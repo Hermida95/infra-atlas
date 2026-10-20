@@ -1,0 +1,28 @@
+---
+id: terraform
+title: "Terraform"
+type: tool
+domain: iac
+hub: true
+summary: "Describes infrastructure as code, then makes reality match it."
+logo: terraform
+level: core
+access: free
+relations:
+  related: [tfstate, tfmodules, tfplan, aws, gha]
+lead: "Terraform turns text into infrastructure by comparing what you wrote, what it remembers and what actually exists."
+parts:
+  - name: "Providers"
+    text: "Plugins that translate your code into API calls to AWS, GitHub, Cloudflare and hundreds more."
+  - name: "Configuration"
+    text: "Your .tf files: resources, variables and outputs, written in HCL."
+  - name: "Modules"
+    text: "Reusable groups of resources with inputs and outputs. Your VPC, written once."
+  - name: "Dependency graph"
+    text: "Terraform orders every change by what depends on what, and runs independent changes in parallel."
+  - name: "State"
+    text: "The record of what already exists. Plan compares it with your code to compute the diff."
+reviewed: 2026-10-20
+---
+
+Describes infrastructure as code, then makes reality match it.

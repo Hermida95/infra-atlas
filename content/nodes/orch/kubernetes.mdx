@@ -1,0 +1,28 @@
+---
+id: kubernetes
+title: "Kubernetes"
+type: tool
+domain: orch
+hub: true
+summary: "Keeps the desired number of containers running, healed and reachable."
+logo: kubernetes
+level: core
+access: free
+relations:
+  related: [pod, deployment, k8ssvc, ingress, helm, hpa, eks]
+lead: "A cluster is a set of control loops that keep reality equal to what you declared. Take it apart and you see who does what."
+parts:
+  - name: "Nodes"
+    text: "The machines that run your workloads. Each one runs a kubelet and a container runtime."
+  - name: "Pods"
+    text: "Your containers, scheduled onto nodes. Containers in a pod share a network address and storage."
+  - name: "Services"
+    text: "Stable virtual addresses that spread traffic across pods that come and go."
+  - name: "Controllers"
+    text: "Reconciliation loops. A Deployment controller notices a missing pod and creates a new one."
+  - name: "API server and etcd"
+    text: "The front door and the memory of the cluster. Every change is written here first."
+reviewed: 2026-10-20
+---
+
+Keeps the desired number of containers running, healed and reachable.

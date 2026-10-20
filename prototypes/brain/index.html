@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infra Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#04070B;
+  --panel:rgba(6,16,24,.62);
+  --panel-solid:#07121B;
+  --holo:#7FE3FF;
+  --holo-2:rgba(127,227,255,.55);
+  --holo-line:rgba(127,227,255,.22);
+  --holo-faint:rgba(127,227,255,.08);
+  --text:#DCF4FF;
+  --muted:#7FA3B5;
+  --faint:#476373;
+  --gold:#FFC46B;
+  --gold-soft:rgba(255,196,107,.12);
+  --alert:#FF8A6B;
+  --font:"Geist",ui-sans-serif,system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:radial-gradient(ellipse at 60% 45%,#0A1A26 0%,var(--bg) 62%);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:5;background:repeating-linear-gradient(0deg,rgba(127,227,255,.014) 0 1px,transparent 1px 3px)}
+header{position:fixed;inset:0 0 auto 0;height:60px;display:flex;align-items:center;gap:24px;padding:0 20px;z-index:3;border-bottom:1px solid var(--holo-line);background:rgba(4,7,11,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-weight:500;letter-spacing:.18em;font-size:13px;text-transform:uppercase}
+.reactor{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--holo);display:grid;place-items:center;box-shadow:inset 0 0 6px rgba(127,227,255,.5)}
+.reactor::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--holo)}
+nav{display:flex;gap:4px}
+nav a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:6px;font-family:var(--mono);font-size:12px;letter-spacing:.08em}
+nav a[aria-current]{color:var(--holo);background:var(--holo-faint)}
+nav a:hover{color:var(--text)}
+.search{margin-left:auto;position:relative}
+.search input{width:240px;height:34px;border-radius:6px;border:1px solid var(--holo-line);background:rgba(127,227,255,.04);color:var(--text);font:inherit;font-family:var(--mono);font-size:12px;padding:0 12px 0 32px}
+.search input::placeholder{color:var(--faint)}
+.search input:focus{outline:none;border-color:var(--holo);box-shadow:0 0 0 3px var(--holo-faint)}
+.search svg{position:absolute;left:10px;top:9px;width:16px;height:16px;stroke:var(--muted)}
+#stage{position:fixed;top:60px;left:0;width:100vw;height:calc(100dvh - 60px);cursor:grab;touch-action:none}
+#stage.drag{cursor:grabbing}
+#stage canvas{display:block}
+#labels{position:fixed;top:60px;left:0;width:100vw;height:calc(100dvh - 60px);pointer-events:none;z-index:1;overflow:hidden}
+.lb{position:absolute;left:0;top:0;white-space:nowrap;font-family:var(--mono);font-size:11px;color:var(--text);transform-origin:0 0;will-change:transform,opacity;text-shadow:0 0 6px rgba(4,7,11,.9)}
+.lb.hub{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--holo)}
+.lb.on{color:var(--gold)}
+.panel{position:fixed;z-index:2;background:var(--panel);border:1px solid var(--holo-line);border-radius:4px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;border:1.5px solid var(--holo);pointer-events:none}
+.panel::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+.panel::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+@media (prefers-reduced-transparency:reduce){.panel,header{background:var(--panel-solid);backdrop-filter:none}}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--holo-2);margin:0 0 10px}
+#planner{top:76px;left:16px;width:380px;max-height:calc(100dvh - 92px);overflow:auto;padding:20px;scrollbar-width:thin;scrollbar-color:var(--holo-line) transparent}
+#planner h1{font-size:20px;font-weight:500;letter-spacing:-.01em;margin:0 0 4px;line-height:1.25}
+#planner p.sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+label.f{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+textarea{width:100%;min-height:76px;resize:vertical;border-radius:4px;border:1px solid var(--holo-line);background:rgba(127,227,255,.03);color:var(--text);font:inherit;font-size:13px;padding:10px 12px;line-height:1.5}
+textarea::placeholder{color:var(--faint)}
+textarea:focus{outline:none;border-color:var(--holo);box-shadow:0 0 0 3px var(--holo-faint)}
+.err{color:var(--alert);font-size:12px;margin:6px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 16px}
+.chip{border:1px solid var(--holo-line);background:transparent;color:var(--muted);border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;transition:color .2s,border-color .2s,background .2s,transform .1s}
+.chip:hover{color:var(--text);border-color:var(--holo-2)}
+.chip:active{transform:scale(.97)}
+.chip[aria-pressed="true"]{color:var(--gold);border-color:var(--gold);background:var(--gold-soft)}
+.row{display:flex;gap:8px}
+.btn{height:36px;padding:0 16px;border-radius:999px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--holo-line);background:transparent;color:var(--text);transition:transform .1s,background .2s}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--holo);border-color:var(--holo);color:#03202B}
+.btn.primary:hover{background:#A6EDFF}
+.btn:not(.primary):hover{background:var(--holo-faint)}
+#route{margin-top:20px;border-top:1px solid var(--holo-line);padding-top:16px}
+#route:empty{display:none}
+.step{margin-bottom:14px;opacity:0;transform:translateX(-6px);animation:in .45s cubic-bezier(.16,1,.3,1) forwards}
+@keyframes in{to{opacity:1;transform:none}}
+.step h3{font-size:11px;font-weight:500;color:var(--gold);margin:0 0 6px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.item{display:grid;gap:2px;padding:6px 8px;margin:0 -8px;border-radius:4px;cursor:pointer;border-left:1px solid transparent}
+.item:hover,.item:focus-visible{background:var(--gold-soft);border-left-color:var(--gold);outline:none}
+.item b{font-weight:500}
+.item span{color:var(--muted);font-size:12px}
+.note{border:1px solid rgba(255,138,107,.4);background:rgba(255,138,107,.07);color:#FFC2B0;border-radius:4px;padding:10px 12px;font-size:12px;margin-top:8px}
+#detail{top:76px;right:16px;width:320px;padding:20px;transform:translateX(calc(100% + 24px));transition:transform .45s cubic-bezier(.16,1,.3,1)}
+#detail.open{transform:none}
+#detail h2{font-size:22px;font-weight:500;margin:0 0 8px}
+#detail p{color:#B5D3E0;margin:0 0 16px}
+#detail h4{font-size:12px;font-weight:500;color:var(--muted);margin:0 0 8px}
+.links{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.close{position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:4px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:18px}
+.close:hover{background:var(--holo-faint);color:var(--text)}
+.soon{font-size:12px;color:var(--faint);border-top:1px solid var(--holo-line);padding-top:12px}
+#hud{position:fixed;right:16px;bottom:16px;z-index:2;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;line-height:1.9;pointer-events:none}
+#hud b{color:var(--holo);font-weight:500}
+#hud .g{color:var(--gold)}
+#hint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2;font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.08em;pointer-events:none}
+.dhead{display:flex;align-items:center;gap:12px;margin:0 0 8px}
+.dhead img{width:34px;height:34px;opacity:.92}
+#detail .dhead h2{margin:0}
+.ilogo{width:14px;height:14px;opacity:.75;vertical-align:-2px;margin-right:6px}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:#2B1B03;margin-bottom:16px}
+.btn.gold:hover{background:#FFD592}
+#teardown{position:fixed;top:60px;left:0;width:100vw;height:calc(100dvh - 60px);z-index:4;overflow-y:auto;overflow-x:hidden;background:radial-gradient(ellipse at 35% 50%,#0A1E2C 0%,#04070B 60%);opacity:0;visibility:hidden;transition:opacity .5s ease,visibility 0s linear .5s;scrollbar-width:thin;scrollbar-color:var(--holo-line) transparent}
+#teardown.open{opacity:1;visibility:visible;transition:opacity .5s ease}
+.td-grid{display:grid;grid-template-columns:minmax(0,1fr) 440px}
+.td-stage{position:sticky;top:0;height:calc(100dvh - 60px)}
+#tdCanvas{position:absolute;inset:0}
+#tdCanvas canvas{display:block}
+#tdLabels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.pl{position:absolute;left:0;top:0;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--muted);white-space:nowrap;transition:color .3s;will-change:transform,opacity}
+.pl.act{color:var(--text)}
+.td-col{padding:0 40px 0 8px}
+.td-sec{min-height:78vh;display:flex;flex-direction:column;justify-content:center;border-left:1px solid var(--holo-line);padding-left:28px;transition:border-color .4s}
+.td-sec.act{border-left-color:var(--holo)}
+.td-sec.intro{min-height:calc(100dvh - 60px)}
+.td-sec .bigLogo{width:64px;height:64px;margin-bottom:20px}
+.td-sec h2{font-size:40px;font-weight:500;letter-spacing:-.02em;line-height:1.05;margin:0 0 12px}
+.td-sec h3{font-size:24px;font-weight:500;letter-spacing:-.01em;margin:0 0 10px}
+.td-sec p{color:#B5D3E0;margin:0;max-width:52ch;font-size:15px;line-height:1.65}
+.td-sec .hint{color:var(--faint);font-family:var(--mono);font-size:12px;margin-top:20px}
+.td-sec.outro{min-height:60vh}
+.td-back{position:fixed;top:76px;left:16px;z-index:5;display:none}
+#teardown.open~.td-back{display:inline-flex;align-items:center}
+.td-sec.lab{min-height:calc(100dvh - 60px)}
+.df{font-family:var(--mono);font-size:12.5px;border:1px solid var(--holo-line);border-radius:4px;background:rgba(127,227,255,.03);padding:8px 0;margin:18px 0 16px}
+.dl{display:flex;justify-content:space-between;gap:12px;padding:5px 14px;color:var(--faint);border-left:2px solid transparent;transition:color .3s,background .3s,border-color .3s}
+.dl code{font-family:inherit;white-space:pre}
+.dl.done{color:var(--text)}
+.dl.cur{border-left-color:var(--holo);background:var(--holo-faint)}
+.dl .st{font-size:11px;white-space:nowrap;color:var(--muted)}
+.dl.cached .st{color:var(--holo)}
+.dl.rebuilt{border-left-color:var(--text)}
+.dl.rebuilt .st{color:var(--text)}
+.labbar{display:flex;flex-wrap:wrap;gap:8px}
+.btn.sm{height:32px;padding:0 14px;font-size:12px}
+.labimg{font-family:var(--mono);font-size:12px;color:var(--holo)!important;margin-top:16px!important}
+.labmsg{min-height:80px;margin-top:8px!important}
+@media (prefers-reduced-motion:reduce){#teardown{transition:none}}
+@media (max-width:767px){
+  .td-grid{grid-template-columns:1fr}
+  .td-stage{height:45dvh;z-index:1}
+  .td-col{padding:0 16px;position:relative;z-index:2;background:linear-gradient(transparent,rgba(4,7,11,.9) 12%)}
+  .td-sec{min-height:60vh}
+  .td-sec h2{font-size:30px}
+}
+@media (max-width:767px){
+  body{overflow:auto}
+  header{gap:12px}
+  nav,#hint{display:none}
+  .search input{width:150px}
+  #stage,#labels{position:absolute;height:60dvh}
+  #planner,#detail{position:relative;top:auto;left:auto;right:auto;width:auto;max-height:none;margin:12px 16px;transform:none}
+  #planner{margin-top:calc(60dvh + 72px)}
+  #detail{display:none}
+  #detail.open{display:block}
+  #hud{display:none}
+}
+@media (prefers-reduced-motion:reduce){.step{animation:none;opacity:1;transform:none}#detail{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="reactor" aria-hidden="true"></span>Infra Atlas</div>
+  <nav aria-label="Main">
+    <a href="#" aria-current="page">Map</a>
+    <a href="#">Journeys</a>
+    <a href="#">Labs</a>
+  </nav>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Find a concept" aria-label="Find a concept">
+  </div>
+</header>
+
+<div id="stage" aria-label="3D knowledge map of DevOps and AWS concepts. Drag to rotate, scroll to zoom, click a node for details."></div>
+<div id="labels" aria-hidden="true"></div>
+
+<aside id="planner" class="panel" aria-labelledby="pt">
+  <p class="tag">Deployment planner</p>
+  <h1 id="pt">What are you deploying?</h1>
+  <p class="sub">Describe your app. The map lights up the pieces you need and the order to wire them.</p>
+  <label class="f" for="desc">Your app</label>
+  <textarea id="desc" placeholder="A FastAPI app with Postgres, user login and image uploads, on a small budget"></textarea>
+  <p class="err" id="err" role="alert"></p>
+  <div class="chips" id="chips" aria-label="Requirements"></div>
+  <div class="row">
+    <button class="btn primary" id="go">Light up my route</button>
+    <button class="btn" id="clear">Clear</button>
+  </div>
+  <div id="route" aria-live="polite"></div>
+</aside>
+
+<aside id="detail" class="panel" aria-live="polite">
+  <button class="close" id="dclose" aria-label="Close">×</button>
+  <p class="tag" id="ddom"></p>
+  <div class="dhead"><img id="dlogo" alt=""><h2 id="dtitle"></h2></div>
+  <p id="dtext"></p>
+  <button class="btn gold" id="dteardown">Take it apart</button>
+  <h4>Connected to</h4>
+  <div class="links" id="dlinks"></div>
+  <div class="soon">Interactive lesson for this concept lands in phase 1.</div>
+</aside>
+
+<section id="teardown" aria-label="Technology teardown" aria-hidden="true">
+  <div class="td-grid">
+    <div class="td-stage"><div id="tdCanvas"></div><div id="tdLabels" aria-hidden="true"></div></div>
+    <div class="td-col" id="tdCol"></div>
+  </div>
+</section>
+<button class="btn td-back" id="tdBack">Back to map</button>
+
+<div id="hud" aria-live="polite"></div>
+<div id="hint">Drag to rotate · scroll to zoom · click a node</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const DOMAINS={
+  local:{name:"Local",x:-1.05,y:.05,z:0,h:200},
+  containers:{name:"Containers",x:-.55,y:-.5,z:.35,h:192},
+  cicd:{name:"CI/CD",x:-.6,y:.55,z:-.35,h:210},
+  iac:{name:"Infrastructure as code",x:-.02,y:-.68,z:.3,h:222},
+  orch:{name:"Kubernetes",x:0,y:.02,z:0,h:186},
+  security:{name:"Security",x:-.05,y:.68,z:-.35,h:205},
+  network:{name:"Networking",x:.55,y:-.55,z:.35,h:196},
+  compute:{name:"Compute",x:.5,y:.05,z:-.1,h:214},
+  obs:{name:"Observability",x:.5,y:.66,z:-.35,h:178},
+  data:{name:"Data",x:1.05,y:-.2,z:.3,h:170},
+  ai:{name:"AI",x:1.05,y:.5,z:-.3,h:230}
+};
+const N=[
+ ["localhost","Localhost","local",1,"Where every app starts. Your machine, your rules, nothing in between."],
+ ["git","Git","local",0,"Version control. Every change is tracked and every push can trigger a pipeline."],
+ ["app","Python app","local",0,"Your FastAPI or Django code and its dependencies."],
+ ["env","Env variables","local",0,"Configuration that changes per environment, kept out of the code."],
+ ["docker","Docker","containers",1,"Packages your app and everything it needs so it runs the same on any machine."],
+ ["dockerfile","Dockerfile","containers",0,"The recipe. Each instruction produces one layer of the image."],
+ ["image","Image","containers",0,"A read-only, versioned stack of layers. The thing you ship."],
+ ["container","Container","containers",0,"A running image plus a thin writable layer on top."],
+ ["layers","Layers","containers",0,"Cached filesystem snapshots. Order them well and rebuilds take seconds."],
+ ["compose","Docker Compose","containers",0,"Runs several containers together locally: app, database, cache."],
+ ["ecr","ECR","containers",0,"AWS private registry. Your cloud services pull images from here."],
+ ["terraform","Terraform","iac",1,"Describes infrastructure as code, then makes reality match it."],
+ ["tfstate","State","iac",0,"Terraform's memory of what exists. Usually stored in S3 with a lock."],
+ ["tfmodules","Modules","iac",0,"Reusable infrastructure building blocks."],
+ ["tfplan","Plan and apply","iac",0,"Plan shows the diff between code and reality. Apply makes it happen."],
+ ["kubernetes","Kubernetes","orch",1,"Keeps the desired number of containers running, healed and reachable."],
+ ["pod","Pod","orch",0,"The smallest unit Kubernetes schedules: one or more containers together."],
+ ["deployment","Deployment","orch",0,"Declares how many pods you want and how to roll out new versions."],
+ ["k8ssvc","Service","orch",0,"A stable address in front of pods that come and go."],
+ ["ingress","Ingress","orch",0,"Routes outside HTTP traffic to the right service."],
+ ["helm","Helm","orch",0,"Package manager for Kubernetes manifests."],
+ ["hpa","Autoscaler","orch",0,"Adds or removes pods based on load."],
+ ["vpc","VPC","network",0,"Your private network in AWS, split into public and private subnets."],
+ ["alb","Load balancer","network",0,"Spreads traffic across healthy targets."],
+ ["cloudfront","CloudFront","network",0,"CDN that serves content from locations close to your users."],
+ ["route53","Route 53","network",0,"DNS. Points your domain at your infrastructure."],
+ ["apigw","API Gateway","network",0,"Front door for HTTP APIs, with throttling and auth."],
+ ["waf","WAF","network",0,"Filters malicious traffic before it reaches your app."],
+ ["aws","AWS","compute",1,"The cloud provider this map is built around."],
+ ["lambda","Lambda","compute",0,"Runs code per request. Scales to zero when idle."],
+ ["ecs","ECS Fargate","compute",0,"Runs containers without managing servers."],
+ ["eks","EKS","compute",0,"Managed Kubernetes control plane on AWS."],
+ ["ec2","EC2","compute",0,"Virtual machines. Full control, full responsibility."],
+ ["rds","RDS Postgres","data",0,"Managed relational database with backups and failover."],
+ ["dynamodb","DynamoDB","data",0,"Serverless key-value database with single-digit millisecond reads."],
+ ["s3","S3","data",0,"Object storage for files, static sites, backups and state."],
+ ["elasticache","ElastiCache","data",0,"Managed Redis for caching and sessions."],
+ ["sqs","SQS","data",0,"Message queue. Moves slow work out of the request path."],
+ ["iam","IAM","security",0,"Who can do what. Least privilege for every service."],
+ ["cognito","Cognito","security",0,"User sign-up, login and tokens."],
+ ["ssm","Secrets","security",0,"Passwords and keys stored encrypted, never in code."],
+ ["oidc","OIDC","cicd",0,"Lets your pipeline assume an AWS role without stored keys."],
+ ["gha","GitHub Actions","cicd",1,"Builds, tests and deploys on every push."],
+ ["tests","Tests","cicd",0,"Unit, integration and smoke tests that gate every deploy."],
+ ["cloudwatch","CloudWatch","obs",1,"Logs, metrics and alarms for everything on AWS."],
+ ["xray","X-Ray","obs",0,"Traces one request across every service it touches."],
+ ["prometheus","Prometheus","obs",0,"Scrapes and stores metrics, the standard in Kubernetes."],
+ ["grafana","Grafana","obs",0,"Dashboards on top of your metrics."],
+ ["budgets","Budgets","obs",0,"Alerts before the bill surprises you."],
+ ["bedrock","Bedrock","ai",1,"Managed access to foundation models such as Claude, inside AWS."],
+ ["embeddings","Embeddings","ai",0,"Text turned into vectors, so meaning becomes searchable."],
+ ["vectordb","Vector store","ai",0,"Finds the documents closest in meaning to a question."],
+ ["rag","RAG","ai",0,"Retrieve your own documents, then let the model answer from them."]
+];
+const E=`localhost-git localhost-app localhost-env localhost-docker app-dockerfile git-gha docker-dockerfile docker-image docker-container dockerfile-image image-layers image-container docker-compose compose-container image-ecr ecr-aws terraform-tfstate terraform-tfmodules terraform-tfplan terraform-aws tfstate-s3 terraform-gha kubernetes-pod kubernetes-deployment kubernetes-k8ssvc kubernetes-ingress kubernetes-helm kubernetes-hpa deployment-pod pod-container ingress-alb kubernetes-eks helm-gha aws-lambda aws-ecs aws-eks aws-ec2 aws-vpc aws-iam aws-s3 aws-cloudwatch ecs-ecr lambda-ecr eks-ec2 ecs-alb alb-vpc lambda-apigw apigw-cloudfront cloudfront-s3 route53-cloudfront waf-cloudfront waf-alb rds-vpc elasticache-vpc ecs-vpc eks-vpc lambda-sqs ecs-sqs lambda-dynamodb rds-ssm iam-oidc oidc-gha gha-tests gha-ecr iam-cognito cognito-apigw ssm-env cloudwatch-xray cloudwatch-budgets prometheus-grafana prometheus-kubernetes cloudwatch-lambda cloudwatch-ecs bedrock-aws bedrock-embeddings embeddings-vectordb vectordb-rag rag-bedrock vectordb-s3 ecs-rds lambda-rds alb-cloudfront`.split(" ").map(s=>{const[a,b]=s.split("-");return{a,b}});
+
+const nodes=N.map(([id,label,d,hub,text],i)=>({i,id,label,d,hub:!!hub,text}));
+const byId=new Map(nodes.map(n=>[n.id,n]));
+const links=E.filter(l=>byId.has(l.a)&&byId.has(l.b)).map(l=>({s:byId.get(l.a),t:byId.get(l.b)}));
+const adj=new Map(nodes.map(n=>[n.id,new Set()]));
+links.forEach(l=>{adj.get(l.s.id).add(l.t.id);adj.get(l.t.id).add(l.s.id)});
+
+const REQS=[
+ {id:"api",label:"Python API",kw:["api","fastapi","django","flask","backend"]},
+ {id:"web",label:"Web frontend",kw:["web","frontend","react","next","website","site"]},
+ {id:"sql",label:"Relational database",kw:["postgres","postgresql","sql","mysql","database","relational"]},
+ {id:"files",label:"File uploads",kw:["upload","uploads","file","files","image","images","video","pdf"]},
+ {id:"jobs",label:"Background jobs",kw:["queue","job","jobs","worker","workers","async","cron","emails"]},
+ {id:"auth",label:"User accounts",kw:["login","auth","accounts","signup","sign up"]},
+ {id:"cache",label:"Caching",kw:["cache","redis","sessions"]},
+ {id:"ai",label:"LLM features",kw:["ai","llm","chatbot","rag","claude","embeddings","assistant"]},
+ {id:"k8s",label:"Kubernetes",kw:["kubernetes","k8s","microservices","eks","helm"]},
+ {id:"cheap",label:"Small budget",kw:["cheap","budget","free","hobby","side project","low cost"]},
+ {id:"scale",label:"High steady traffic",kw:["scale","millions","enterprise","high traffic","always on"]},
+ {id:"global",label:"Global users",kw:["global","worldwide","international","cdn"]}
+];
+const sel=new Set();
+const GROUPS=["Build locally","Containerize","Define infrastructure","Run and expose","Store and process","Secure","Ship","Observe"];
+function plan(){
+  const S=new Map(),notes=[];
+  const add=(g,id,why)=>{if(!S.has(id))S.set(id,{g,why})};
+  const has=k=>sel.has(k);
+  const k8s=has("k8s"),serverless=!k8s&&has("cheap")&&!has("scale");
+  add(0,"localhost","Run and debug the app on your machine first.");
+  add(0,"app","Your application code and its dependencies.");
+  add(0,"git","Every change is versioned and can trigger the pipeline.");
+  add(0,"env","Configuration stays out of the code.");
+  add(1,"docker","Package the app so it runs the same everywhere.");
+  add(1,"dockerfile","The recipe that builds your image.");
+  add(1,"image","The versioned artifact you deploy.");
+  if(has("sql")||has("cache"))add(1,"compose","Run the app and its database together locally.");
+  add(1,"ecr","Private registry that AWS pulls your image from.");
+  add(2,"terraform","Describe the whole infrastructure as code.");
+  add(2,"tfstate","Terraform's record of what exists, stored in S3.");
+  add(2,"aws","Your cloud provider.");
+  if(k8s){
+    add(3,"eks","Managed Kubernetes on AWS.");
+    add(3,"kubernetes","Keeps your containers running and healed.");
+    add(3,"deployment","Declares replicas and rollout strategy.");
+    add(3,"pod","Where your container actually runs.");
+    add(3,"k8ssvc","Stable address in front of the pods.");
+    add(3,"ingress","Routes outside traffic into the cluster.");
+    add(3,"helm","Packages and versions your manifests.");
+    add(3,"alb","Public entry point for HTTP traffic.");
+    add(3,"vpc","Private network for the cluster.");
+    if(has("scale"))add(3,"hpa","Adds pods when load rises.");
+    if(has("cheap"))notes.push("EKS has a fixed monthly cost for the control plane. On a small budget, ECS Fargate or Lambda usually fit better.");
+  }else if(serverless){
+    add(3,"lambda","Pay per request, scales to zero when idle.");
+    add(3,"apigw","Turns HTTPS requests into Lambda invocations.");
+  }else{
+    add(3,"ecs","Runs your container without managing servers.");
+    add(3,"alb","Spreads traffic across healthy containers.");
+    add(3,"vpc","Private network for your services.");
+  }
+  if(has("web")||has("global")){
+    add(3,"cloudfront","Serves your frontend close to your users.");
+    add(3,"route53","Points your domain at the CDN.");
+    add(4,"s3","Holds the static frontend files.");
+  }
+  if(has("sql")){
+    add(4,"rds","Managed Postgres with automated backups.");
+    add(3,"vpc","Keeps the database in a private subnet.");
+    add(5,"ssm","The database password lives here, never in code.");
+    if(has("cheap"))notes.push("RDS bills by the hour even when idle. On a tight budget, compare Aurora Serverless or DynamoDB.");
+    if(serverless)notes.push("Lambda talking to RDS needs VPC access and connection pooling, for example RDS Proxy.");
+  }
+  if(has("files"))add(4,"s3","Durable storage for uploads, served through signed URLs.");
+  if(has("jobs"))add(4,"sqs","Queues slow work so requests return fast.");
+  if(has("cache"))add(4,"elasticache","Redis for sessions and hot data.");
+  if(has("ai")){
+    add(4,"bedrock","Call Claude from inside AWS, authenticated with IAM.");
+    add(4,"embeddings","Turn your documents into vectors.");
+    add(4,"vectordb","Search your content by meaning.");
+    add(4,"rag","Answers grounded in your own data.");
+  }
+  if(has("auth"))add(5,"cognito","Sign-up, login and tokens without building auth yourself.");
+  if(has("scale"))add(5,"waf","Filters abusive traffic at the edge.");
+  add(5,"iam","Least-privilege permissions for every service.");
+  add(6,"gha","Builds, tests and deploys on every push.");
+  add(6,"tests","Nothing broken reaches production.");
+  add(6,"oidc","Deploys to AWS without stored access keys.");
+  add(7,"cloudwatch","Logs, metrics and alarms.");
+  if(has("scale")||k8s)add(7,"xray","Traces a slow request across services.");
+  if(k8s){add(7,"prometheus","Cluster and app metrics.");add(7,"grafana","Dashboards for the team.");}
+  if(has("cheap"))add(7,"budgets","Alerts before the bill surprises you.");
+  return{S,notes,order:[...S.keys()]};
+}
+
+const SI="https://cdn.jsdelivr.net/npm/simple-icons@13.0.0/icons/";
+const SLUG={docker:"docker",compose:"docker",terraform:"terraform",kubernetes:"kubernetes",helm:"helm",gha:"githubactions",git:"git",app:"python",prometheus:"prometheus",grafana:"grafana",aws:"amazonwebservices",lambda:"awslambda",ecs:"amazonecs",eks:"amazoneks",ec2:"amazonec2",rds:"amazonrds",dynamodb:"amazondynamodb",s3:"amazons3",sqs:"amazonsqs",cloudwatch:"amazoncloudwatch",route53:"amazonroute53",apigw:"amazonapigateway",cognito:"amazoncognito",iam:"amazoniam",elasticache:"amazonelasticache",oidc:"openid"};
+const MONO={localhost:"LH",bedrock:"BR",cloudfront:"CF",ecr:"ECR"};
+
+const PARTS={
+ docker:{lab:true,lead:"An image is not one thing. It is a stack of read-only layers, and a container is that stack plus one thin layer you can write to.",parts:[
+  ["Base image","A minimal operating system plus the language runtime, pulled from a registry. Every image built on it shares these bytes on disk.","os"],
+  ["Dependencies layer","The result of pip install, frozen into its own layer. Docker reuses it from cache until requirements.txt changes.","pkg"],
+  ["Application layer","Your source code. It changes on every commit, so it sits near the top where rebuilding it is cheap.","code"],
+  ["Image metadata","CMD, ENV and EXPOSE. Instructions for how to run the image. They add no files.","meta"],
+  ["Writable container layer","Added at docker run. Everything the process writes lives here and disappears with the container.","rw"]]},
+ kubernetes:{lead:"A cluster is a set of control loops that keep reality equal to what you declared. Take it apart and you see who does what.",parts:[
+  ["Nodes","The machines that run your workloads. Each one runs a kubelet and a container runtime."],
+  ["Pods","Your containers, scheduled onto nodes. Containers in a pod share a network address and storage."],
+  ["Services","Stable virtual addresses that spread traffic across pods that come and go."],
+  ["Controllers","Reconciliation loops. A Deployment controller notices a missing pod and creates a new one."],
+  ["API server and etcd","The front door and the memory of the cluster. Every change is written here first."]]},
+ terraform:{lead:"Terraform turns text into infrastructure by comparing what you wrote, what it remembers and what actually exists.",parts:[
+  ["Providers","Plugins that translate your code into API calls to AWS, GitHub, Cloudflare and hundreds more."],
+  ["Configuration","Your .tf files: resources, variables and outputs, written in HCL."],
+  ["Modules","Reusable groups of resources with inputs and outputs. Your VPC, written once."],
+  ["Dependency graph","Terraform orders every change by what depends on what, and runs independent changes in parallel."],
+  ["State","The record of what already exists. Plan compares it with your code to compute the diff."]]},
+ gha:{lead:"A pipeline is a chain of small, isolated pieces. Each push sets the chain in motion.",parts:[
+  ["Runner","The virtual machine or container where jobs run. Hosted by GitHub or by you."],
+  ["Steps","Single commands or reusable actions, executed in order inside a job."],
+  ["Jobs","Groups of steps. Jobs run in parallel unless one declares it needs another."],
+  ["Workflow","A YAML file in .github/workflows that wires triggers, jobs and permissions together."],
+  ["Triggers","The events that start it all: push, pull request, schedule or a manual run."]]},
+ aws:{lead:"AWS is a global set of building blocks. From the ground up, this is how they are organized.",parts:[
+  ["Regions","Independent geographic areas. You pick one close to your users and your data rules."],
+  ["Availability zones","Isolated data centers inside a region. Spread across two or more to survive an outage."],
+  ["VPC","Your private network, spanning the zones of a region."],
+  ["Services","Compute, storage, data and AI blocks you assemble inside that network."],
+  ["IAM","The permission layer wrapped around everything. Nothing talks to anything without it."]]},
+ lambda:{lead:"Serverless still runs on servers. You just stop managing them. Here is what sits under one function call.",parts:[
+  ["Execution environment","A lightweight micro virtual machine that AWS creates, reuses and destroys for you."],
+  ["Runtime","Python, Node or a container image. Loaded once per environment, which is the cold start."],
+  ["Handler","Your function. Called once per event with the payload and a context object."],
+  ["IAM role","What the function is allowed to touch: a bucket, a table, a queue."],
+  ["Triggers","API Gateway, S3 uploads, SQS messages or a schedule. Each event is one invocation."]]},
+ cloudwatch:{lead:"Observability is what lets you answer why something broke, not just that it did.",parts:[
+  ["Logs","Every print and every error from your services, stored and searchable."],
+  ["Metrics","Numbers over time: latency, error rate, CPU and your own business counters."],
+  ["Alarms","Thresholds on metrics that notify you or trigger an automatic action."],
+  ["Dashboards","Related metrics side by side for a fast health check."]]},
+ bedrock:{lead:"Bedrock puts foundation models behind an AWS API, with the pieces you need to use them on your own data.",parts:[
+  ["Foundation models","Claude and other models, served and scaled by AWS."],
+  ["Runtime API","InvokeModel and Converse. One API, authenticated with IAM, no keys to store."],
+  ["Knowledge bases","Managed retrieval: your documents chunked, embedded and searchable."],
+  ["Guardrails","Filters for unsafe or off-topic input and output."],
+  ["Agents","Models that call your own tools to complete tasks in several steps."]]},
+ localhost:{lead:"Before any cloud, there is your laptop. Even localhost has layers.",parts:[
+  ["Operating system","macOS, Linux or Windows. Provides processes, files and the network stack."],
+  ["Language runtime","The Python interpreter and a virtual environment with your dependencies."],
+  ["App process","Uvicorn or the Django dev server, running your code."],
+  ["Port","localhost:8000 is a port on the loopback interface. Only your own machine can reach it."],
+  ["Config","Environment variables and .env files that change behaviour without changing code."]]}
+};
+
+const T=THREE;
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const stage=document.getElementById("stage");
+const renderer=new T.WebGLRenderer({antialias:true,alpha:true});
+stage.appendChild(renderer.domElement);
+const scene=new T.Scene();
+scene.fog=new T.FogExp2(0x04070b,.00055);
+const camera=new T.PerspectiveCamera(48,1,1,6000);
+let W=1,H=1;
+function size(){
+  const r=stage.getBoundingClientRect();W=r.width;H=r.height;
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(W,H);
+  camera.aspect=W/H;
+  camera.setViewOffset(W,H,W>767?-200:0,0,W,H);
+  camera.updateProjectionMatrix();
+}
+
+function glowTex(){
+  const c=document.createElement("canvas");c.width=c.height=128;const g=c.getContext("2d");
+  const gr=g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,"rgba(255,255,255,1)");gr.addColorStop(.12,"rgba(255,255,255,.95)");
+  gr.addColorStop(.3,"rgba(255,255,255,.16)");gr.addColorStop(1,"rgba(255,255,255,0)");
+  g.fillStyle=gr;g.fillRect(0,0,128,128);return new T.CanvasTexture(c);
+}
+const GLOW=glowTex();
+const CYAN=new T.Color(0x7fe3ff),GOLD=new T.Color(0xffc46b);
+
+const brain=new T.Group();scene.add(brain);
+const RAD=240;
+nodes.forEach(n=>{
+  const D=DOMAINS[n.d];
+  n.p=new T.Vector3(D.x*RAD+(Math.random()-.5)*50,-D.y*RAD*.8+(Math.random()-.5)*50,D.z*RAD+(Math.random()-.5)*50);
+  n.v=new T.Vector3();n.c0=new T.Vector3(D.x*RAD,-D.y*RAD*.8,D.z*RAD);
+});
+(function relax(){
+  const d=new T.Vector3();
+  for(let it=0;it<320;it++){
+    const al=1-it/320;
+    for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+      const a=nodes[i],b=nodes[j];d.subVectors(a.p,b.p);
+      const L2=Math.max(d.lengthSq(),1);const f=(a.hub||b.hub?2600:1200)/L2*al;
+      d.normalize().multiplyScalar(f);a.v.add(d);b.v.sub(d);
+    }
+    for(const l of links){
+      d.subVectors(l.t.p,l.s.p);const L=d.length()||1,same=l.s.d===l.t.d;
+      const f=(L-(same?34:72))*(same?.08:.012)*al;d.multiplyScalar(f/L);l.s.v.add(d);l.t.v.sub(d);
+    }
+    for(const n of nodes){d.subVectors(n.c0,n.p).multiplyScalar(.03*al);n.v.add(d);n.p.add(n.v);n.v.multiplyScalar(.5)}
+  }
+})();
+
+nodes.forEach(n=>{
+  const col=new T.Color().setHSL(DOMAINS[n.d].h/360,.75,.68);
+  n.col=col;
+  const m=new T.SpriteMaterial({map:GLOW,color:col.clone(),transparent:true,depthWrite:false,blending:T.AdditiveBlending});
+  const s=new T.Sprite(m);s.position.copy(n.p);n.base=n.hub?52:26;s.scale.setScalar(n.base);
+  brain.add(s);n.sprite=s;n.a=0;n.ta=.9;n.delay=(n.p.x+RAD*1.4)/(RAD*2.8)*.6;
+});
+
+const LOGO=new Map();
+function monogram(txt){
+  const c=document.createElement("canvas");c.width=c.height=128;const g=c.getContext("2d");
+  g.strokeStyle="#fff";g.lineWidth=5;g.beginPath();
+  for(let i=0;i<6;i++){const a=Math.PI/3*i+Math.PI/6;g[i?"lineTo":"moveTo"](64+52*Math.cos(a),64+52*Math.sin(a))}
+  g.closePath();g.stroke();
+  g.fillStyle="#fff";g.font=`500 ${txt.length>2?30:38}px "Geist Mono", monospace`;g.textAlign="center";g.textBaseline="middle";g.fillText(txt,64,66);
+  return c;
+}
+async function loadLogo(id){
+  if(LOGO.has(id))return LOGO.get(id);
+  let c=null;
+  if(SLUG[id]){
+    try{
+      const r=await fetch(SI+SLUG[id]+".svg");if(!r.ok)throw 0;
+      const svg=(await r.text()).replace("<svg",'<svg fill="#ffffff" width="96" height="96"');
+      const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml"}));
+      const img=new Image();img.src=url;await img.decode();
+      c=document.createElement("canvas");c.width=c.height=128;c.getContext("2d").drawImage(img,16,16,96,96);URL.revokeObjectURL(url);
+    }catch(e){c=null}
+  }
+  if(!c){const n=byId.get(id);c=monogram(MONO[id]||n.label.replace(/[^A-Za-z0-9 ]/g,"").split(" ").map(w=>w[0]).join("").slice(0,3).toUpperCase())}
+  const v={canvas:c,url:c.toDataURL(),real:!!SLUG[id]};LOGO.set(id,v);return v;
+}
+nodes.forEach(n=>{
+  if(!SLUG[n.id]&&!MONO[n.id]&&!PARTS[n.id])return;
+  loadLogo(n.id).then(L=>{
+    const m=new T.SpriteMaterial({map:new T.CanvasTexture(L.canvas),color:0xdcf4ff,transparent:true,depthWrite:false,opacity:0});
+    const s=new T.Sprite(m);s.position.copy(n.p);brain.add(s);n.logo=s;
+  });
+});
+
+const lPos=new Float32Array(links.length*6),lCol=new Float32Array(links.length*6);
+links.forEach((l,i)=>{lPos.set([l.s.p.x,l.s.p.y,l.s.p.z,l.t.p.x,l.t.p.y,l.t.p.z],i*6);l.cur=[0,0,0];l.tgt=[0,0,0]});
+const lGeo=new T.BufferGeometry();
+lGeo.setAttribute("position",new T.BufferAttribute(lPos,3));
+lGeo.setAttribute("color",new T.BufferAttribute(lCol,3));
+brain.add(new T.LineSegments(lGeo,new T.LineBasicMaterial({vertexColors:true,transparent:true,blending:T.AdditiveBlending,depthWrite:false})));
+
+const pPos=new Float32Array(links.length*3);
+const pGeo=new T.BufferGeometry();pGeo.setAttribute("position",new T.BufferAttribute(pPos,3));pGeo.setDrawRange(0,0);
+brain.add(new T.Points(pGeo,new T.PointsMaterial({size:16,map:GLOW,color:GOLD,transparent:true,depthWrite:false,blending:T.AdditiveBlending})));
+
+(function dust(){
+  const n=1600,pos=new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    const u=Math.random()*2-1,th=Math.random()*Math.PI*2,s=Math.sqrt(1-u*u);
+    let x=s*Math.cos(th),y=u,z=s*Math.sin(th);
+    const wr=1+.06*Math.sin(x*9)*Math.cos(z*7)+.04*Math.sin(y*13);
+    const r=(.82+Math.random()*.18)*wr;
+    pos.set([x*r*RAD*1.45,y*r*RAD*.95,z*r*RAD*1.0],i*3);
+  }
+  const g=new T.BufferGeometry();g.setAttribute("position",new T.BufferAttribute(pos,3));
+  brain.add(new T.Points(g,new T.PointsMaterial({size:2.8,color:CYAN,transparent:true,opacity:.5,depthWrite:false,blending:T.AdditiveBlending})));
+})();
+
+const base=new T.Group();base.position.y=-RAD*1.02;scene.add(base);
+const arcs=[];
+[[300,0,Math.PI*1.4,.0016,.55],[318,1.2,Math.PI*.6,-.0024,.35],[340,2.4,Math.PI*1.1,.001,.25],[262,.6,Math.PI*.35,-.004,.6],[380,0,Math.PI*2,0,.1]].forEach(([r,st,len,sp,op])=>{
+  const m=new T.Mesh(new T.RingGeometry(r,r+1.6,128,1,st,len),new T.MeshBasicMaterial({color:CYAN,transparent:true,opacity:op,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));
+  m.rotation.x=-Math.PI/2;base.add(m);arcs.push([m,sp]);
+});
+(function ticks(){
+  const n=120,pos=[];
+  for(let i=0;i<n;i++){const a=i/n*Math.PI*2,r1=352,r2=i%10===0?370:360;pos.push(Math.cos(a)*r1,0,Math.sin(a)*r1,Math.cos(a)*r2,0,Math.sin(a)*r2)}
+  const g=new T.BufferGeometry();g.setAttribute("position",new T.Float32BufferAttribute(pos,3));
+  const t=new T.LineSegments(g,new T.LineBasicMaterial({color:CYAN,transparent:true,opacity:.35,blending:T.AdditiveBlending}));
+  base.add(t);arcs.push([t,.0008,true]);
+})();
+
+const labels=document.getElementById("labels");
+nodes.forEach(n=>{const d=document.createElement("div");d.className="lb"+(n.hub?" hub":"");d.textContent=n.label;labels.appendChild(d);n.el=d});
+
+let rotY=-.35,rotX=.12,tRotY=rotY,tRotX=rotX,dist=920,tDist=760,focusY=0,tFocusY=0;
+let dragging=false,moved=0,lastX=0,lastY=0,hover=null,selected=null,lit=null,litAt=0,boot=reduce?1:0,t0=performance.now(),idleAt=0;
+
+function pickAt(x,y){
+  let best=null,bd=Infinity;const v=new T.Vector3();
+  for(const n of nodes){
+    n.sprite.getWorldPosition(v);v.project(camera);
+    if(v.z>1)continue;
+    const sx=(v.x+1)/2*W,sy=(1-v.y)/2*H,dd=(sx-x)**2+(sy-y)**2;
+    const r=Math.max(16,n.base*.45);
+    if(dd<r*r&&dd<bd){bd=dd;best=n}
+  }
+  return best;
+}
+stage.addEventListener("pointerdown",e=>{dragging=true;moved=0;lastX=e.clientX;lastY=e.clientY;stage.setPointerCapture(e.pointerId);stage.classList.add("drag")});
+stage.addEventListener("pointermove",e=>{
+  const r=stage.getBoundingClientRect();
+  if(dragging){
+    const dx=e.clientX-lastX,dy=e.clientY-lastY;moved+=Math.abs(dx)+Math.abs(dy);
+    tRotY+=dx*.006;tRotX=Math.max(-.9,Math.min(.9,tRotX+dy*.004));lastX=e.clientX;lastY=e.clientY;idleAt=performance.now();
+  }else{hover=pickAt(e.clientX-r.left,e.clientY-r.top);stage.style.cursor=hover?"pointer":""}
+});
+stage.addEventListener("pointerup",e=>{
+  dragging=false;stage.classList.remove("drag");
+  if(moved<5){const r=stage.getBoundingClientRect();const n=pickAt(e.clientX-r.left,e.clientY-r.top);n?select(n):closeDetail()}
+});
+stage.addEventListener("pointerleave",()=>{hover=null});
+stage.addEventListener("wheel",e=>{e.preventDefault();tDist=Math.max(320,Math.min(1500,tDist*(1+e.deltaY*.0012)));idleAt=performance.now()},{passive:false});
+
+function isLit(n){return lit&&lit.S.has(n.id)}
+function targets(now){
+  const focus=hover||selected;
+  for(const n of nodes){
+    if(lit){
+      const on=isLit(n);
+      n.ta=on?(reduce||now-litAt>lit.order.indexOf(n.id)*55?1:.15):.1;n.gold=on;
+    }else{n.gold=false;n.ta=focus?(n===focus||adj.get(focus.id).has(n.id)?1:.15):.85}
+  }
+  for(const l of links){
+    let c=[.5*.42,.89*.42,1*.42];
+    if(lit){
+      if(isLit(l.s)&&isLit(l.t)){const k=Math.min(l.s.ta,l.t.ta)>.5?1.1:.1;c=[1*k,.77*k,.42*k]}
+      else c=[.5*.04,.89*.04,.04];
+    }else if(focus){
+      c=(l.s===focus||l.t===focus)?[.5*1.2,.89*1.2,1.2]:[.5*.08,.89*.08,.08];
+    }
+    l.tgt=c;
+  }
+}
+
+const v3=new T.Vector3();
+function frame(now){
+  const dt=Math.min(50,now-(frame.last||now));frame.last=now;
+  if(!reduce&&boot<1)boot=Math.min(1,(now-t0)/1600);
+  const ease=1-Math.pow(1-boot,3);
+  if(!reduce&&!dragging&&!selected&&now-idleAt>2500)tRotY+=.0011*dt/16;
+  const k=reduce?1:.08;
+  rotY+=(tRotY-rotY)*k;rotX+=(tRotX-rotX)*k;dist+=(tDist-dist)*k;focusY+=(tFocusY-focusY)*k;
+  brain.rotation.set(rotX,rotY,0);
+  camera.position.set(0,focusY+60,dist);camera.lookAt(0,focusY,0);
+  for(const[m,sp,isT]of arcs){if(!reduce){isT?m.rotation.y+=sp*dt/16:m.rotation.z+=sp*dt/16}}
+
+  targets(now);
+  for(const n of nodes){
+    n.a+=(n.ta-n.a)*(reduce?1:.12);
+    const appear=reduce?1:Math.max(0,Math.min(1,(ease-n.delay)/.4));
+    const pulse=n.gold&&!reduce?1+.12*Math.sin(now/260+n.i):1;
+    n.sprite.scale.setScalar(n.base*appear*(n.gold?1.1:1)*pulse*(n===selected?1.3:1)*(.5+.5*Math.min(1,dist/760)));
+    n.sprite.material.color.copy(n.gold?GOLD:n.col);
+    n.sprite.material.opacity=n.a*appear*(n.logo?.5:1);
+    if(n.logo){
+      const ls=(n.hub?36:17)*appear*(n===selected?1.25:1)*(.6+.4*Math.min(1,dist/760));
+      n.logo.scale.setScalar(ls);
+      n.logo.material.color.copy(n.gold?GOLD:CYAN).lerp(new T.Color(1,1,1),n.gold?.2:.55);
+      n.logo.material.opacity=Math.min(1,n.a*1.1)*appear;
+    }
+  }
+  links.forEach((l,i)=>{
+    const appear=reduce?1:Math.max(0,Math.min(1,(ease-Math.max(l.s.delay,l.t.delay))/.4));
+    for(let j=0;j<3;j++)l.cur[j]+=(l.tgt[j]-l.cur[j])*(reduce?1:.1);
+    for(let j=0;j<3;j++){lCol[i*6+j]=l.cur[j]*appear;lCol[i*6+3+j]=l.cur[j]*appear}
+  });
+  lGeo.attributes.color.needsUpdate=true;
+
+  let pc=0;
+  if(lit&&!reduce&&now-litAt>lit.order.length*55){
+    links.forEach((l,i)=>{
+      if(!(isLit(l.s)&&isLit(l.t)))return;
+      const[s,e]=lit.S.get(l.s.id).g<=lit.S.get(l.t.id).g?[l.s,l.t]:[l.t,l.s];
+      const p=(now/1500+i*.37)%1;
+      pPos[pc*3]=s.p.x+(e.p.x-s.p.x)*p;pPos[pc*3+1]=s.p.y+(e.p.y-s.p.y)*p;pPos[pc*3+2]=s.p.z+(e.p.z-s.p.z)*p;pc++;
+    });
+  }
+  pGeo.setDrawRange(0,pc);pGeo.attributes.position.needsUpdate=true;
+
+  if(td.open&&td.visible){tdFrame(now);hud();requestAnimationFrame(frame);return}
+  renderer.render(scene,camera);
+
+  const focus=hover||selected;
+  for(const n of nodes){
+    const show=boot>.9&&(n.hub||n===focus||(focus&&adj.get(focus.id).has(n.id))||(n.gold&&n.a>.5)||dist<480);
+    if(!show){n.el.style.opacity=0;continue}
+    n.sprite.getWorldPosition(v3);const z=v3.z;v3.project(camera);
+    if(v3.z>1){n.el.style.opacity=0;continue}
+    const sx=(v3.x+1)/2*W,sy=(1-v3.y)/2*H;
+    const depth=Math.max(.55,Math.min(1,(z+RAD)/(RAD*2)));
+    n.el.style.transform=`translate(${(sx+n.base*.32+(n.logo?10:0)).toFixed(1)}px,${(sy-7).toFixed(1)}px)`;
+    n.el.style.opacity=(Math.min(1,n.a*1.2)*depth).toFixed(2);
+    n.el.className="lb"+(n.hub?" hub":"")+(n.gold?" on":"");
+  }
+  hud();
+  requestAnimationFrame(frame);
+}
+
+const $=id=>document.getElementById(id);
+let hudKey="";
+function hud(){
+  const key=[!!lit,lit&&lit.order.length,selected&&selected.id,boot>=1].join("|");
+  if(key===hudKey)return;hudKey=key;
+  const lines=[`Core <b>${boot>=1?"online":"initializing"}</b>`,`Concepts <b>${nodes.length}</b>`,`Links <b>${links.length}</b>`];
+  if(lit)lines.push(`Route <span class="g">${lit.order.length} components</span>`);
+  if(selected)lines.push(`Focus <b>${selected.label}</b>`);
+  $("hud").innerHTML=lines.join("<br>");
+}
+
+function select(n){
+  selected=n;
+  $("ddom").textContent=DOMAINS[n.d].name;$("dtitle").textContent=n.label;$("dtext").textContent=n.text;
+  const dl=$("dlogo");dl.style.display="none";
+  if(SLUG[n.id]||MONO[n.id]||PARTS[n.id])loadLogo(n.id).then(L=>{if(selected===n){dl.src=L.url;dl.style.display=""}});
+  $("dteardown").style.display=PARTS[n.id]?"":"none";
+  const L=$("dlinks");L.innerHTML="";
+  [...adj.get(n.id)].map(id=>byId.get(id)).forEach(m=>{const b=document.createElement("button");b.className="chip";b.textContent=m.label;b.onclick=()=>select(m);L.appendChild(b)});
+  $("detail").classList.add("open");
+  const th=Math.atan2(n.p.x,n.p.z);
+  let target=-th;while(target-tRotY>Math.PI)target-=Math.PI*2;while(target-tRotY<-Math.PI)target+=Math.PI*2;
+  tRotY=target;tRotX=0;tDist=430;tFocusY=n.p.y*.7;
+}
+function closeDetail(){
+  if(!selected)return;selected=null;$("detail").classList.remove("open");tDist=760;tFocusY=0;tRotX=.12;idleAt=performance.now();
+}
+$("dclose").onclick=closeDetail;
+
+const chips=$("chips");
+REQS.forEach(r=>{
+  const b=document.createElement("button");b.className="chip";b.textContent=r.label;b.setAttribute("aria-pressed","false");b.dataset.id=r.id;
+  b.onclick=()=>{sel.has(r.id)?sel.delete(r.id):sel.add(r.id);syncChips();$("err").textContent="";if(lit)run()};
+  chips.appendChild(b);
+});
+function syncChips(){chips.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed",sel.has(b.dataset.id)))}
+function detect(text){
+  const t=" "+text.toLowerCase()+" ";
+  REQS.forEach(r=>{if(r.kw.some(k=>new RegExp("(^|[^a-z0-9])"+k.replace(/ /g,"\\s+")+"([^a-z0-9]|$)").test(t)))sel.add(r.id)});
+}
+$("desc").addEventListener("input",()=>$("err").textContent="");
+$("go").onclick=()=>{
+  const txt=$("desc").value.trim();if(txt)detect(txt);syncChips();
+  if(!sel.size){$("err").textContent="Describe your app or pick at least one requirement.";return}
+  run();
+};
+$("clear").onclick=()=>{sel.clear();syncChips();lit=null;$("route").innerHTML="";$("desc").value="";$("err").textContent="";closeDetail()};
+function run(){
+  lit=plan();litAt=performance.now();closeDetail();$("err").textContent="";
+  const out=$("route");out.innerHTML="";
+  const groups=GROUPS.map(()=>[]);lit.S.forEach((v,id)=>groups[v.g].push([id,v.why]));
+  let d=0;
+  groups.forEach((items,gi)=>{
+    if(!items.length)return;
+    const s=document.createElement("div");s.className="step";s.style.animationDelay=(d++*70)+"ms";
+    s.innerHTML=`<h3>${GROUPS[gi]}</h3>`;
+    items.forEach(([id,why])=>{
+      const it=document.createElement("div");it.className="item";it.tabIndex=0;
+      it.innerHTML=`<b>${byId.get(id).label}</b><span>${why}</span>`;
+      if(SLUG[id]||MONO[id])loadLogo(id).then(L=>{const im=new Image();im.src=L.url;im.alt="";im.className="ilogo";it.querySelector("b").prepend(im)});
+      it.onclick=()=>select(byId.get(id));it.onkeydown=e=>{if(e.key==="Enter")it.onclick()};
+      s.appendChild(it);
+    });
+    out.appendChild(s);
+  });
+  lit.notes.forEach(n=>{const x=document.createElement("div");x.className="note";x.textContent=n;out.appendChild(x)});
+  tRotX=.12;tDist=760;
+}
+$("q").addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;const v=e.target.value.trim().toLowerCase();if(!v)return;
+  const n=nodes.find(n=>n.label.toLowerCase()===v)||nodes.find(n=>n.label.toLowerCase().includes(v));if(n)select(n);
+});
+
+const td={open:false,visible:false,n:null,parts:[],act:-1,openAt:0,e:0,rot:.6,drag:0,logo:null,io:null,labOn:false,labK:0,lab:null,ctrs:[]};
+const tdEl=$("teardown"),tdHost=$("tdCanvas"),tdLab=$("tdLabels"),tdCol=$("tdCol");
+const tdR=new T.WebGLRenderer({antialias:true,alpha:true});tdHost.appendChild(tdR.domElement);
+const tdScene=new T.Scene(),tdCam=new T.PerspectiveCamera(36,1,1,6000),tdGroup=new T.Group(),tdBase=new T.Group();
+tdScene.add(tdGroup,tdBase);
+const BRIGHT=new T.Color(0xdcf4ff);
+[[132,0,Math.PI*1.5,.002,.5],[146,1,Math.PI*.7,-.003,.3],[162,0,Math.PI*2,0,.12]].forEach(([r,st,len,sp,op])=>{
+  const m=new T.Mesh(new T.RingGeometry(r,r+1.4,128,1,st,len),new T.MeshBasicMaterial({color:CYAN,transparent:true,opacity:op,side:T.DoubleSide,depthWrite:false,blending:T.AdditiveBlending}));
+  m.rotation.x=-Math.PI/2;m.userData.sp=sp;tdBase.add(m);
+});
+let tdW=1,tdH=1;
+function tdSize(){
+  const r=tdHost.getBoundingClientRect();tdW=r.width||1;tdH=r.height||1;
+  tdR.setPixelRatio(Math.min(devicePixelRatio,2));tdR.setSize(tdW,tdH);tdCam.aspect=tdW/tdH;tdCam.updateProjectionMatrix();
+}
+function addMat(op){return{color:CYAN.clone(),transparent:true,opacity:op,depthWrite:false,blending:T.AdditiveBlending}}
+function dashed(geo,op){const l=new T.LineSegments(new T.EdgesGeometry(geo),new T.LineDashedMaterial({...addMat(op),dashSize:6,gapSize:5}));l.computeLineDistances();return l}
+function detail(kind,w,h,d){
+  const top=h/2+.6,pts=[];
+  if(kind==="os"){
+    for(let i=1;i<8;i++){const x=-w*.38+w*.76*i/8;pts.push(x,top,-d*.38,x,top,d*.38)}
+    for(let j=1;j<6;j++){const z=-d*.38+d*.76*j/6;pts.push(-w*.38,top,z,w*.38,top,z)}
+  }
+  if(kind==="code"){
+    for(let j=0;j<7;j++){const z=-d*.32+d*.64*j/6,ind=(j%3)*12,len=w*(.22+((j*37)%5)/12);pts.push(-w*.36+ind,top,z,-w*.36+ind+len,top,z)}
+  }
+  if(pts.length){const g=new T.BufferGeometry();g.setAttribute("position",new T.Float32BufferAttribute(pts,3));return new T.LineSegments(g,new T.LineBasicMaterial(addMat(.45)))}
+  if(kind==="pkg"){
+    const grp=new T.Group(),bg=new T.EdgesGeometry(new T.BoxGeometry(13,11,13));
+    for(let i=0;i<5;i++)for(let j=0;j<3;j++){const m=new T.LineSegments(bg,new T.LineBasicMaterial(addMat(.55)));m.position.set(-w*.32+i*w*.16,h/2+5.5,-d*.24+j*d*.24);grp.add(m)}
+    return grp;
+  }
+  return null;
+}
+function setOp(obj,op){obj.traverse(o=>{if(o.material)o.material.opacity=op})}
+function buildTeardown(n){
+  tdGroup.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){if(o.material.map)o.material.map.dispose();o.material.dispose()}});
+  tdGroup.clear();tdLab.innerHTML="";td.logo=null;td.ctrs=[];
+  const info=PARTS[n.id],P=info.parts;
+  td.parts=P.map(([name,,kind],i)=>{
+    const thin=kind==="meta"||kind==="rw",w=220-i*16,d=w*.64,h=kind==="meta"?5:kind==="rw"?8:14,g=new T.Group(),geo=new T.BoxGeometry(w,h,d);
+    const fill=new T.Mesh(geo,new T.MeshBasicMaterial(addMat(kind==="meta"?0:.05)));
+    const edge=thin?dashed(geo,.8):new T.LineSegments(new T.EdgesGeometry(geo),new T.LineBasicMaterial(addMat(.8)));
+    let inset=kind?detail(kind,w,h,d):null;
+    if(!inset&&!thin){inset=new T.LineSegments(new T.EdgesGeometry(new T.PlaneGeometry(w*.76,d*.76)),new T.LineBasicMaterial(addMat(.35)));inset.rotation.x=-Math.PI/2;inset.position.y=h/2+.5}
+    const lead=new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(w/2,0,0),new T.Vector3(w/2+90,0,0)]),new T.LineBasicMaterial(addMat(0)));
+    g.add(fill,edge,lead);if(inset)g.add(inset);tdGroup.add(g);
+    const el=document.createElement("div");el.className="pl";el.textContent=name;tdLab.appendChild(el);
+    return{name,kind,g,fill,edge,inset,lead,el,anchor:new T.Vector3(w/2+96,0,0),vis:1,drop:null,flash:0,state:"",txt:name,y:0};
+  });
+  if(info.lab){
+    for(let k=0;k<3;k++){
+      const g=new T.Group(),geo=new T.BoxGeometry(124,7,80),plate=dashed(geo,.9),fill=new T.Mesh(geo,new T.MeshBasicMaterial(addMat(.06)));
+      const line=new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(),new T.Vector3()]),new T.LineBasicMaterial(addMat(.5)));
+      g.add(plate,fill);tdGroup.add(g,line);
+      const el=document.createElement("div");el.className="pl";el.textContent=`Container ${k+1}, writable`;tdLab.appendChild(el);
+      td.ctrs.push({g,plate,fill,line,el,drop:null,x:0});
+    }
+  }
+  loadLogo(n.id).then(L=>{
+    if(td.n!==n)return;
+    const s=new T.Sprite(new T.SpriteMaterial({map:new T.CanvasTexture(L.canvas),color:0xdcf4ff,transparent:true,depthWrite:false}));
+    s.scale.setScalar(50);tdGroup.add(s);td.logo=s;
+    const im=$("tdLogo");if(im)im.src=L.url;
+  });
+  tdCol.innerHTML=`<section class="td-sec intro" data-i="-1"><img class="bigLogo" alt="" id="tdLogo"><p class="tag">${DOMAINS[n.d].name}</p><h2>${n.label}</h2><p>${info.lead}</p><p class="hint">Scroll to take it apart</p></section>`+
+    P.map(([name,txt],i)=>`<section class="td-sec" data-i="${i}"><h3>${name}</h3><p>${txt}</p></section>`).join("")+
+    (info.lab?labHTML():"")+
+    `<section class="td-sec outro" data-i="-2"><h3>Connected concepts</h3><div class="links" id="tdLinks"></div><div class="row"><button class="btn" id="tdBack2">Back to map</button></div></section>`;
+  const L=$("tdLinks");
+  [...adj.get(n.id)].map(id=>byId.get(id)).forEach(m=>{const b=document.createElement("button");b.className="chip";b.textContent=m.label;b.onclick=()=>{closeTeardown();select(m)};L.appendChild(b)});
+  $("tdBack2").onclick=closeTeardown;
+  td.lab=null;td.labOn=false;td.labK=0;
+  if(info.lab){td.lab={step:0,c:0,ver:0};wireLab();labReset()}
+  if(td.io)td.io.disconnect();
+  td.io=new IntersectionObserver(es=>{es.forEach(en=>{if(!en.isIntersecting)return;
+    const v=en.target.dataset.i;td.labOn=v==="lab";td.act=td.labOn?-1:+v;
+    tdCol.querySelectorAll(".td-sec").forEach(s=>s.classList.toggle("act",s===en.target&&(td.act>=0||td.labOn)));
+  })},{root:tdEl,rootMargin:"-45% 0px -45% 0px"});
+  tdCol.querySelectorAll(".td-sec").forEach(s=>td.io.observe(s));
+}
+
+const DF=[
+  ["FROM python:3.12-slim",0,1,"FROM pulls the base image: a slim Linux plus Python. You never rebuild these layers yourself."],
+  ["COPY requirements.txt .",1,.4,"Only the dependency list is copied first. This ordering is the trick that makes rebuilds fast. Keep going."],
+  ["RUN pip install -r requirements.txt",1,1,"RUN executes and freezes the result as a read-only layer. This is the slow, heavy step."],
+  ["COPY . .",2,1,"Your code goes in last, because it is what changes most often."],
+  ['CMD ["uvicorn", "main:app"]',3,1,"Metadata only: how to start the app. The image is complete. Run a container from it."]
+];
+function labHTML(){
+  return `<section class="td-sec lab" data-i="lab"><p class="tag">Lab</p><h3>Build it yourself</h3>
+  <p>Step through the Dockerfile, start containers from the image, then change the code and watch the cache.</p>
+  <div class="df" id="labDf">${DF.map((l,i)=>`<div class="dl" data-l="${i}"><code>${l[0].replace(/</g,"&lt;")}</code><span class="st"></span></div>`).join("")}</div>
+  <div class="labbar"><button class="btn primary sm" id="labNext">Build next step</button><button class="btn sm" id="labRun">docker run</button><button class="btn sm" id="labEdit">Edit app.py and rebuild</button><button class="btn sm" id="labReset">Reset</button></div>
+  <p class="labimg" id="labImg"></p>
+  <p class="labmsg" id="labMsg" aria-live="polite"></p></section>`;
+}
+function wireLab(){$("labNext").onclick=labNext;$("labRun").onclick=labRun;$("labEdit").onclick=labEdit;$("labReset").onclick=labReset}
+function labLines(){
+  const lab=td.lab;
+  document.querySelectorAll("#labDf .dl").forEach((el,i)=>{
+    el.className="dl"+(i<lab.step?" done":"")+(i===lab.step-1&&!lab.ver?" cur":"")+(lab.ver&&i<3?" cached":"")+(lab.ver&&i>=3?" rebuilt":"");
+    el.querySelector(".st").textContent=lab.ver?(i<3?"cached":"rebuilt"):"";
+  });
+  $("labImg").textContent=lab.step<DF.length?(lab.step?`Building, ${lab.step} of ${DF.length}`:"No image yet"):`Image myapp:1.${lab.ver}, read-only`+(lab.c?`, ${lab.c} container${lab.c>1?"s":""} running`:"");
+}
+function labMsg(t){$("labMsg").textContent=t}
+function labReset(){
+  const lab=td.lab;lab.step=0;lab.c=0;lab.ver=0;
+  td.parts.forEach(p=>{p.vis=0;p.drop=null;p.flash=0;p.state=""});
+  td.ctrs.forEach(c=>c.drop=null);
+  labLines();labMsg("Press Build next step to run the Dockerfile one instruction at a time.");
+}
+function labNext(){
+  const lab=td.lab;
+  if(lab.step>=DF.length){labMsg("The image is already built. Start a container, or change the code to see the cache at work.");return}
+  const[,pi,v,m]=DF[lab.step],p=td.parts[pi],now=performance.now();
+  if(p.vis===0)p.drop=now;else p.flash=now;
+  p.vis=v;lab.step++;labLines();labMsg(m);
+}
+function labRun(){
+  const lab=td.lab;
+  if(lab.step<DF.length){labMsg("Finish building the image first. A container always starts from a complete image.");return}
+  if(lab.c>=3){labMsg("Three containers, one image. The image is stored once; each container only adds its own thin writable layer.");return}
+  td.ctrs[lab.c].drop=performance.now();lab.c++;labLines();
+  labMsg(lab.c===1?"A container is the image plus a thin writable layer. Whatever it writes lives only there and is gone when the container is removed.":"Another container, same read-only layers underneath. That is why containers start in seconds and barely use extra disk.");
+}
+function labEdit(){
+  const lab=td.lab;
+  if(lab.step<DF.length){labMsg("Build the full image first, then change the code.");return}
+  const now=performance.now();lab.ver++;lab.c=0;td.ctrs.forEach(c=>c.drop=null);
+  td.parts.forEach((p,i)=>{if(i<2){p.flash=now;p.state="cached"}else if(i<4){p.drop=now+(i-2)*280;p.state="rebuilt"}});
+  labLines();
+  labMsg("You changed app.py. The base image and the dependencies come straight from cache. Only COPY . . and what follows are rebuilt, so the slow pip install is skipped. Start new containers from the new image.");
+}
+
+function openTeardown(n){
+  td.n=n;buildTeardown(n);tdEl.scrollTop=0;td.e=0;td.act=-1;td.rot=.6;td.drag=0;
+  td.openAt=performance.now()+(reduce?0:250);td.open=true;
+  tdEl.classList.add("open");tdEl.setAttribute("aria-hidden","false");
+  requestAnimationFrame(tdSize);
+  setTimeout(()=>{if(td.open)td.visible=true},reduce?0:520);
+}
+function closeTeardown(){
+  td.open=false;td.visible=false;tdEl.classList.remove("open");tdEl.setAttribute("aria-hidden","true");
+  if(td.io)td.io.disconnect();
+}
+$("dteardown").onclick=()=>{if(selected)openTeardown(selected)};
+$("tdBack").onclick=closeTeardown;
+addEventListener("keydown",e=>{if(e.key!=="Escape")return;td.open?closeTeardown():closeDetail()});
+let tdDragX=null;
+tdHost.addEventListener("pointerdown",e=>{tdDragX=e.clientX;tdHost.setPointerCapture(e.pointerId)});
+tdHost.addEventListener("pointermove",e=>{if(tdDragX===null)return;td.drag+=(e.clientX-tdDragX)*.008;tdDragX=e.clientX});
+tdHost.addEventListener("pointerup",()=>{tdDragX=null});
+
+const tv=new T.Vector3(),TAU=Math.PI*2;
+const clamp01=x=>Math.max(0,Math.min(1,x)),eOut=x=>1-Math.pow(1-x,3);
+function tdFrame(now){
+  const a=reduce?1:clamp01((now-td.openAt)/1000),ea=eOut(a);
+  const first=tdCol.querySelector('.td-sec[data-i="0"]');
+  const range=first?Math.max(1,first.offsetTop-tdH*.3):1;
+  td.e+=(clamp01(tdEl.scrollTop/range)-td.e)*(reduce?1:.1);
+  td.labK+=((td.labOn?1:0)-td.labK)*(reduce?1:.08);
+  const e=td.e,ee=e*e*(3-2*e),L=td.labK,ex=ee*(1-L),N=td.parts.length,lab=td.lab;
+  const still=Math.max(ee,L);
+  if(!reduce)td.rot+=.004*(1-still);
+  const rest=-.55+TAU*Math.round((td.rot+.55)/TAU);
+  td.rot+=(rest-td.rot)*.08*still;
+  tdGroup.rotation.y=td.rot+td.drag;
+  const gap=16+8*L;
+  td.parts.forEach((p,i)=>{
+    const c=i-(N-1)/2,act=td.act===i&&!td.labOn,dim=td.act>=0&&!act&&ex>.5;
+    const lv=lab?(p.kind==="rw"?0:p.vis):1,vis=1+(lv-1)*L;
+    const dt=p.drop==null?1:clamp01((now-p.drop)/650),drop=L*(1-eOut(dt))*150*(p.drop!=null&&now>=p.drop?1:0)+L*(p.drop!=null&&now<p.drop?150:0);
+    const fl=p.flash?Math.max(0,1-(now-p.flash)/1100):0;
+    p.y=c*gap+(c*66-c*gap)*ex+c*240*(1-ea)+drop;
+    p.g.position.set(ex*(i%2?8:-8),p.y,0);
+    p.g.rotation.y=ex*c*.06;
+    const k=ea*vis*(p.drop!=null&&now<p.drop?0:1);
+    p.edge.material.opacity=(dim?.28:act?1:.8)*k;
+    p.edge.material.color.copy(act||fl>0?BRIGHT:CYAN);
+    p.fill.material.opacity=(p.kind==="meta"?0:act?.17:.05+fl*.25)*k;
+    if(p.inset)setOp(p.inset,(dim?.1:.4)*k);
+    const lo=Math.max(clamp01((ex-.55)/.45)*(dim?.3:.85),L*lv*dt*.7);
+    p.lead.material.opacity=lo*k;
+    p.lo=Math.max(clamp01((ex-.55)/.45),L*lv*dt)*k;
+    const txt=p.name+(L>.5&&p.state?`  ${p.state}`:"");
+    if(txt!==p.txt){p.el.textContent=txt;p.txt=txt}
+  });
+  const visTop=td.parts.filter(p=>!(lab&&L>.5&&p.kind==="rw")).pop();
+  const top=visTop?visTop.y:0,bottom=td.parts[0].y;
+  if(td.logo){td.logo.position.set(0,top+46+ex*14,0);td.logo.material.opacity=ea*(1-L)}
+  td.ctrs.forEach((ct,k)=>{
+    const on=lab&&k<lab.c&&ct.drop!=null,ap=on?eOut(clamp01((now-ct.drop)/550)):0;
+    const tx=(k-(lab?lab.c-1:0)/2)*150;ct.x+=(tx-ct.x)*.12;
+    const y=top+100+(1-ap)*70;
+    ct.g.position.set(ct.x,y,0);ct.plate.material.opacity=ap*L*.95;ct.fill.material.opacity=ap*L*.07;
+    const pa=ct.line.geometry.attributes.position;pa.setXYZ(0,ct.x,y-4,0);pa.setXYZ(1,ct.x*.2,top+8,0);pa.needsUpdate=true;
+    ct.line.material.opacity=ap*L*.45;ct.vis=ap*L;
+  });
+  tdBase.position.y=bottom-70;
+  tdBase.children.forEach(m=>{if(!reduce)m.rotation.z+=m.userData.sp});
+  const dist=580+ex*N*58+L*(lab&&lab.c?150:60),cy=(top+bottom)/2+L*(lab&&lab.c?60:0);
+  tdCam.position.set(dist*.5,dist*.36+cy,dist*.79);tdCam.lookAt(0,cy,0);
+  tdR.render(tdScene,tdCam);
+  td.parts.forEach((p,i)=>{
+    tv.copy(p.anchor);p.g.localToWorld(tv);tv.project(tdCam);
+    p.el.style.opacity=(p.lo*(td.act>=0&&td.act!==i&&!td.labOn?.5:1)).toFixed(2);
+    p.el.style.transform=`translate(${((tv.x+1)/2*tdW+6).toFixed(1)}px,${((1-tv.y)/2*tdH-9).toFixed(1)}px)`;
+    p.el.classList.toggle("act",td.act===i&&!td.labOn);
+  });
+  td.ctrs.forEach(ct=>{
+    tv.set(66,0,0);ct.g.localToWorld(tv);tv.project(tdCam);
+    ct.el.style.opacity=(ct.vis||0).toFixed(2);
+    ct.el.style.transform=`translate(${((tv.x+1)/2*tdW+6).toFixed(1)}px,${((1-tv.y)/2*tdH-9).toFixed(1)}px)`;
+  });
+}
+
+size();addEventListener("resize",()=>{size();if(td.open)tdSize()});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+---
+id: lambda
+title: "Lambda"
+type: service
+domain: compute
+summary: "Runs code per request. Scales to zero when idle."
+logo: awslambda
+level: core
+access: free
+relations:
+  related: [ecr, apigw, sqs, dynamodb, rds]
+lead: "Serverless still runs on servers. You just stop managing them. Here is what sits under one function call."
+parts:
+  - name: "Execution environment"
+    text: "A lightweight micro virtual machine that AWS creates, reuses and destroys for you."
+  - name: "Runtime"
+    text: "Python, Node or a container image. Loaded once per environment, which is the cold start."
+  - name: "Handler"
+    text: "Your function. Called once per event with the payload and a context object."
+  - name: "IAM role"
+    text: "What the function is allowed to touch: a bucket, a table, a queue."
+  - name: "Triggers"
+    text: "API Gateway, S3 uploads, SQS messages or a schedule. Each event is one invocation."
+reviewed: 2026-10-20
+---
+
+Runs code per request. Scales to zero when idle.

@@ -1,0 +1,28 @@
+---
+id: aws
+title: "AWS"
+type: service
+domain: compute
+hub: true
+summary: "The cloud provider this map is built around."
+logo: amazonwebservices
+level: core
+access: free
+relations:
+  related: [lambda, ecs, eks, ec2, vpc, iam, s3, cloudwatch]
+lead: "AWS is a global set of building blocks. From the ground up, this is how they are organized."
+parts:
+  - name: "Regions"
+    text: "Independent geographic areas. You pick one close to your users and your data rules."
+  - name: "Availability zones"
+    text: "Isolated data centers inside a region. Spread across two or more to survive an outage."
+  - name: "VPC"
+    text: "Your private network, spanning the zones of a region."
+  - name: "Services"
+    text: "Compute, storage, data and AI blocks you assemble inside that network."
+  - name: "IAM"
+    text: "The permission layer wrapped around everything. Nothing talks to anything without it."
+reviewed: 2026-10-20
+---
+
+The cloud provider this map is built around.

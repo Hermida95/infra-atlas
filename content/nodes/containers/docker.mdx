@@ -1,0 +1,34 @@
+---
+id: docker
+title: "Docker"
+type: tool
+domain: containers
+hub: true
+summary: "Packages your app and everything it needs so it runs the same on any machine."
+logo: docker
+level: core
+access: free
+relations:
+  related: [dockerfile, image, container, compose]
+lead: "An image is not one thing. It is a stack of read-only layers, and a container is that stack plus one thin layer you can write to."
+parts:
+  - name: "Base image"
+    kind: os
+    text: "A minimal operating system plus the language runtime, pulled from a registry. Every image built on it shares these bytes on disk."
+  - name: "Dependencies layer"
+    kind: pkg
+    text: "The result of pip install, frozen into its own layer. Docker reuses it from cache until requirements.txt changes."
+  - name: "Application layer"
+    kind: code
+    text: "Your source code. It changes on every commit, so it sits near the top where rebuilding it is cheap."
+  - name: "Image metadata"
+    kind: meta
+    text: "CMD, ENV and EXPOSE. Instructions for how to run the image. They add no files."
+  - name: "Writable container layer"
+    kind: rw
+    text: "Added at docker run. Everything the process writes lives here and disappears with the container."
+lab: docker-layers
+reviewed: 2026-10-20
+---
+
+Packages your app and everything it needs so it runs the same on any machine.

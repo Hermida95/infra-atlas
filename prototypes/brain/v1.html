@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infra Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#090B0F;
+  --panel:rgba(15,18,24,.78);
+  --panel-solid:#0F1218;
+  --line:rgba(255,255,255,.08);
+  --line-strong:rgba(255,255,255,.16);
+  --text:#E4E7EB;
+  --muted:#8A919B;
+  --faint:#5A616B;
+  --accent:#5BE7C4;
+  --accent-ink:#04261D;
+  --accent-soft:rgba(91,231,196,.12);
+  --warn:#E8B45C;
+  --radius:12px;
+  --font:"Geist",ui-sans-serif,system-ui,sans-serif;
+  --mono:"Geist Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+header{position:fixed;inset:0 0 auto 0;height:60px;display:flex;align-items:center;gap:24px;padding:0 20px;z-index:3;border-bottom:1px solid var(--line);background:rgba(9,11,15,.7);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em;font-size:15px}
+.mark{width:22px;height:22px;border-radius:6px;border:1px solid var(--accent);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--accent)}
+nav{display:flex;gap:4px}
+nav a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:8px;font-size:13px}
+nav a[aria-current]{color:var(--text);background:rgba(255,255,255,.05)}
+nav a:hover{color:var(--text)}
+.search{margin-left:auto;position:relative}
+.search input{width:240px;height:34px;border-radius:8px;border:1px solid var(--line-strong);background:rgba(255,255,255,.03);color:var(--text);font:inherit;font-size:13px;padding:0 12px 0 32px}
+.search input::placeholder{color:var(--faint)}
+.search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.search svg{position:absolute;left:10px;top:9px;width:16px;height:16px;stroke:var(--muted)}
+#graph{position:fixed;top:60px;left:0;width:100vw;height:calc(100dvh - 60px);display:block;cursor:grab}
+#graph:active{cursor:grabbing}
+.panel{position:fixed;z-index:2;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+@media (prefers-reduced-transparency:reduce){.panel,header{background:var(--panel-solid);backdrop-filter:none}}
+#planner{top:76px;left:16px;width:380px;max-height:calc(100dvh - 92px);overflow:auto;padding:20px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent}
+#planner h1{font-size:20px;font-weight:600;letter-spacing:-.02em;margin:0 0 4px;line-height:1.25}
+#planner p.sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+label.f{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+textarea{width:100%;min-height:76px;resize:vertical;border-radius:8px;border:1px solid var(--line-strong);background:rgba(255,255,255,.03);color:var(--text);font:inherit;font-size:13px;padding:10px 12px;line-height:1.5}
+textarea::placeholder{color:var(--faint)}
+textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.err{color:#F08A7E;font-size:12px;margin:6px 0 0;min-height:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 16px}
+.chip{border:1px solid var(--line-strong);background:transparent;color:var(--muted);border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;transition:color .2s,border-color .2s,background .2s,transform .1s}
+.chip:hover{color:var(--text);border-color:rgba(255,255,255,.3)}
+.chip:active{transform:scale(.97)}
+.chip[aria-pressed="true"]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.row{display:flex;gap:8px}
+.btn{height:36px;padding:0 16px;border-radius:999px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--line-strong);background:transparent;color:var(--text);transition:transform .1s,background .2s}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{background:#7BEED1}
+.btn:not(.primary):hover{background:rgba(255,255,255,.05)}
+#route{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+#route:empty{display:none}
+.step{margin-bottom:14px;opacity:0;transform:translateY(6px);animation:in .45s cubic-bezier(.16,1,.3,1) forwards}
+@keyframes in{to{opacity:1;transform:none}}
+.step h3{font-size:12px;font-weight:500;color:var(--muted);margin:0 0 6px;font-family:var(--mono)}
+.item{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:6px 8px;margin:0 -8px;border-radius:8px;cursor:pointer}
+.item:hover{background:rgba(255,255,255,.04)}
+.item b{font-weight:500;color:var(--text)}
+.item span{grid-column:1/-1;color:var(--muted);font-size:12px}
+.note{border:1px solid rgba(232,180,92,.35);background:rgba(232,180,92,.07);color:#F0CF94;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:8px}
+#detail{top:76px;right:16px;width:320px;padding:20px;transform:translateX(calc(100% + 24px));transition:transform .45s cubic-bezier(.16,1,.3,1)}
+#detail.open{transform:none}
+#detail .dom{font-family:var(--mono);font-size:12px;color:var(--muted)}
+#detail h2{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:4px 0 8px}
+#detail p{color:#C3C8CF;margin:0 0 16px}
+#detail h4{font-size:12px;font-weight:500;color:var(--muted);margin:0 0 8px}
+.links{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:18px}
+.close:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.soon{font-size:12px;color:var(--faint);border-top:1px solid var(--line);padding-top:12px}
+.legend{position:fixed;right:16px;bottom:16px;z-index:2;font-size:12px;color:var(--faint);font-family:var(--mono)}
+@media (max-width:767px){
+  body{overflow:auto}
+  header{gap:12px}
+  nav{display:none}
+  .search input{width:150px}
+  #graph{position:relative;inset:auto;margin-top:60px;width:100%;height:60dvh}
+  #planner,#detail{position:static;width:auto;max-height:none;margin:12px 16px;transform:none}
+  #detail{display:none}
+  #detail.open{display:block}
+  .legend{display:none}
+}
+@media (prefers-reduced-motion:reduce){.step{animation:none;opacity:1;transform:none}#detail{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">IA</span>Infra Atlas</div>
+  <nav aria-label="Main">
+    <a href="#" aria-current="page">Map</a>
+    <a href="#">Journeys</a>
+    <a href="#">Labs</a>
+  </nav>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Find a concept" aria-label="Find a concept">
+  </div>
+</header>
+
+<canvas id="graph" aria-label="Knowledge map of DevOps and AWS concepts. Each node is a concept, each line a relationship."></canvas>
+
+<aside id="planner" class="panel" aria-labelledby="pt">
+  <h1 id="pt">What are you deploying?</h1>
+  <p class="sub">Describe your app. The map lights up the pieces you need and the order to wire them.</p>
+  <label class="f" for="desc">Your app</label>
+  <textarea id="desc" placeholder="A FastAPI app with Postgres, user login and image uploads, on a small budget"></textarea>
+  <p class="err" id="err" role="alert"></p>
+  <div class="chips" id="chips" aria-label="Requirements"></div>
+  <div class="row">
+    <button class="btn primary" id="go">Light up my route</button>
+    <button class="btn" id="clear">Clear</button>
+  </div>
+  <div id="route" aria-live="polite"></div>
+</aside>
+
+<aside id="detail" class="panel" aria-live="polite">
+  <button class="close" id="dclose" aria-label="Close">×</button>
+  <div class="dom" id="ddom"></div>
+  <h2 id="dtitle"></h2>
+  <p id="dtext"></p>
+  <h4>Connected to</h4>
+  <div class="links" id="dlinks"></div>
+  <div class="soon">Interactive lesson for this concept lands in phase 1.</div>
+</aside>
+
+<div class="legend">Drag to pan, scroll to zoom, click a node</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+const DOMAINS={
+  local:{name:"Local",x:-1.05,y:.05,c:"#8E99A8"},
+  containers:{name:"Containers",x:-.55,y:-.5,c:"#6E9FD0"},
+  cicd:{name:"CI/CD",x:-.6,y:.55,c:"#9AA7C9"},
+  iac:{name:"Infrastructure as code",x:-.02,y:-.68,c:"#A592CF"},
+  orch:{name:"Kubernetes",x:0,y:.02,c:"#6FB2C8"},
+  security:{name:"Security",x:-.05,y:.68,c:"#C79A8E"},
+  network:{name:"Networking",x:.55,y:-.55,c:"#7DB0D9"},
+  compute:{name:"Compute",x:.5,y:.05,c:"#D0A874"},
+  obs:{name:"Observability",x:.5,y:.66,c:"#B4B88A"},
+  data:{name:"Data",x:1.05,y:-.2,c:"#9CC29A"},
+  ai:{name:"AI",x:1.05,y:.5,c:"#C795C0"}
+};
+const N=[
+ ["localhost","Localhost","local",1,"Where every app starts. Your machine, your rules, nothing in between."],
+ ["git","Git","local",0,"Version control. Every change is tracked and every push can trigger a pipeline."],
+ ["app","Python app","local",0,"Your FastAPI or Django code and its dependencies."],
+ ["env","Env variables","local",0,"Configuration that changes per environment, kept out of the code."],
+ ["docker","Docker","containers",1,"Packages your app and everything it needs so it runs the same on any machine."],
+ ["dockerfile","Dockerfile","containers",0,"The recipe. Each instruction produces one layer of the image."],
+ ["image","Image","containers",0,"A read-only, versioned stack of layers. The thing you ship."],
+ ["container","Container","containers",0,"A running image plus a thin writable layer on top."],
+ ["layers","Layers","containers",0,"Cached filesystem snapshots. Order them well and rebuilds take seconds."],
+ ["compose","Docker Compose","containers",0,"Runs several containers together locally: app, database, cache."],
+ ["ecr","ECR","containers",0,"AWS private registry. Your cloud services pull images from here."],
+ ["terraform","Terraform","iac",1,"Describes infrastructure as code, then makes reality match it."],
+ ["tfstate","State","iac",0,"Terraform's memory of what exists. Usually stored in S3 with a lock."],
+ ["tfmodules","Modules","iac",0,"Reusable infrastructure building blocks."],
+ ["tfplan","Plan and apply","iac",0,"Plan shows the diff between code and reality. Apply makes it happen."],
+ ["kubernetes","Kubernetes","orch",1,"Keeps the desired number of containers running, healed and reachable."],
+ ["pod","Pod","orch",0,"The smallest unit Kubernetes schedules: one or more containers together."],
+ ["deployment","Deployment","orch",0,"Declares how many pods you want and how to roll out new versions."],
+ ["k8ssvc","Service","orch",0,"A stable address in front of pods that come and go."],
+ ["ingress","Ingress","orch",0,"Routes outside HTTP traffic to the right service."],
+ ["helm","Helm","orch",0,"Package manager for Kubernetes manifests."],
+ ["hpa","Autoscaler","orch",0,"Adds or removes pods based on load."],
+ ["vpc","VPC","network",0,"Your private network in AWS, split into public and private subnets."],
+ ["alb","Load balancer","network",0,"Spreads traffic across healthy targets."],
+ ["cloudfront","CloudFront","network",0,"CDN that serves content from locations close to your users."],
+ ["route53","Route 53","network",0,"DNS. Points your domain at your infrastructure."],
+ ["apigw","API Gateway","network",0,"Front door for HTTP APIs, with throttling and auth."],
+ ["waf","WAF","network",0,"Filters malicious traffic before it reaches your app."],
+ ["aws","AWS","compute",1,"The cloud provider this map is built around."],
+ ["lambda","Lambda","compute",0,"Runs code per request. Scales to zero when idle."],
+ ["ecs","ECS Fargate","compute",0,"Runs containers without managing servers."],
+ ["eks","EKS","compute",0,"Managed Kubernetes control plane on AWS."],
+ ["ec2","EC2","compute",0,"Virtual machines. Full control, full responsibility."],
+ ["rds","RDS Postgres","data",0,"Managed relational database with backups and failover."],
+ ["dynamodb","DynamoDB","data",0,"Serverless key-value database with single-digit millisecond reads."],
+ ["s3","S3","data",0,"Object storage for files, static sites, backups and state."],
+ ["elasticache","ElastiCache","data",0,"Managed Redis for caching and sessions."],
+ ["sqs","SQS","data",0,"Message queue. Moves slow work out of the request path."],
+ ["iam","IAM","security",0,"Who can do what. Least privilege for every service."],
+ ["cognito","Cognito","security",0,"User sign-up, login and tokens."],
+ ["ssm","Secrets","security",0,"Passwords and keys stored encrypted, never in code."],
+ ["oidc","OIDC","cicd",0,"Lets your pipeline assume an AWS role without stored keys."],
+ ["gha","GitHub Actions","cicd",1,"Builds, tests and deploys on every push."],
+ ["tests","Tests","cicd",0,"Unit, integration and smoke tests that gate every deploy."],
+ ["cloudwatch","CloudWatch","obs",1,"Logs, metrics and alarms for everything on AWS."],
+ ["xray","X-Ray","obs",0,"Traces one request across every service it touches."],
+ ["prometheus","Prometheus","obs",0,"Scrapes and stores metrics, the standard in Kubernetes."],
+ ["grafana","Grafana","obs",0,"Dashboards on top of your metrics."],
+ ["budgets","Budgets","obs",0,"Alerts before the bill surprises you."],
+ ["bedrock","Bedrock","ai",1,"Managed access to foundation models such as Claude, inside AWS."],
+ ["embeddings","Embeddings","ai",0,"Text turned into vectors, so meaning becomes searchable."],
+ ["vectordb","Vector store","ai",0,"Finds the documents closest in meaning to a question."],
+ ["rag","RAG","ai",0,"Retrieve your own documents, then let the model answer from them."]
+];
+const E=`localhost-git localhost-app localhost-env localhost-docker app-dockerfile git-gha docker-dockerfile docker-image docker-container dockerfile-image image-layers image-container docker-compose compose-container image-ecr ecr-aws terraform-tfstate terraform-tfmodules terraform-tfplan terraform-aws tfstate-s3 terraform-gha kubernetes-pod kubernetes-deployment kubernetes-k8ssvc kubernetes-ingress kubernetes-helm kubernetes-hpa deployment-pod pod-container ingress-alb kubernetes-eks helm-gha aws-lambda aws-ecs aws-eks aws-ec2 aws-vpc aws-iam aws-s3 aws-cloudwatch ecs-ecr lambda-ecr eks-ec2 ecs-alb alb-vpc lambda-apigw apigw-cloudfront cloudfront-s3 route53-cloudfront waf-cloudfront waf-alb rds-vpc elasticache-vpc ecs-vpc eks-vpc lambda-sqs ecs-sqs lambda-dynamodb rds-ssm iam-oidc oidc-gha gha-tests gha-ecr iam-cognito cognito-apigw ssm-env cloudwatch-xray cloudwatch-budgets prometheus-grafana prometheus-kubernetes cloudwatch-lambda cloudwatch-ecs bedrock-aws bedrock-embeddings embeddings-vectordb vectordb-rag rag-bedrock vectordb-s3 ecs-rds lambda-rds alb-cloudfront`.split(" ").map(s=>{const[a,b]=s.split("-");return{source:a,target:b}});
+
+const nodes=N.map(([id,label,d,hub,text])=>({id,label,d,hub:!!hub,text,r:hub?9:5}));
+const byId=new Map(nodes.map(n=>[n.id,n]));
+const links=E.filter(l=>byId.has(l.source)&&byId.has(l.target));
+const adj=new Map(nodes.map(n=>[n.id,new Set()]));
+links.forEach(l=>{adj.get(l.source).add(l.target);adj.get(l.target).add(l.source)});
+
+const REQS=[
+ {id:"api",label:"Python API",kw:["api","fastapi","django","flask","backend"]},
+ {id:"web",label:"Web frontend",kw:["web","frontend","react","next","website","site"]},
+ {id:"sql",label:"Relational database",kw:["postgres","postgresql","sql","mysql","database","relational"]},
+ {id:"files",label:"File uploads",kw:["upload","uploads","file","files","image","images","video","pdf"]},
+ {id:"jobs",label:"Background jobs",kw:["queue","job","jobs","worker","workers","async","cron","emails"]},
+ {id:"auth",label:"User accounts",kw:["login","auth","users","user","accounts","signup"]},
+ {id:"cache",label:"Caching",kw:["cache","redis","sessions"]},
+ {id:"ai",label:"LLM features",kw:["ai","llm","chatbot","rag","claude","embeddings","assistant"]},
+ {id:"k8s",label:"Kubernetes",kw:["kubernetes","k8s","microservices","eks","helm"]},
+ {id:"cheap",label:"Small budget",kw:["cheap","budget","free","hobby","side project","low cost"]},
+ {id:"scale",label:"High steady traffic",kw:["scale","millions","enterprise","high traffic","always on"]},
+ {id:"global",label:"Global users",kw:["global","worldwide","international","cdn"]}
+];
+const sel=new Set();
+
+const GROUPS=["Build locally","Containerize","Define infrastructure","Run and expose","Store and process","Secure","Ship","Observe"];
+function plan(){
+  const S=new Map(),notes=[];
+  const add=(g,id,why)=>{if(!S.has(id))S.set(id,{g,why})};
+  const has=k=>sel.has(k);
+  const k8s=has("k8s"),serverless=!k8s&&has("cheap")&&!has("scale");
+  add(0,"localhost","Run and debug the app on your machine first.");
+  add(0,"app","Your application code and its dependencies.");
+  add(0,"git","Every change is versioned and can trigger the pipeline.");
+  add(0,"env","Configuration stays out of the code.");
+  add(1,"docker","Package the app so it runs the same everywhere.");
+  add(1,"dockerfile","The recipe that builds your image.");
+  add(1,"image","The versioned artifact you deploy.");
+  if(has("sql")||has("cache"))add(1,"compose","Run the app and its database together locally.");
+  add(1,"ecr","Private registry that AWS pulls your image from.");
+  add(2,"terraform","Describe the whole infrastructure as code.");
+  add(2,"tfstate","Terraform's record of what exists, stored in S3.");
+  add(2,"aws","Your cloud provider.");
+  if(k8s){
+    add(3,"eks","Managed Kubernetes on AWS.");
+    add(3,"kubernetes","Keeps your containers running and healed.");
+    add(3,"deployment","Declares replicas and rollout strategy.");
+    add(3,"pod","Where your container actually runs.");
+    add(3,"k8ssvc","Stable address in front of the pods.");
+    add(3,"ingress","Routes outside traffic into the cluster.");
+    add(3,"helm","Packages and versions your manifests.");
+    add(3,"alb","Public entry point for HTTP traffic.");
+    add(3,"vpc","Private network for the cluster.");
+    if(has("scale"))add(3,"hpa","Adds pods when load rises.");
+    if(has("cheap"))notes.push("EKS has a fixed monthly cost for the control plane. On a small budget, ECS Fargate or Lambda usually fit better.");
+  }else if(serverless){
+    add(3,"lambda","Pay per request, scales to zero when idle.");
+    add(3,"apigw","Turns HTTPS requests into Lambda invocations.");
+  }else{
+    add(3,"ecs","Runs your container without managing servers.");
+    add(3,"alb","Spreads traffic across healthy containers.");
+    add(3,"vpc","Private network for your services.");
+  }
+  if(has("web")||has("global")){
+    add(3,"cloudfront","Serves your frontend close to your users.");
+    add(3,"route53","Points your domain at the CDN.");
+    add(4,"s3","Holds the static frontend files.");
+  }
+  if(has("sql")){
+    add(4,"rds","Managed Postgres with automated backups.");
+    add(3,"vpc","Keeps the database in a private subnet.");
+    add(5,"ssm","The database password lives here, never in code.");
+    if(has("cheap"))notes.push("RDS bills by the hour even when idle. On a tight budget, compare Aurora Serverless or DynamoDB.");
+    if(serverless)notes.push("Lambda talking to RDS needs VPC access and connection pooling, for example RDS Proxy.");
+  }
+  if(has("files"))add(4,"s3","Durable storage for uploads, served through signed URLs.");
+  if(has("jobs"))add(4,"sqs","Queues slow work so requests return fast.");
+  if(has("cache"))add(4,"elasticache","Redis for sessions and hot data.");
+  if(has("ai")){
+    add(4,"bedrock","Call Claude from inside AWS, authenticated with IAM.");
+    add(4,"embeddings","Turn your documents into vectors.");
+    add(4,"vectordb","Search your content by meaning.");
+    add(4,"rag","Answers grounded in your own data.");
+  }
+  if(has("auth"))add(5,"cognito","Sign-up, login and tokens without building auth yourself.");
+  if(has("scale"))add(5,"waf","Filters abusive traffic at the edge.");
+  add(5,"iam","Least-privilege permissions for every service.");
+  add(6,"gha","Builds, tests and deploys on every push.");
+  add(6,"tests","Nothing broken reaches production.");
+  add(6,"oidc","Deploys to AWS without stored access keys.");
+  add(7,"cloudwatch","Logs, metrics and alarms.");
+  if(has("scale")||k8s)add(7,"xray","Traces a slow request across services.");
+  if(k8s){add(7,"prometheus","Cluster and app metrics.");add(7,"grafana","Dashboards for the team.");}
+  if(has("cheap"))add(7,"budgets","Alerts before the bill surprises you.");
+  return{S,notes};
+}
+
+const canvas=document.getElementById("graph"),ctx=canvas.getContext("2d");
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+let W=0,H=0,dpr=1,transform=d3.zoomIdentity,hover=null,selected=null,lit=null,litAt=0;
+const R=()=>Math.min(W*.3,H*.46,380);
+
+function resize(){
+  const r=canvas.getBoundingClientRect();W=r.width;H=r.height;dpr=window.devicePixelRatio||1;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+}
+resize();
+
+const sim=d3.forceSimulation(nodes)
+  .force("link",d3.forceLink(links).id(d=>d.id).distance(l=>l.source.d===l.target.d?30:55).strength(l=>l.source.d===l.target.d?.7:.08))
+  .force("charge",d3.forceManyBody().strength(d=>d.hub?-200:-70))
+  .force("x",d3.forceX(d=>DOMAINS[d.d].x*R()).strength(.22))
+  .force("y",d3.forceY(d=>DOMAINS[d.d].y*R()*.78).strength(.22))
+  .force("collide",d3.forceCollide(d=>d.r+10))
+  .alphaDecay(.025);
+sim.stop();sim.tick(400);
+if(!reduce)sim.alpha(.08).restart();
+
+const zoom=d3.zoom().scaleExtent([.35,4]).on("zoom",e=>{transform=e.transform});
+d3.select(canvas).call(zoom).on("dblclick.zoom",null);
+function fit(dur){
+  const xs=nodes.map(n=>n.x),ys=nodes.map(n=>n.y);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const padL=W>767?400:24,padR=W>767?40:24;
+  const k=Math.min((W-padL-padR)/(x1-x0+80),(H-60)/(y1-y0+80),1.6);
+  const cx=(x0+x1)/2,cy=(y0+y1)/2;
+  const t=d3.zoomIdentity.translate(padL+(W-padL-padR)/2-cx*k,H/2-cy*k).scale(k);
+  d3.select(canvas).transition().duration(reduce?0:dur).call(zoom.transform,t);
+}
+fit(0);
+
+function pick(e){
+  const[mx,my]=d3.pointer(e,canvas);const[x,y]=transform.invert([mx,my]);
+  return sim.find(x,y,18/transform.k)||null;
+}
+d3.select(canvas).call(d3.drag().subject(e=>{const n=pick(e.sourceEvent);return n?n:null})
+  .on("start",e=>{if(!reduce&&!e.active)sim.alphaTarget(.2).restart();e.subject.fx=e.subject.x;e.subject.fy=e.subject.y})
+  .on("drag",e=>{const[x,y]=transform.invert(d3.pointer(e.sourceEvent,canvas));e.subject.fx=x;e.subject.fy=y;if(reduce){e.subject.x=x;e.subject.y=y}})
+  .on("end",e=>{if(!e.active)sim.alphaTarget(0);e.subject.fx=null;e.subject.fy=null}));
+canvas.addEventListener("mousemove",e=>{hover=pick(e);canvas.style.cursor=hover?"pointer":""});
+canvas.addEventListener("mouseleave",()=>hover=null);
+canvas.addEventListener("click",e=>{const n=pick(e);n?openDetail(n):closeDetail()});
+
+function isLit(id){return lit&&lit.S.has(id)}
+function litOrder(id){return lit?[...lit.S.keys()].indexOf(id):-1}
+function nodeAlpha(n,t){
+  if(lit){
+    if(!lit.S.has(n.id))return .12;
+    const on=reduce?1:Math.min(1,Math.max(0,(t-litAt-litOrder(n.id)*55)/260));
+    return .12+.88*on;
+  }
+  const focus=hover||selected;
+  if(focus)return n===focus||adj.get(focus.id).has(n.id)?1:.18;
+  return .9;
+}
+
+function draw(t){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  ctx.translate(transform.x,transform.y);ctx.scale(transform.k,transform.k);
+  const k=transform.k;
+
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.font=`500 ${13/k}px Geist, sans-serif`;
+  for(const key in DOMAINS){
+    const ms=nodes.filter(n=>n.d===key);if(!ms.length)continue;
+    const cx=d3.mean(ms,n=>n.x),cy=d3.min(ms,n=>n.y)-26/k;
+    ctx.fillStyle=lit?"rgba(138,145,155,.18)":"rgba(138,145,155,.42)";
+    ctx.fillText(DOMAINS[key].name,cx,cy);
+  }
+
+  const focus=hover||selected;
+  for(const l of links){
+    const a=l.source,b=l.target;
+    let col="rgba(255,255,255,.07)",w=1/k;
+    if(lit){
+      if(isLit(a.id)&&isLit(b.id)){
+        const on=reduce?1:Math.min(1,Math.max(0,(t-litAt-Math.max(litOrder(a.id),litOrder(b.id))*55)/300));
+        col=`rgba(91,231,196,${.08+.42*on})`;w=1.4/k;
+      }else col="rgba(255,255,255,.025)";
+    }else if(focus&&(a===focus||b===focus)){col="rgba(228,231,235,.45)";w=1.2/k}
+    else if(focus)col="rgba(255,255,255,.03)";
+    ctx.strokeStyle=col;ctx.lineWidth=w;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+
+  if(lit&&!reduce&&t-litAt>lit.S.size*55){
+    ctx.fillStyle="#5BE7C4";
+    for(const l of links){
+      const a=l.source,b=l.target;
+      if(!(isLit(a.id)&&isLit(b.id)))continue;
+      const[s,e]=lit.S.get(a.id).g<=lit.S.get(b.id).g?[a,b]:[b,a];
+      const p=((t/1400)+(l.index*.37))%1;
+      ctx.globalAlpha=Math.sin(p*Math.PI)*.9;
+      ctx.beginPath();ctx.arc(s.x+(e.x-s.x)*p,s.y+(e.y-s.y)*p,1.8/Math.sqrt(k),0,7);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  for(const n of nodes){
+    const a=nodeAlpha(n,t),on=isLit(n.id);
+    const base=on?"#5BE7C4":DOMAINS[n.d].c;
+    if(on&&a>.5){
+      ctx.globalAlpha=(a-.5)*.35;ctx.fillStyle="#5BE7C4";
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r+7,0,7);ctx.fill();
+    }
+    ctx.globalAlpha=a;
+    ctx.fillStyle=n.hub?base:"#0D1015";
+    ctx.strokeStyle=base;ctx.lineWidth=(n.hub?0:1.6)/Math.max(k,.8);
+    ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,7);ctx.fill();if(!n.hub)ctx.stroke();
+    if(n===selected){ctx.strokeStyle="#E4E7EB";ctx.lineWidth=1.2/k;ctx.beginPath();ctx.arc(n.x,n.y,n.r+4,0,7);ctx.stroke()}
+    const showLabel=n.hub||k>1.25||n===focus||(focus&&adj.get(focus.id).has(n.id))||(on&&a>.5);
+    if(showLabel){
+      ctx.font=`${n.hub?600:400} ${(n.hub?13:11.5)/k}px Geist, sans-serif`;
+      ctx.fillStyle=on?"#CFF8EC":n.hub?"#E4E7EB":"#AEB4BC";
+      ctx.globalAlpha=Math.max(a,lit&&!on?0:.2);
+      ctx.fillText(n.label,n.x,n.y+n.r+10/k);
+    }
+    ctx.globalAlpha=1;
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+addEventListener("resize",()=>{resize();fit(0)});
+
+const $=id=>document.getElementById(id);
+function openDetail(n){
+  selected=n;
+  $("ddom").textContent=DOMAINS[n.d].name;
+  $("dtitle").textContent=n.label;
+  $("dtext").textContent=n.text;
+  const L=$("dlinks");L.innerHTML="";
+  [...adj.get(n.id)].map(id=>byId.get(id)).forEach(m=>{
+    const b=document.createElement("button");b.className="chip";b.textContent=m.label;
+    b.onclick=()=>{openDetail(m);focusOn(m)};L.appendChild(b);
+  });
+  $("detail").classList.add("open");
+}
+function closeDetail(){selected=null;$("detail").classList.remove("open")}
+$("dclose").onclick=closeDetail;
+function focusOn(n){
+  const k=Math.max(transform.k,1.5);
+  const cx=W>767?(W+380)/2-160:W/2;
+  d3.select(canvas).transition().duration(reduce?0:700).call(zoom.transform,d3.zoomIdentity.translate(cx-n.x*k,H/2-n.y*k).scale(k));
+}
+
+const chips=$("chips");
+REQS.forEach(r=>{
+  const b=document.createElement("button");b.className="chip";b.textContent=r.label;b.setAttribute("aria-pressed","false");b.dataset.id=r.id;
+  b.onclick=()=>{sel.has(r.id)?sel.delete(r.id):sel.add(r.id);syncChips();$("err").textContent="";if(lit)run()};
+  chips.appendChild(b);
+});
+function syncChips(){chips.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed",sel.has(b.dataset.id)))}
+function detect(text){
+  const t=" "+text.toLowerCase()+" ";
+  REQS.forEach(r=>{if(r.kw.some(k=>new RegExp("(^|[^a-z0-9])"+k.replace(/ /g,"\\s+")+"([^a-z0-9]|$)").test(t)))sel.add(r.id)});
+}
+$("desc").addEventListener("input",()=>$("err").textContent="");
+$("go").onclick=()=>{
+  const txt=$("desc").value.trim();
+  if(txt)detect(txt);
+  syncChips();
+  if(!sel.size){$("err").textContent="Describe your app or pick at least one requirement.";return}
+  run();
+};
+$("clear").onclick=()=>{sel.clear();syncChips();lit=null;$("route").innerHTML="";$("desc").value="";$("err").textContent="";fit(700)};
+
+function run(){
+  lit=plan();litAt=performance.now();closeDetail();$("err").textContent="";
+  const out=$("route");out.innerHTML="";
+  const groups=GROUPS.map(()=>[]);
+  lit.S.forEach((v,id)=>groups[v.g].push([id,v.why]));
+  let d=0;
+  groups.forEach((items,gi)=>{
+    if(!items.length)return;
+    const s=document.createElement("div");s.className="step";s.style.animationDelay=(d++*70)+"ms";
+    s.innerHTML=`<h3>${GROUPS[gi]}</h3>`;
+    items.forEach(([id,why])=>{
+      const it=document.createElement("div");it.className="item";it.tabIndex=0;
+      it.innerHTML=`<b>${byId.get(id).label}</b><span>${why}</span>`;
+      it.onclick=()=>{focusOn(byId.get(id));openDetail(byId.get(id))};
+      it.onkeydown=e=>{if(e.key==="Enter")it.onclick()};
+      s.appendChild(it);
+    });
+    out.appendChild(s);
+  });
+  lit.notes.forEach(n=>{const x=document.createElement("div");x.className="note";x.textContent=n;out.appendChild(x)});
+  fit(800);
+}
+
+$("q").addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;
+  const v=e.target.value.trim().toLowerCase();if(!v)return;
+  const n=nodes.find(n=>n.label.toLowerCase()===v)||nodes.find(n=>n.label.toLowerCase().includes(v));
+  if(n){focusOn(n);openDetail(n)}
+});
+</script>
+</body>
+</html>

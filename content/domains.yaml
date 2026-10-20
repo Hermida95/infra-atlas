@@ -1,0 +1,56 @@
+# Domains of the knowledge map. x/y/z place each region in the 3D brain (journey reads left to right).
+- id: local
+  name: "Local"
+  order: 0
+  position: [-1.05, 0.05, 0]
+  hue: 200
+- id: containers
+  name: "Containers"
+  order: 1
+  position: [-0.55, -0.5, 0.35]
+  hue: 192
+- id: cicd
+  name: "CI/CD"
+  order: 2
+  position: [-0.6, 0.55, -0.35]
+  hue: 210
+- id: iac
+  name: "Infrastructure as code"
+  order: 3
+  position: [-0.02, -0.68, 0.3]
+  hue: 222
+- id: orch
+  name: "Kubernetes"
+  order: 4
+  position: [0, 0.02, 0]
+  hue: 186
+- id: security
+  name: "Security"
+  order: 5
+  position: [-0.05, 0.68, -0.35]
+  hue: 205
+- id: network
+  name: "Networking"
+  order: 6
+  position: [0.55, -0.55, 0.35]
+  hue: 196
+- id: compute
+  name: "Compute"
+  order: 7
+  position: [0.5, 0.05, -0.1]
+  hue: 214
+- id: obs
+  name: "Observability"
+  order: 8
+  position: [0.5, 0.66, -0.35]
+  hue: 178
+- id: data
+  name: "Data"
+  order: 9
+  position: [1.05, -0.2, 0.3]
+  hue: 170
+- id: ai
+  name: "AI"
+  order: 10
+  position: [1.05, 0.5, -0.3]
+  hue: 230
