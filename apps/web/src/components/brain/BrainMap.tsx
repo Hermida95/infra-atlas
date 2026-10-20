@@ -5,12 +5,32 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { domainById, graph, type GraphNode, neighbours, nodeById } from "@/lib/graph";
 import BrainScene, { type MapStore } from "./BrainScene";
 import { Mark } from "./Mark";
+import { Planner } from "./Planner";
+import type { Route } from "@/lib/planner";
 
 export default function BrainMap() {
-  const store = useRef<MapStore>({ hover: null, selected: null });
+  const store = useRef<MapStore>({ hover: null, selected: null, route: null, routeAt: 0, shiftX: 0 });
   const labels = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [query, setQuery] = useState("");
+  const [route, setRoute] = useState<Route | null>(null);
+
+  // On desktop the planner sits on the left, so the hologram is centred in the remaining space.
+  useEffect(() => {
+    const mq = matchMedia("(min-width: 768px)");
+    const sync = () => (store.current.shiftX = mq.matches ? 200 : 0);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const showRoute = useCallback((next: Route | null) => {
+    store.current.route = next;
+    store.current.routeAt = performance.now();
+    store.current.selected = null;
+    setSelected(null);
+    setRoute(next);
+  }, []);
 
   const select = useCallback((node: GraphNode | null) => {
     store.current.selected = node;
@@ -58,6 +78,8 @@ export default function BrainMap() {
       </div>
       <div className="labels" ref={labels} aria-hidden="true" />
 
+      <Planner route={route} onRoute={showRoute} onSelect={select} />
+
       <aside className={`panel detail${selected ? " open" : ""}`} aria-live="polite">
         {selected && (
           <>
@@ -90,6 +112,12 @@ export default function BrainMap() {
         Concepts <b>{graph.nodes.length}</b>
         <br />
         Links <b>{graph.links.length}</b>
+        {route && (
+          <>
+            <br />
+            Route <span className="gold">{route.order.size} components</span>
+          </>
+        )}
         {selected && (
           <>
             <br />

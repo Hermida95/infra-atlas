@@ -10,9 +10,18 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { domainById, graph, type GraphNode, neighbours } from "@/lib/graph";
 import { hasMark } from "@/lib/logos";
+import type { Route } from "@/lib/planner";
 import { glowTexture, markCanvas } from "@/lib/textures";
 
-export type MapStore = { hover: GraphNode | null; selected: GraphNode | null };
+export type MapStore = {
+  hover: GraphNode | null;
+  selected: GraphNode | null;
+  /** The planner route currently lit in gold, and when it was lit (for the staggered reveal). */
+  route: Route | null;
+  routeAt: number;
+  /** Desktop layout reserves the left side for the planner panel. */
+  shiftX: number;
+};
 
 type Props = {
   store: RefObject<MapStore>;
@@ -27,6 +36,7 @@ THREE.ColorManagement.enabled = false;
 const RAD = 240;
 const CYAN = new THREE.Color(0x7fe3ff);
 const WHITE = new THREE.Color(1, 1, 1);
+const GOLD = new THREE.Color(0xffc46b);
 
 export default function BrainScene(props: Props) {
   return (
@@ -96,6 +106,18 @@ function buildScene() {
     new THREE.LineSegments(
       lGeo,
       new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+    ),
+  );
+
+  // Gold pulses that travel along lit links, from earlier route stages to later ones.
+  const pPos = new Float32Array(links.length * 3);
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+  pGeo.setDrawRange(0, 0);
+  brain.add(
+    new THREE.Points(
+      pGeo,
+      new THREE.PointsMaterial({ size: 16, map: glow, color: GOLD, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     ),
   );
 
@@ -171,7 +193,7 @@ function buildScene() {
       mat?.dispose?.();
     });
 
-  return { root, brain, items, links, lGeo, lCol, arcs, dispose };
+  return { root, brain, items, links, lGeo, lCol, pGeo, pPos, arcs, dispose };
 }
 
 function World({ store, labels, onSelect }: Props) {
@@ -273,7 +295,8 @@ function World({ store, labels, onSelect }: Props) {
     const v = view.current;
     const now = performance.now();
     const dt = Math.min(50, delta * 1000);
-    const { hover, selected } = store.current;
+    const { hover, selected, route, routeAt, shiftX } = store.current;
+    const lit = (id: string) => route?.order.has(id) ?? false;
 
     if (selected !== v.lastSel) {
       v.lastSel = selected;
@@ -299,6 +322,10 @@ function World({ store, labels, onSelect }: Props) {
     scene.brain.rotation.set(v.rotX, v.rotY, 0);
     camera.position.set(0, v.focusY + 60, v.dist);
     camera.lookAt(0, v.focusY, 0);
+    const pc = camera as THREE.PerspectiveCamera;
+    if (pc.view?.offsetX !== -shiftX || pc.view?.fullWidth !== size.width) {
+      pc.setViewOffset(size.width, size.height, -shiftX, 0, size.width, size.height);
+    }
     if (!v.reduce) {
       for (const [m, sp, isTick] of scene.arcs) {
         if (isTick) m.rotation.y += (sp * dt) / 16;
@@ -310,22 +337,34 @@ function World({ store, labels, onSelect }: Props) {
     const near = focus ? neighbours.get(focus.id)! : null;
     const zoomK = 0.5 + 0.5 * Math.min(1, v.dist / 760);
     for (const it of scene.items) {
-      it.ta = focus ? (it.node === focus || near!.has(it.node.id) ? 1 : 0.15) : 0.85;
+      const gold = lit(it.node.id);
+      if (route) {
+        const revealed = v.reduce || now - routeAt > route.order.get(it.node.id)! * 55;
+        it.ta = gold ? (revealed ? 1 : 0.15) : 0.1;
+      } else it.ta = focus ? (it.node === focus || near!.has(it.node.id) ? 1 : 0.15) : 0.85;
       it.a += (it.ta - it.a) * (v.reduce ? 1 : 0.12);
       const appear = v.reduce ? 1 : Math.max(0, Math.min(1, (ease - it.delay) / 0.4));
       const sel = it.node === selected ? 1.3 : 1;
-      it.sprite.scale.setScalar(it.base * appear * sel * zoomK);
+      const pulse = gold && !v.reduce ? 1 + 0.12 * Math.sin(now / 260 + it.delay * 40) : 1;
+      it.sprite.scale.setScalar(it.base * appear * sel * zoomK * (gold ? 1.1 : 1) * pulse);
+      it.sprite.material.color.copy(gold ? GOLD : it.color);
       it.sprite.material.opacity = it.a * appear * (it.mark ? 0.5 : 1);
       if (it.mark) {
         it.mark.scale.setScalar((it.node.hub ? 36 : 17) * appear * (sel > 1 ? 1.25 : 1) * (0.6 + 0.4 * Math.min(1, v.dist / 760)));
-        it.mark.material.color.copy(CYAN).lerp(WHITE, 0.55);
+        it.mark.material.color.copy(gold ? GOLD : CYAN).lerp(WHITE, gold ? 0.2 : 0.55);
         it.mark.material.opacity = Math.min(1, it.a * 1.1) * appear;
       }
     }
     scene.links.forEach((l, i) => {
-      const on = focus && (l.s.node === focus || l.t.node === focus);
-      const kk = focus ? (on ? 1.2 : 0.08) : 0.42;
-      l.tgt = [0.5 * kk, 0.89 * kk, kk];
+      if (route) {
+        const both = lit(l.s.node.id) && lit(l.t.node.id);
+        const kk = both ? (Math.min(l.s.ta, l.t.ta) > 0.5 ? 1.1 : 0.1) : 0.04;
+        l.tgt = both ? [kk, 0.77 * kk, 0.42 * kk] : [0.5 * kk, 0.89 * kk, kk];
+      } else {
+        const on = focus && (l.s.node === focus || l.t.node === focus);
+        const kk = focus ? (on ? 1.2 : 0.08) : 0.42;
+        l.tgt = [0.5 * kk, 0.89 * kk, kk];
+      }
       const appear = v.reduce ? 1 : Math.max(0, Math.min(1, (ease - Math.max(l.s.delay, l.t.delay)) / 0.4));
       for (let j = 0; j < 3; j++) {
         l.cur[j] += (l.tgt[j] - l.cur[j]) * (v.reduce ? 1 : 0.1);
@@ -334,10 +373,25 @@ function World({ store, labels, onSelect }: Props) {
     });
     scene.lGeo.attributes.color.needsUpdate = true;
 
+    let pulses = 0;
+    if (route && !v.reduce && now - routeAt > route.order.size * 55) {
+      scene.links.forEach((l, i) => {
+        const a = route.stageIndex.get(l.s.node.id), b = route.stageIndex.get(l.t.node.id);
+        if (a === undefined || b === undefined) return;
+        const [from, to] = a <= b ? [l.s.node.position, l.t.node.position] : [l.t.node.position, l.s.node.position];
+        const p = (now / 1500 + i * 0.37) % 1;
+        for (let j = 0; j < 3; j++) scene.pPos[pulses * 3 + j] = from[j] + (to[j] - from[j]) * p;
+        pulses++;
+      });
+    }
+    scene.pGeo.setDrawRange(0, pulses);
+    scene.pGeo.attributes.position.needsUpdate = true;
+
     for (const it of scene.items) {
       const el = it.el;
       if (!el) continue;
-      const show = v.boot > 0.9 && (it.node.hub || it.node === focus || near?.has(it.node.id) || v.dist < 480);
+      const gold = lit(it.node.id);
+      const show = v.boot > 0.9 && (it.node.hub || it.node === focus || near?.has(it.node.id) || (gold && it.a > 0.5) || v.dist < 480);
       if (!show) { el.style.opacity = "0"; continue; }
       it.sprite.getWorldPosition(tmp);
       const z = tmp.z;
@@ -347,6 +401,7 @@ function World({ store, labels, onSelect }: Props) {
       const depth = Math.max(0.55, Math.min(1, (z + RAD) / (RAD * 2)));
       el.style.transform = `translate(${(sx + it.base * 0.32 + (it.mark ? 10 : 0)).toFixed(1)}px,${(sy - 7).toFixed(1)}px)`;
       el.style.opacity = (Math.min(1, it.a * 1.2) * depth).toFixed(2);
+      el.classList.toggle("on", gold);
     }
   });
 

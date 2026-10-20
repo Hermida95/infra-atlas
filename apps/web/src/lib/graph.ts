@@ -4,6 +4,12 @@ export type PartKind = "os" | "pkg" | "code" | "meta" | "rw";
 export type Part = { name: string; kind: PartKind | null; text: string };
 export type Vec3 = [number, number, number];
 
+export const STAGES = ["build", "containerize", "infra", "run", "data", "secure", "ship", "observe"] as const;
+export type Stage = (typeof STAGES)[number];
+export type PlannerNote = { when: string; text: string };
+export type PlannerRule = { stage: Stage; when: string; why: string; notes: PlannerNote[] };
+export type Requirement = { id: string; label: string; keywords: string[] };
+
 export type GraphNode = {
   id: string;
   title: string;
@@ -18,6 +24,7 @@ export type GraphNode = {
   lead: string | null;
   parts: Part[];
   lab: string | null;
+  planner: PlannerRule | null;
   position: Vec3;
 };
 
@@ -27,6 +34,7 @@ export type Graph = {
   version: number;
   generatedAt: string;
   domains: Domain[];
+  requirements: Requirement[];
   nodes: GraphNode[];
   links: Link[];
 };
