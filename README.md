@@ -4,7 +4,7 @@ A 3D, explorable map of DevOps, cloud and AI: the journey of an app from `localh
 
 Every technology is a node in a holographic knowledge graph. Open one and it comes apart into the pieces it is made of; some include a lab where you build, run and break things yourself. The project deploys itself along the same journey it teaches.
 
-> Status: phase 0. Monorepo, content schema and the 3D map are in place. The planner and the teardown views live in `prototypes/brain` and are being ported.
+> Status: phase 1. The 3D map, the content-driven deployment planner, per-technology teardowns and the Docker lab run in the Next.js app. `prototypes/brain` keeps the original HTML prototype for reference.
 
 ## Layout
 
@@ -29,6 +29,14 @@ make api       # API on http://localhost:8000
 make up        # the API in Docker
 make help      # everything else
 ```
+
+## Plan a deployment from the terminal
+
+```bash
+uv run brain plan --text "FastAPI with Postgres, user login and image uploads on a small budget"
+```
+
+The same rules power the planner in the browser: each concept declares in its frontmatter when it belongs in a route, as a boolean expression over requirements (`not k8s and cheap and not scale`).
 
 ## Add a concept
 

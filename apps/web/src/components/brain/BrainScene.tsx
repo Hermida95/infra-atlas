@@ -27,6 +27,8 @@ type Props = {
   store: RefObject<MapStore>;
   labels: RefObject<HTMLDivElement | null>;
   onSelect: (node: GraphNode | null) => void;
+  /** Stop rendering while another full-screen view covers the map. */
+  paused?: boolean;
 };
 
 // The hologram is tuned for additive light in plain sRGB, like the prototype:
@@ -38,9 +40,10 @@ const CYAN = new THREE.Color(0x7fe3ff);
 const WHITE = new THREE.Color(1, 1, 1);
 const GOLD = new THREE.Color(0xffc46b);
 
-export default function BrainScene(props: Props) {
+export default function BrainScene({ paused = false, ...props }: Props) {
   return (
     <Canvas
+      frameloop={paused ? "never" : "always"}
       camera={{ fov: 48, near: 1, far: 6000, position: [0, 60, 920] }}
       dpr={[1, 2]}
       flat
@@ -196,7 +199,7 @@ function buildScene() {
   return { root, brain, items, links, lGeo, lCol, pGeo, pPos, arcs, dispose };
 }
 
-function World({ store, labels, onSelect }: Props) {
+function World({ store, labels, onSelect }: Omit<Props, "paused">) {
   const { camera, gl, size } = useThree();
   const [scene] = useState(buildScene);
   const view = useRef({

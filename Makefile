@@ -19,8 +19,10 @@ dev: content ## Run the web app on http://localhost:3000
 api: content ## Run the FastAPI app on http://localhost:8000
 	GRAPH_PATH=$(CURDIR)/apps/web/src/data/graph.json uv run uvicorn api.main:app --reload --port 8000
 
-test: ## Run Python tests
+test: content ## Run Python and web tests
 	uv run pytest -q
+	$(PNPM) --filter web logos
+	$(PNPM) --filter web test
 
 lint: ## Lint Python and TypeScript
 	uv run ruff check .

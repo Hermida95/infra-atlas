@@ -6,6 +6,7 @@ import { domainById, graph, type GraphNode, neighbours, nodeById } from "@/lib/g
 import BrainScene, { type MapStore } from "./BrainScene";
 import { Mark } from "./Mark";
 import { Planner } from "./Planner";
+import { Teardown } from "../teardown/Teardown";
 import type { Route } from "@/lib/planner";
 
 export default function BrainMap() {
@@ -14,6 +15,7 @@ export default function BrainMap() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [query, setQuery] = useState("");
   const [route, setRoute] = useState<Route | null>(null);
+  const [teardown, setTeardown] = useState<GraphNode | null>(null);
 
   // On desktop the planner sits on the left, so the hologram is centred in the remaining space.
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function BrainMap() {
   }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && select(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !document.querySelector(".teardown") && select(null);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [select]);
@@ -74,7 +76,7 @@ export default function BrainMap() {
       </header>
 
       <div className="stage" aria-label="3D knowledge map of DevOps and AWS concepts. Drag to rotate, scroll to zoom, click a node for details.">
-        <BrainScene store={store} labels={labels} onSelect={select} />
+        <BrainScene store={store} labels={labels} onSelect={select} paused={teardown !== null} />
       </div>
       <div className="labels" ref={labels} aria-hidden="true" />
 
@@ -91,7 +93,9 @@ export default function BrainMap() {
             </div>
             <p>{selected.summary}</p>
             {selected.parts.length > 0 && (
-              <p className="soon">Teardown with {selected.parts.length} parts is being ported from the prototype.</p>
+              <button type="button" className="btn gold" onClick={() => setTeardown(selected)}>
+                Take it apart
+              </button>
             )}
             <h4>Connected to</h4>
             <div className="links">
@@ -125,6 +129,18 @@ export default function BrainMap() {
           </>
         )}
       </div>
+      {teardown && (
+        <Teardown
+          key={teardown.id}
+          node={teardown}
+          onClose={() => setTeardown(null)}
+          onSelect={(n) => {
+            setTeardown(null);
+            select(n);
+          }}
+        />
+      )}
+
       <div className="hint" aria-hidden="true">Drag to rotate · scroll to zoom · click a node</div>
     </>
   );
