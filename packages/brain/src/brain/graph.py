@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from brain.layout import compute_layout
-from brain.models import Domain, Node
+from brain.models import Domain, Node, Planner, Requirement
 
 GRAPH_VERSION = 1
 
@@ -40,6 +40,7 @@ def build_graph(
     domains: Sequence[Domain],
     nodes: Sequence[Node],
     *,
+    requirements: Sequence[Requirement] = (),
     include_pro: bool = False,
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
@@ -53,6 +54,7 @@ def build_graph(
         "version": GRAPH_VERSION,
         "generatedAt": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "domains": [_domain_json(d) for d in sorted(domains, key=lambda d: (d.order, d.id))],
+        "requirements": [_requirement_json(r) for r in requirements],
         "nodes": [_node_json(node, positions[node.id]) for node in published],
         "links": [{"source": s, "target": t, "type": "related"} for s, t in links],
     }
@@ -96,4 +98,20 @@ def _node_json(node: Node, position: tuple[float, float, float]) -> dict[str, An
         "parts": [{"name": p.name, "kind": p.kind, "text": p.text} for p in meta.parts],
         "lab": meta.lab,
         "position": list(position),
+        "planner": _planner_json(meta.planner),
+    }
+
+
+def _requirement_json(requirement: Requirement) -> dict[str, Any]:
+    return {"id": requirement.id, "label": requirement.label, "keywords": requirement.keywords}
+
+
+def _planner_json(planner: Planner | None) -> dict[str, Any] | None:
+    if planner is None:
+        return None
+    return {
+        "stage": planner.stage,
+        "when": planner.when,
+        "why": planner.why,
+        "notes": [{"when": note.when, "text": note.text} for note in planner.notes],
     }

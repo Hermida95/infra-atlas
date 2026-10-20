@@ -1,8 +1,5 @@
 # What a user can say about their app. Planner rules in each node's `planner.when`
 # are boolean expressions over these ids: `and`, `or`, `not`, parentheses, `true`.
-- id: api
-  label: Python API
-  keywords: [api, fastapi, django, flask, backend]
 - id: web
   label: Web frontend
   keywords: [web, frontend, react, next, website, site]

@@ -19,7 +19,10 @@ PartKind = Literal["os", "pkg", "code", "meta", "rw"]
 Level = Literal["core", "intermediate", "advanced"]
 Access = Literal["free", "pro"]
 
+Stage = Literal["build", "containerize", "infra", "run", "data", "secure", "ship", "observe"]
+
 SUMMARY_MAX_LENGTH = 200
+WHY_MAX_LENGTH = 160
 
 
 class _Strict(BaseModel):
@@ -52,6 +55,26 @@ class Relations(_Strict):
         return [(kind, target) for kind in Relations.model_fields for target in getattr(self, kind)]
 
 
+class Requirement(_Strict):
+    """Something a user can say about their app. `planner.when` expressions use the ids."""
+
+    id: Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+$")]
+    label: NonEmptyStr
+    keywords: list[NonEmptyStr] = []
+
+
+class PlannerNote(_Strict):
+    when: NonEmptyStr
+    text: NonEmptyStr
+
+
+class Planner(_Strict):
+    stage: Stage
+    when: NonEmptyStr
+    why: Annotated[str, StringConstraints(min_length=1, max_length=WHY_MAX_LENGTH)]
+    notes: list[PlannerNote] = []
+
+
 class NodeFrontmatter(_Strict):
     id: Slug
     title: NonEmptyStr
@@ -69,10 +92,7 @@ class NodeFrontmatter(_Strict):
     parts: list[Part] = []
     lab: Slug | None = None
     reviewed: date
-    # Planner fields (see docs/DISENO.md). Unused by the graph for now.
-    satisfies: list[Slug] = []
-    stage: Slug | None = None
-    when: dict[str, str] = {}
+    planner: Planner | None = None
 
 
 @dataclass(frozen=True, slots=True)

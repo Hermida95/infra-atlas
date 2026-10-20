@@ -52,3 +52,20 @@ def write_node(content_dir: Path) -> WriteNode:
         return path
 
     return _write
+
+
+REQUIREMENTS = [
+    {"id": "api", "label": "Python API", "keywords": ["api", "fastapi"]},
+    {"id": "sql", "label": "Relational database", "keywords": ["postgres"]},
+    {"id": "cheap", "label": "Small budget", "keywords": ["budget", "side project"]},
+]
+
+
+@pytest.fixture
+def write_requirements(content_dir: Path) -> Callable[..., Path]:
+    def _write(requirements: list[dict[str, Any]] | None = None) -> Path:
+        path = content_dir / "requirements.yaml"
+        path.write_text(yaml.safe_dump(REQUIREMENTS if requirements is None else requirements))
+        return path
+
+    return _write

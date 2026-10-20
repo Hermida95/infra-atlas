@@ -10,7 +10,7 @@ from typing import Annotated, get_args
 
 import typer
 
-from brain.graph import build_graph, related_links, write_graph
+from brain.graph import build_graph, related_links, sort_nodes, write_graph
 from brain.loader import (
     DOMAINS_FILE,
     NODES_DIR,
@@ -20,6 +20,8 @@ from brain.loader import (
     parse_node_text,
 )
 from brain.models import SLUG_PATTERN, NodeFrontmatter, NodeType
+from brain.planner import STAGES, Route, UnknownRequirementError, match_requirements
+from brain.planner import plan as build_route
 from brain.validate import Issue, ValidationReport, validate_content
 
 app = typer.Typer(help="Infra Atlas content pipeline.", no_args_is_help=True)
@@ -64,7 +66,11 @@ def validate(content: ContentOption = None) -> None:
     """Validate every node and domain. Exit 1 if any error is found."""
     report = _run_validation(content)
     links = related_links(report.nodes)
-    typer.echo(f"{len(report.nodes)} nodes, {len(report.domains)} domains, {len(links)} links, OK")
+    rules = sum(node.meta.planner is not None for node in report.nodes)
+    typer.echo(
+        f"{len(report.nodes)} nodes, {len(report.domains)} domains, {len(links)} links, "
+        f"{len(report.requirements)} requirements, {rules} planner rules, OK"
+    )
 
 
 @app.command()
@@ -79,7 +85,9 @@ def graph(
     """Validate, lay out and write graph.json."""
     report = _run_validation(content)
     target = out if out is not None else find_repo_root() / "apps/web/src/data/graph.json"
-    data = build_graph(report.domains, report.nodes, include_pro=include_pro)
+    data = build_graph(
+        report.domains, report.nodes, requirements=report.requirements, include_pro=include_pro
+    )
     write_graph(data, target)
     typer.echo(f"Wrote {_display(target)}: {len(data['nodes'])} nodes, {len(data['links'])} links")
 
@@ -97,6 +105,50 @@ def schema(
     payload = NodeFrontmatter.model_json_schema()
     target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     typer.echo(f"Wrote {_display(target)}")
+
+
+@app.command("plan")
+def plan_command(
+    requirement_ids: Annotated[
+        list[str] | None,
+        typer.Argument(metavar="[REQ]...", help="Requirement ids from requirements.yaml."),
+    ] = None,
+    text: Annotated[
+        str | None,
+        typer.Option("--text", help="Free text; requirement keywords found in it are selected."),
+    ] = None,
+    content: ContentOption = None,
+) -> None:
+    """Print the deployment route for a set of requirements. Exit 2 on an unknown id."""
+    report = _run_validation(content)
+    selected = set(requirement_ids or [])
+    if text:
+        selected |= match_requirements(text, report.requirements)
+    try:
+        route = build_route(sort_nodes(report.nodes, report.domains), report.requirements, selected)
+    except UnknownRequirementError as exc:
+        known = ", ".join(r.id for r in report.requirements)
+        typer.echo(f"ERROR {exc}. Known: {known}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    ordered = [r.id for r in report.requirements if r.id in selected]
+    typer.echo(f"Requirements: {', '.join(ordered) or '(none)'}")
+    _print_route(route)
+
+
+def _print_route(route: Route) -> None:
+    for stage in STAGES:
+        stage_nodes = [node for step_stage, node in route.steps if step_stage == stage]
+        if not stage_nodes:
+            continue
+        typer.echo(f"\n{stage}")
+        for node in stage_nodes:
+            why = node.meta.planner.why if node.meta.planner else ""
+            typer.echo(f"  {node.meta.title}: {why}")
+    if route.notes:
+        typer.echo("\nNotes")
+        for note in route.notes:
+            typer.echo(f"  - {note.node.meta.title}: {note.text}")
 
 
 @app.command()

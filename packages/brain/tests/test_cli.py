@@ -24,7 +24,7 @@ def test_validate_summary(content_dir: Path, write_node) -> None:
     result = runner.invoke(app, ["validate", "--content", str(content_dir)])
 
     assert result.exit_code == 0
-    assert "2 nodes, 2 domains, 1 links, OK" in result.output
+    assert "2 nodes, 2 domains, 1 links, 0 requirements, 0 planner rules, OK" in result.output
 
 
 def test_new_scaffolds_valid_node_and_refuses_overwrite(content_dir: Path) -> None:
@@ -70,3 +70,21 @@ def test_schema_writes_json_schema(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert '"additionalProperties": false' in out.read_text()
+
+
+PLAN_EXAMPLE = "FastAPI with Postgres, user login and image uploads on a small budget"
+
+
+def test_plan_selects_requirements_from_free_text() -> None:
+    result = runner.invoke(app, ["plan", "--text", PLAN_EXAMPLE])
+
+    assert result.exit_code == 0, result.output
+    assert "Requirements: sql, files, auth, cheap\n" in result.stdout
+    assert "RDS Postgres: Managed Postgres" in result.stdout
+
+
+def test_plan_rejects_unknown_requirement_with_exit_2() -> None:
+    result = runner.invoke(app, ["plan", "sql", "nope"])
+
+    assert result.exit_code == 2
+    assert "unknown requirement(s): nope" in result.output

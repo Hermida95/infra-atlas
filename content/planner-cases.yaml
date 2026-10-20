@@ -1,19 +1,19 @@
 # Expected planner routes, generated from the original prototype's plan() so the
 # content-driven planner (Python and TypeScript) keeps the same behaviour.
 - id: fastapi-postgres-login-uploads-budget
-  requirements: [api, sql, files, auth, cheap]
+  requirements: [sql, files, auth, cheap]
   nodes: [apigw, app, aws, budgets, cloudwatch, cognito, compose, docker, dockerfile, ecr, env, gha, git, iam, image, lambda, localhost, oidc, rds, s3, ssm, terraform, tests, tfstate, vpc]
   notes: 2
 - id: django-chatbot-k8s-scale-global
-  requirements: [api, jobs, ai, k8s, scale, global]
+  requirements: [jobs, ai, k8s, scale, global]
   nodes: [alb, app, aws, bedrock, cloudfront, cloudwatch, deployment, docker, dockerfile, ecr, eks, embeddings, env, gha, git, grafana, helm, hpa, iam, image, ingress, k8ssvc, kubernetes, localhost, oidc, pod, prometheus, rag, route53, s3, sqs, terraform, tests, tfstate, vectordb, vpc, waf, xray]
   notes: 0
 - id: minimal-api
-  requirements: [api]
+  requirements: []
   nodes: [alb, app, aws, cloudwatch, docker, dockerfile, ecr, ecs, env, gha, git, iam, image, localhost, oidc, terraform, tests, tfstate, vpc]
   notes: 0
 - id: web-app-global-with-cache
-  requirements: [api, web, global, cache]
+  requirements: [web, global, cache]
   nodes: [alb, app, aws, cloudfront, cloudwatch, compose, docker, dockerfile, ecr, ecs, elasticache, env, gha, git, iam, image, localhost, oidc, route53, s3, terraform, tests, tfstate, vpc]
   notes: 0
 - id: k8s-on-a-budget

@@ -40,6 +40,72 @@
       "title": "Part",
       "type": "object"
     },
+    "Planner": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "enum": [
+            "build",
+            "containerize",
+            "infra",
+            "run",
+            "data",
+            "secure",
+            "ship",
+            "observe"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "when": {
+          "minLength": 1,
+          "title": "When",
+          "type": "string"
+        },
+        "why": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Why",
+          "type": "string"
+        },
+        "notes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlannerNote"
+          },
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stage",
+        "when",
+        "why"
+      ],
+      "title": "Planner",
+      "type": "object"
+    },
+    "PlannerNote": {
+      "additionalProperties": false,
+      "properties": {
+        "when": {
+          "minLength": 1,
+          "title": "When",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "when",
+        "text"
+      ],
+      "title": "PlannerNote",
+      "type": "object"
+    },
     "Relations": {
       "additionalProperties": false,
       "properties": {
@@ -137,7 +203,7 @@
     "logo": {
       "anyOf": [
         {
-          "pattern": "^[a-z0-9]+$",
+          "pattern": "^(aws:)?[a-z0-9]+$",
           "type": "string"
         },
         {
@@ -228,35 +294,16 @@
       "title": "Reviewed",
       "type": "string"
     },
-    "satisfies": {
-      "default": [],
-      "items": {
-        "pattern": "^[a-z0-9][a-z0-9-]*$",
-        "type": "string"
-      },
-      "title": "Satisfies",
-      "type": "array"
-    },
-    "stage": {
+    "planner": {
       "anyOf": [
         {
-          "pattern": "^[a-z0-9][a-z0-9-]*$",
-          "type": "string"
+          "$ref": "#/$defs/Planner"
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "title": "Stage"
-    },
-    "when": {
-      "additionalProperties": {
-        "type": "string"
-      },
-      "default": {},
-      "title": "When",
-      "type": "object"
+      "default": null
     }
   },
   "required": [

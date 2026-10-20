@@ -64,6 +64,29 @@ def test_shape_and_ordering(content_dir: Path, write_node, tmp_path: Path) -> No
         "parts",
         "lab",
         "position",
+        "planner",
     }
     assert alpha["parts"] == [{"name": "P", "kind": None, "text": "t"}]
     assert alpha["logo"] is None and len(alpha["position"]) == 3
+
+
+def test_requirements_and_planner_blocks(content_dir: Path, write_node, write_requirements) -> None:
+    write_requirements()
+    rule = {"stage": "data", "when": "sql", "why": "Managed Postgres.", "notes": []}
+    write_node("rds", planner=rule | {"notes": [{"when": "cheap", "text": "Idle cost."}]})
+    write_node("docker")
+
+    loaded = load_content(content_dir)
+    graph = build_graph(
+        loaded.domains, loaded.nodes, requirements=loaded.requirements, generated_at=FIXED
+    )
+
+    assert list(graph) == ["version", "generatedAt", "domains", "requirements", "nodes", "links"]
+    assert graph["requirements"][0] == {
+        "id": "api",
+        "label": "Python API",
+        "keywords": ["api", "fastapi"],
+    }
+    by_id = {node["id"]: node for node in graph["nodes"]}
+    assert by_id["docker"]["planner"] is None
+    assert by_id["rds"]["planner"] == rule | {"notes": [{"when": "cheap", "text": "Idle cost."}]}
