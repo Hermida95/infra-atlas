@@ -1,8 +1,15 @@
 import logos from "@/data/logos.json";
 import type { GraphNode } from "@/lib/graph";
 
-type Logo = { title: string; path: string };
-const LOGOS = logos as Record<string, Logo>;
+export type Logo = {
+  title: string;
+  path: string;
+  viewBox: [number, number];
+  fillRule: CanvasFillRule;
+  /** Original file to show untouched in HTML (official AWS icons). */
+  src: string | null;
+};
+const LOGOS = logos as unknown as Record<string, Logo>;
 
 export function logoFor(node: GraphNode): Logo | null {
   return node.logo ? (LOGOS[node.logo] ?? null) : null;

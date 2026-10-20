@@ -54,9 +54,12 @@ Pendiente de la parada Docker:
   - En el prototipo cargan 26 logos reales.
   - Cuando no hay logo (CloudFront, ECR, Bedrock, y conceptos sin marca como State o Pod) se genera un **monograma hexagonal** propio.
 - Se tiñen en el color del holograma (cian, o dorado si están en tu ruta) para que formen parte de la estética y no parezcan pegatinas.
-- **Cambio en la app Next.js (fase 0):** Simple Icons 15 **ya no incluye los iconos de los servicios de AWS** (Lambda, S3, EC2…). Los retiró después de la versión 13 que usaba el prototipo.
-  - De momento, los servicios de AWS se muestran con monograma hexagonal (IAM, EC2, S3, La…).
-  - La solución buena es empaquetar los **AWS Architecture Icons** oficiales, revisando antes sus condiciones de uso.
+- **Iconos de AWS (fase 0):** Simple Icons 15 retiró los iconos de servicios de AWS, así que se usan los **AWS Architecture Icons oficiales** (paquete del 31/07/2025).
+  - Están en `apps/web/public/icons/aws/`, sin modificar, con su `NOTICE.md`. Se regeneran con `scripts/vendor-aws-icons.mjs`.
+  - En el frontmatter, la ficha los referencia como `logo: aws:<nombre>`.
+  - Los **paneles HTML** muestran el icono original, con su color y fondo.
+  - El **holograma 3D** usa solo su glifo (los `<path>`, sin el cuadrado de fondo) teñido en cian, para que siga la estética.
+  - AWS permite usarlos para crear diagramas de arquitectura. Si su guía de uso prohibiera recolorear, el 3D volvería al monograma: es un cambio de una línea en `build-logos.mjs`.
 - **Ojo legal:** CC0 cubre el archivo SVG, no la marca. Se usan solo para identificar la tecnología (uso nominativo), sin sugerir patrocinio.
   - Para producción, valorar los **AWS Architecture Icons** oficiales, revisando sus condiciones de uso.
   - En producción, los SVG se empaquetan en el repo; no se piden a un CDN en tiempo de ejecución.

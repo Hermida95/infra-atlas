@@ -4,6 +4,11 @@ import { logoFor, monogramFor } from "@/lib/logos";
 /** Brand logo from Simple Icons, or a hex monogram when the technology has none. */
 export function Mark({ node, size = 32 }: { node: GraphNode; size?: number }) {
   const logo = logoFor(node);
+  if (logo?.src) {
+    // Official AWS Architecture Icons are shown exactly as AWS ships them.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={logo.src} width={size} height={size} alt={logo.title} className="mark mark-aws" />;
+  }
   if (logo) {
     return (
       <svg viewBox="0 0 24 24" width={size} height={size} role="img" aria-label={logo.title} className="mark">

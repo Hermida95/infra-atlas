@@ -44,4 +44,4 @@ CI refuses a concept with broken relations, unknown fields or a mismatched folde
 - [docs/DECISIONES.md](docs/DECISIONES.md): stack, hosting, costs and trade-offs
 - [docs/DISENO.md](docs/DISENO.md): visual direction, tokens and interaction patterns
 
-Logos come from [Simple Icons](https://simpleicons.org) (CC0) and are used only to identify each technology. All trademarks belong to their owners.
+Logos come from [Simple Icons](https://simpleicons.org) (CC0) and the official [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/) (see `apps/web/public/icons/aws/NOTICE.md`). They are used only to identify each technology. All trademarks belong to their owners.

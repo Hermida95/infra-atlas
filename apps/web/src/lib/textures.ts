@@ -25,9 +25,11 @@ export function markCanvas(node: GraphNode): HTMLCanvasElement {
   g.strokeStyle = "#fff";
   const logo = logoFor(node);
   if (logo) {
-    g.translate(16, 16);
-    g.scale(96 / 24, 96 / 24);
-    g.fill(new Path2D(logo.path));
+    const [w, h] = logo.viewBox;
+    const k = 96 / Math.max(w, h);
+    g.translate(16 + (96 - w * k) / 2, 16 + (96 - h * k) / 2);
+    g.scale(k, k);
+    g.fill(new Path2D(logo.path), logo.fillRule);
     return c;
   }
   const txt = monogramFor(node);

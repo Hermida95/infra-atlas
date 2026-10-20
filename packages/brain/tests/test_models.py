@@ -71,3 +71,16 @@ def test_rejects_invalid_frontmatter(mutate) -> None:
 
     with pytest.raises(ValidationError):
         NodeFrontmatter.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("logo", "ok"),
+    [("docker", True), ("aws:lambda", True), ("gcp:run", False), ("aws:Lambda", False)],
+)
+def test_logo_accepts_simple_icons_and_aws_prefix(logo: str, ok: bool) -> None:
+    data = docker_data() | {"logo": logo}
+    if ok:
+        assert NodeFrontmatter.model_validate(data).logo == logo
+    else:
+        with pytest.raises(ValidationError):
+            NodeFrontmatter.model_validate(data)

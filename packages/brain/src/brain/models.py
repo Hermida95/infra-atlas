@@ -59,7 +59,8 @@ class NodeFrontmatter(_Strict):
     domain: Slug
     hub: bool = False
     summary: Annotated[str, StringConstraints(min_length=1, max_length=SUMMARY_MAX_LENGTH)]
-    logo: Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+$")] | None = None
+    # Simple Icons slug, or aws:<name> for an official AWS Architecture Icon.
+    logo: Annotated[str, StringConstraints(pattern=r"^(aws:)?[a-z0-9]+$")] | None = None
     monogram: Annotated[str, StringConstraints(pattern=r"^[A-Z0-9]{1,3}$")] | None = None
     level: Level = "core"
     access: Access = "free"
