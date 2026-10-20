@@ -26,13 +26,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package api --no-editable
 
 FROM ${PYTHON_IMAGE}
-RUN groupadd --system app && useradd --system --gid app --no-create-home app
+# Fixed numeric UID/GID: Kubernetes can only enforce runAsNonRoot on a numeric USER.
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --no-create-home app
 WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app apps/web/src/data/graph.json /app/graph.json
 ENV PATH="/app/.venv/bin:$PATH" \
     GRAPH_PATH=/app/graph.json \
     PYTHONUNBUFFERED=1
-USER app
+USER 10001:10001
 EXPOSE 8000
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
