@@ -323,7 +323,10 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
     v.dist += (v.tDist - v.dist) * k;
     v.focusY += (v.tFocusY - v.focusY) * k;
     scene.brain.rotation.set(v.rotX, v.rotY, 0);
-    camera.position.set(0, v.focusY + 60, v.dist);
+    // Tuned for landscape screens: on a tall phone the brain is wider than the view, so back off
+    // until its width fits (aspect 0.46 on a 375x812 phone -> about 2.4x further).
+    const fit = Math.min(2.6, Math.max(1, 1.1 / (size.width / size.height)));
+    camera.position.set(0, v.focusY + 60, v.dist * fit);
     camera.lookAt(0, v.focusY, 0);
     const pc = camera as THREE.PerspectiveCamera;
     if (pc.view?.offsetX !== -shiftX || pc.view?.fullWidth !== size.width) {
