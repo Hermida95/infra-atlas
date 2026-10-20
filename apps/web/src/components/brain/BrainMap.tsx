@@ -15,7 +15,28 @@ export default function BrainMap() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [query, setQuery] = useState("");
   const [route, setRoute] = useState<Route | null>(null);
-  const [teardown, setTeardown] = useState<GraphNode | null>(null);
+  const [teardown, setTeardownState] = useState<GraphNode | null>(null);
+
+  // Deep links: /?t=<concept id> opens that teardown, so a technology can be shared directly.
+  const setTeardown = useCallback((node: GraphNode | null) => {
+    setTeardownState(node);
+    const url = new URL(window.location.href);
+    if (node) url.searchParams.set("t", node.id);
+    else url.searchParams.delete("t");
+    window.history.replaceState(null, "", url);
+  }, []);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("t");
+    const node = id ? nodeById.get(id) : undefined;
+    if (node?.parts.length) {
+      store.current.selected = node;
+      // Deferred so the state update does not run synchronously inside the effect.
+      queueMicrotask(() => {
+        setSelected(node);
+        setTeardownState(node);
+      });
+    }
+  }, []);
 
   // On desktop the planner sits on the left, so the hologram is centred in the remaining space.
   useEffect(() => {

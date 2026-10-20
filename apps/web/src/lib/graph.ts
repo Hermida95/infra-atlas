@@ -1,6 +1,13 @@
 import data from "@/data/graph.json";
 
-export type PartKind = "os" | "pkg" | "code" | "meta" | "rw";
+export type PartKind =
+  | "os" | "pkg" | "code" | "meta" | "rw"
+  | "node" | "pod" | "bus" | "orbit" | "core" | "machine"
+  | "cylinder" | "discs" | "sheet" | "plugin" | "modules" | "graph"
+  | "trigger" | "jobs" | "chips"
+  | "disc" | "zones" | "vpc" | "services" | "shell" | "ring"
+  | "bars" | "bell" | "panel" | "sphere" | "satellites";
+export type Layout = "stack" | "row" | "cluster";
 export type Part = { name: string; kind: PartKind | null; text: string };
 export type Vec3 = [number, number, number];
 
@@ -23,6 +30,7 @@ export type GraphNode = {
   access: string;
   lead: string | null;
   parts: Part[];
+  layout: Layout;
   lab: string | null;
   planner: PlannerRule | null;
   position: Vec3;

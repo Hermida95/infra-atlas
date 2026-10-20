@@ -16,7 +16,33 @@
                 "pkg",
                 "code",
                 "meta",
-                "rw"
+                "rw",
+                "node",
+                "pod",
+                "bus",
+                "orbit",
+                "core",
+                "machine",
+                "cylinder",
+                "discs",
+                "sheet",
+                "plugin",
+                "modules",
+                "graph",
+                "trigger",
+                "jobs",
+                "chips",
+                "disc",
+                "zones",
+                "vpc",
+                "services",
+                "shell",
+                "ring",
+                "bars",
+                "bell",
+                "panel",
+                "sphere",
+                "satellites"
               ],
               "type": "string"
             },
@@ -275,6 +301,16 @@
       },
       "title": "Parts",
       "type": "array"
+    },
+    "layout": {
+      "default": "stack",
+      "enum": [
+        "stack",
+        "row",
+        "cluster"
+      ],
+      "title": "Layout",
+      "type": "string"
     },
     "lab": {
       "anyOf": [

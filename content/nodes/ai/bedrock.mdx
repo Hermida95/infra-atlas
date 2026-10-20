@@ -13,15 +13,21 @@ relations:
 lead: "Bedrock puts foundation models behind an AWS API, with the pieces you need to use them on your own data."
 parts:
   - name: "Foundation models"
+    kind: sphere
     text: "Claude and other models, served and scaled by AWS."
   - name: "Runtime API"
+    kind: ring
     text: "InvokeModel and Converse. One API, authenticated with IAM, no keys to store."
   - name: "Knowledge bases"
+    kind: discs
     text: "Managed retrieval: your documents chunked, embedded and searchable."
   - name: "Guardrails"
+    kind: shell
     text: "Filters for unsafe or off-topic input and output."
   - name: "Agents"
+    kind: satellites
     text: "Models that call your own tools to complete tasks in several steps."
+layout: stack
 planner:
   stage: data
   when: "ai"

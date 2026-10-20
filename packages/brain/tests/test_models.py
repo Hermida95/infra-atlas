@@ -58,6 +58,7 @@ def test_applies_defaults() -> None:
         pytest.param(lambda d: d.update(titel="typo"), id="unknown-top-level-key"),
         pytest.param(lambda d: d["relations"].update(relatd=["x"]), id="unknown-relation-key"),
         pytest.param(lambda d: d["parts"][0].update(kind="disk"), id="bad-part-kind"),
+        pytest.param(lambda d: d.update(layout="spiral"), id="bad-layout"),
         pytest.param(lambda d: d.update(id="Docker"), id="id-not-a-slug"),
         pytest.param(lambda d: d.update(type="library"), id="bad-type"),
         pytest.param(lambda d: d.update(summary="x" * 201), id="summary-too-long"),

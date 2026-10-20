@@ -15,7 +15,49 @@ Slug = Annotated[str, StringConstraints(pattern=SLUG_PATTERN)]
 NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 NodeType = Literal["concept", "service", "tool", "pattern", "howto", "comparison", "lab"]
-PartKind = Literal["os", "pkg", "code", "meta", "rw"]
+# Shape of each part in a teardown. The web app has one 3D primitive per kind.
+PartKind = Literal[
+    # layered slabs (Docker)
+    "os",
+    "pkg",
+    "code",
+    "meta",
+    "rw",
+    # compute and orchestration
+    "node",
+    "pod",
+    "bus",
+    "orbit",
+    "core",
+    "machine",
+    # data and files
+    "cylinder",
+    "discs",
+    "sheet",
+    "plugin",
+    "modules",
+    "graph",
+    # pipelines
+    "trigger",
+    "jobs",
+    "chips",
+    # cloud and network
+    "disc",
+    "zones",
+    "vpc",
+    "services",
+    "shell",
+    "ring",
+    # observability and AI
+    "bars",
+    "bell",
+    "panel",
+    "sphere",
+    "satellites",
+]
+# How the parts are arranged and pulled apart: vertical stack, left-to-right pipeline,
+# or a Kubernetes-style cluster (control plane above, nodes holding pods below).
+Layout = Literal["stack", "row", "cluster"]
 Level = Literal["core", "intermediate", "advanced"]
 Access = Literal["free", "pro"]
 
@@ -90,6 +132,7 @@ class NodeFrontmatter(_Strict):
     relations: Relations = Relations()
     lead: NonEmptyStr | None = None
     parts: list[Part] = []
+    layout: Layout = "stack"
     lab: Slug | None = None
     reviewed: date
     planner: Planner | None = None

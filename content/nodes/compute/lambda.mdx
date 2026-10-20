@@ -12,15 +12,21 @@ relations:
 lead: "Serverless still runs on servers. You just stop managing them. Here is what sits under one function call."
 parts:
   - name: "Execution environment"
+    kind: machine
     text: "A lightweight micro virtual machine that AWS creates, reuses and destroys for you."
   - name: "Runtime"
+    kind: cylinder
     text: "Python, Node or a container image. Loaded once per environment, which is the cold start."
   - name: "Handler"
+    kind: code
     text: "Your function. Called once per event with the payload and a context object."
   - name: "IAM role"
+    kind: ring
     text: "What the function is allowed to touch: a bucket, a table, a queue."
   - name: "Triggers"
+    kind: trigger
     text: "API Gateway, S3 uploads, SQS messages or a schedule. Each event is one invocation."
+layout: stack
 planner:
   stage: run
   when: "not k8s and cheap and not scale"

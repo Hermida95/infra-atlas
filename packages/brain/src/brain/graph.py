@@ -96,6 +96,7 @@ def _node_json(node: Node, position: tuple[float, float, float]) -> dict[str, An
         "access": meta.access,
         "lead": meta.lead,
         "parts": [{"name": p.name, "kind": p.kind, "text": p.text} for p in meta.parts],
+        "layout": meta.layout,
         "lab": meta.lab,
         "position": list(position),
         "planner": _planner_json(meta.planner),

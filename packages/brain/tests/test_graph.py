@@ -62,6 +62,7 @@ def test_shape_and_ordering(content_dir: Path, write_node, tmp_path: Path) -> No
         "access",
         "lead",
         "parts",
+        "layout",
         "lab",
         "position",
         "planner",

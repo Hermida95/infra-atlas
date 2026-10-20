@@ -13,15 +13,21 @@ relations:
 lead: "AWS is a global set of building blocks. From the ground up, this is how they are organized."
 parts:
   - name: "Regions"
+    kind: disc
     text: "Independent geographic areas. You pick one close to your users and your data rules."
   - name: "Availability zones"
+    kind: zones
     text: "Isolated data centers inside a region. Spread across two or more to survive an outage."
   - name: "VPC"
+    kind: vpc
     text: "Your private network, spanning the zones of a region."
   - name: "Services"
+    kind: services
     text: "Compute, storage, data and AI blocks you assemble inside that network."
   - name: "IAM"
+    kind: shell
     text: "The permission layer wrapped around everything. Nothing talks to anything without it."
+layout: stack
 planner:
   stage: infra
   when: "true"

@@ -13,15 +13,21 @@ relations:
 lead: "Terraform turns text into infrastructure by comparing what you wrote, what it remembers and what actually exists."
 parts:
   - name: "Providers"
+    kind: plugin
     text: "Plugins that translate your code into API calls to AWS, GitHub, Cloudflare and hundreds more."
   - name: "Configuration"
+    kind: sheet
     text: "Your .tf files: resources, variables and outputs, written in HCL."
   - name: "Modules"
+    kind: modules
     text: "Reusable groups of resources with inputs and outputs. Your VPC, written once."
   - name: "Dependency graph"
+    kind: graph
     text: "Terraform orders every change by what depends on what, and runs independent changes in parallel."
   - name: "State"
+    kind: cylinder
     text: "The record of what already exists. Plan compares it with your code to compute the diff."
+layout: stack
 planner:
   stage: infra
   when: "true"
