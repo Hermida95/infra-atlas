@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [aws]
+planner:
+  stage: containerize
+  when: "true"
+  why: "Private registry that AWS pulls your image from."
 reviewed: 2026-10-20
 ---
 

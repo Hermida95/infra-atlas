@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [cloudfront]
+planner:
+  stage: run
+  when: "not k8s and cheap and not scale"
+  why: "Turns HTTPS requests into Lambda invocations."
 reviewed: 2026-10-20
 ---
 

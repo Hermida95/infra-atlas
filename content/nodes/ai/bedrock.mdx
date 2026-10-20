@@ -22,6 +22,10 @@ parts:
     text: "Filters for unsafe or off-topic input and output."
   - name: "Agents"
     text: "Models that call your own tools to complete tasks in several steps."
+planner:
+  stage: data
+  when: "ai"
+  why: "Call Claude from inside AWS, authenticated with IAM."
 reviewed: 2026-10-20
 ---
 

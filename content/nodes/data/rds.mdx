@@ -9,6 +9,15 @@ level: core
 access: free
 relations:
   related: [vpc, ssm]
+planner:
+  stage: data
+  when: "sql"
+  why: "Managed Postgres with automated backups."
+  notes:
+    - when: "sql and cheap"
+      text: "RDS bills by the hour even when idle. On a tight budget, compare Aurora Serverless or DynamoDB."
+    - when: "sql and not k8s and cheap and not scale"
+      text: "Lambda talking to RDS needs VPC access and connection pooling, for example RDS Proxy."
 reviewed: 2026-10-20
 ---
 

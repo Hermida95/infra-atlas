@@ -22,6 +22,10 @@ parts:
     text: "Terraform orders every change by what depends on what, and runs independent changes in parallel."
   - name: "State"
     text: "The record of what already exists. Plan compares it with your code to compute the diff."
+planner:
+  stage: infra
+  when: "true"
+  why: "Describe the whole infrastructure as code."
 reviewed: 2026-10-20
 ---
 

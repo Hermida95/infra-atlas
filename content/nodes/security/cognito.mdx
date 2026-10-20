@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [apigw]
+planner:
+  stage: secure
+  when: "auth"
+  why: "Sign-up, login and tokens without building auth yourself."
 reviewed: 2026-10-20
 ---
 

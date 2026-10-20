@@ -22,6 +22,10 @@ parts:
     text: "Reconciliation loops. A Deployment controller notices a missing pod and creates a new one."
   - name: "API server and etcd"
     text: "The front door and the memory of the cluster. Every change is written here first."
+planner:
+  stage: run
+  when: "k8s"
+  why: "Keeps your containers running and healed."
 reviewed: 2026-10-20
 ---
 

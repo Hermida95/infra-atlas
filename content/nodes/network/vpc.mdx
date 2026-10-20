@@ -7,6 +7,10 @@ summary: "Your private network in AWS, split into public and private subnets."
 logo: aws:vpc
 level: core
 access: free
+planner:
+  stage: run
+  when: "k8s or (not k8s and not (cheap and not scale)) or sql"
+  why: "Private network for your services and database."
 reviewed: 2026-10-20
 ---
 

@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [cloudfront]
+planner:
+  stage: run
+  when: "web or global"
+  why: "Points your domain at the CDN."
 reviewed: 2026-10-20
 ---
 

@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [cloudfront, alb]
+planner:
+  stage: secure
+  when: "scale"
+  why: "Filters abusive traffic at the edge."
 reviewed: 2026-10-20
 ---
 

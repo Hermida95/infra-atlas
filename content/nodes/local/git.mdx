@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [gha]
+planner:
+  stage: build
+  when: "true"
+  why: "Every change is versioned and can trigger the pipeline."
 reviewed: 2026-10-20
 ---
 

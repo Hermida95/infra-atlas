@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [container]
+planner:
+  stage: containerize
+  when: "sql or cache"
+  why: "Run the app and its database together locally."
 reviewed: 2026-10-20
 ---
 

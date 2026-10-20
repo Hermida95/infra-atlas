@@ -21,6 +21,10 @@ parts:
     text: "What the function is allowed to touch: a bucket, a table, a queue."
   - name: "Triggers"
     text: "API Gateway, S3 uploads, SQS messages or a schedule. Each event is one invocation."
+planner:
+  stage: run
+  when: "not k8s and cheap and not scale"
+  why: "Pay per request, scales to zero when idle."
 reviewed: 2026-10-20
 ---
 

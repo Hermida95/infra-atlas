@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [vpc]
+planner:
+  stage: data
+  when: "cache"
+  why: "Redis for sessions and hot data."
 reviewed: 2026-10-20
 ---
 

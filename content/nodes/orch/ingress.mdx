@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [alb]
+planner:
+  stage: run
+  when: "k8s"
+  why: "Routes outside traffic into the cluster."
 reviewed: 2026-10-20
 ---
 

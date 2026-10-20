@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [s3]
+planner:
+  stage: infra
+  when: "true"
+  why: "Terraform's record of what exists, stored in S3."
 reviewed: 2026-10-20
 ---
 

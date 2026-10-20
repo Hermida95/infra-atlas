@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [env]
+planner:
+  stage: secure
+  when: "sql"
+  why: "The database password lives here, never in code."
 reviewed: 2026-10-20
 ---
 

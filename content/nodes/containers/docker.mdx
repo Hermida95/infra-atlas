@@ -28,6 +28,10 @@ parts:
     kind: rw
     text: "Added at docker run. Everything the process writes lives here and disappears with the container."
 lab: docker-layers
+planner:
+  stage: containerize
+  when: "true"
+  why: "Package the app so it runs the same everywhere."
 reviewed: 2026-10-20
 ---
 

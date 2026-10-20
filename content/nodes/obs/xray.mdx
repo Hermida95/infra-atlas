@@ -7,6 +7,10 @@ summary: "Traces one request across every service it touches."
 logo: aws:xray
 level: core
 access: free
+planner:
+  stage: observe
+  when: "scale or k8s"
+  why: "Traces a slow request across services."
 reviewed: 2026-10-20
 ---
 

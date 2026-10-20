@@ -22,6 +22,10 @@ parts:
     text: "A YAML file in .github/workflows that wires triggers, jobs and permissions together."
   - name: "Triggers"
     text: "The events that start it all: push, pull request, schedule or a manual run."
+planner:
+  stage: ship
+  when: "true"
+  why: "Builds, tests and deploys on every push."
 reviewed: 2026-10-20
 ---
 

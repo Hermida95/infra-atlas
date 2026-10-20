@@ -22,6 +22,10 @@ parts:
     text: "localhost:8000 is a port on the loopback interface. Only your own machine can reach it."
   - name: "Config"
     text: "Environment variables and .env files that change behaviour without changing code."
+planner:
+  stage: build
+  when: "true"
+  why: "Run and debug the app on your machine first."
 reviewed: 2026-10-20
 ---
 
