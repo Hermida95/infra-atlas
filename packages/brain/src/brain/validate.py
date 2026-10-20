@@ -8,8 +8,9 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
-from brain.loader import load_content
-from brain.models import Domain, Node
+from brain.loader import DOMAINS_FILE, REQUIREMENTS_FILE, load_content
+from brain.models import Domain, Node, Requirement
+from brain.planner import KEYWORDS, ExpressionError, parse, variables
 
 STALE_AFTER = timedelta(days=365)
 
@@ -26,6 +27,7 @@ class Issue:
 @dataclass
 class ValidationReport:
     domains: list[Domain] = field(default_factory=list)
+    requirements: list[Requirement] = field(default_factory=list)
     nodes: list[Node] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
 
@@ -45,9 +47,17 @@ class ValidationReport:
 def validate_content(content_dir: Path, today: date | None = None) -> ValidationReport:
     loaded = load_content(content_dir)
     issues = [Issue(error.path, error.message) for error in loaded.errors]
-    issues += check_domains(loaded.domains, content_dir / "domains.yaml")
+    issues += check_domains(loaded.domains, content_dir / DOMAINS_FILE)
     issues += check_nodes(loaded.nodes, loaded.domains, today or date.today())
-    return ValidationReport(domains=loaded.domains, nodes=loaded.nodes, issues=issues)
+    requirements_path = content_dir / REQUIREMENTS_FILE
+    issues += check_requirements(loaded.requirements, requirements_path)
+    issues += check_planner_rules(loaded.nodes, loaded.requirements, requirements_path)
+    return ValidationReport(
+        domains=loaded.domains,
+        requirements=loaded.requirements,
+        nodes=loaded.nodes,
+        issues=issues,
+    )
 
 
 def check_domains(domains: Sequence[Domain], source: Path) -> list[Issue]:
@@ -106,4 +116,56 @@ def _check_node(
         issues.append(
             Issue(path, f"not reviewed since {meta.reviewed.isoformat()}", severity="warning")
         )
+    return issues
+
+
+def check_requirements(requirements: Sequence[Requirement], source: Path) -> list[Issue]:
+    seen: set[str] = set()
+    issues = []
+    for requirement in requirements:
+        if requirement.id in seen:
+            issues.append(Issue(source, f"duplicate requirement id '{requirement.id}'"))
+        if requirement.id in KEYWORDS:
+            issues.append(Issue(source, f"requirement id '{requirement.id}' is a reserved word"))
+        seen.add(requirement.id)
+    return issues
+
+
+def check_planner_rules(
+    nodes: Sequence[Node], requirements: Sequence[Requirement], requirements_path: Path
+) -> list[Issue]:
+    """Every `when` parses and only names known requirements; warn on unused requirements."""
+    known = {requirement.id for requirement in requirements}
+    referenced: set[str] = set()
+    issues: list[Issue] = []
+
+    for node in nodes:
+        rule = node.meta.planner
+        if rule is None:
+            continue
+        expressions = [("planner.when", rule.when)] + [
+            (f"planner.notes[{index}].when", note.when) for index, note in enumerate(rule.notes)
+        ]
+        for location, source in expressions:
+            try:
+                names = variables(parse(source))
+            except ExpressionError as exc:
+                issues.append(Issue(node.source, f"{location}: {exc} in {source!r}"))
+                continue
+            for var in names:
+                referenced.add(var.name)
+                if var.name not in known:
+                    issues.append(
+                        Issue(
+                            node.source,
+                            f"{location}: column {var.column}: unknown requirement "
+                            f"'{var.name}' in {source!r}",
+                        )
+                    )
+
+    issues += [
+        Issue(requirements_path, f"requirement '{rid}' is not used by any planner rule", "warning")
+        for rid in (requirement.id for requirement in requirements)
+        if rid not in referenced
+    ]
     return issues

@@ -6,6 +6,10 @@ domain: orch
 summary: "A stable address in front of pods that come and go."
 level: core
 access: free
+planner:
+  stage: run
+  when: "k8s"
+  why: "Stable address in front of the pods."
 reviewed: 2026-10-20
 ---
 

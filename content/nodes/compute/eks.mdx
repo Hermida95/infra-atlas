@@ -9,6 +9,13 @@ level: core
 access: free
 relations:
   related: [ec2, vpc]
+planner:
+  stage: run
+  when: "k8s"
+  why: "Managed Kubernetes on AWS."
+  notes:
+    - when: "k8s and cheap"
+      text: "EKS has a fixed monthly cost for the control plane. On a small budget, ECS Fargate or Lambda usually fit better."
 reviewed: 2026-10-20
 ---
 

@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [gha]
+planner:
+  stage: run
+  when: "k8s"
+  why: "Packages and versions your manifests."
 reviewed: 2026-10-20
 ---
 

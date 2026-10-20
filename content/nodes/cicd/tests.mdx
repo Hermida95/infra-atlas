@@ -6,6 +6,10 @@ domain: cicd
 summary: "Unit, integration and smoke tests that gate every deploy."
 level: core
 access: free
+planner:
+  stage: ship
+  when: "true"
+  why: "Nothing broken reaches production."
 reviewed: 2026-10-20
 ---
 

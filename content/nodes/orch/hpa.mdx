@@ -6,6 +6,10 @@ domain: orch
 summary: "Adds or removes pods based on load."
 level: core
 access: free
+planner:
+  stage: run
+  when: "k8s and scale"
+  why: "Adds pods when load rises."
 reviewed: 2026-10-20
 ---
 

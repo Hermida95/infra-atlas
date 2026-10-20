@@ -12,16 +12,26 @@ relations:
   related: [tests, ecr]
 lead: "A pipeline is a chain of small, isolated pieces. Each push sets the chain in motion."
 parts:
-  - name: "Runner"
-    text: "The virtual machine or container where jobs run. Hosted by GitHub or by you."
-  - name: "Steps"
-    text: "Single commands or reusable actions, executed in order inside a job."
-  - name: "Jobs"
-    text: "Groups of steps. Jobs run in parallel unless one declares it needs another."
-  - name: "Workflow"
-    text: "A YAML file in .github/workflows that wires triggers, jobs and permissions together."
   - name: "Triggers"
+    kind: trigger
     text: "The events that start it all: push, pull request, schedule or a manual run."
+  - name: "Workflow"
+    kind: sheet
+    text: "A YAML file in .github/workflows that wires triggers, jobs and permissions together."
+  - name: "Jobs"
+    kind: jobs
+    text: "Groups of steps. Jobs run in parallel unless one declares it needs another."
+  - name: "Steps"
+    kind: chips
+    text: "Single commands or reusable actions, executed in order inside a job."
+  - name: "Runner"
+    kind: machine
+    text: "The virtual machine or container where jobs run. Hosted by GitHub or by you."
+layout: row
+planner:
+  stage: ship
+  when: "true"
+  why: "Builds, tests and deploys on every push."
 reviewed: 2026-10-20
 ---
 

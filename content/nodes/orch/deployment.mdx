@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [pod]
+planner:
+  stage: run
+  when: "k8s"
+  why: "Declares replicas and rollout strategy."
 reviewed: 2026-10-20
 ---
 

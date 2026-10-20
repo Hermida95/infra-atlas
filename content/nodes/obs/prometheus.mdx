@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [grafana, kubernetes]
+planner:
+  stage: observe
+  when: "k8s"
+  why: "Cluster and app metrics."
 reviewed: 2026-10-20
 ---
 

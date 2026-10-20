@@ -13,13 +13,22 @@ relations:
 lead: "Observability is what lets you answer why something broke, not just that it did."
 parts:
   - name: "Logs"
+    kind: code
     text: "Every print and every error from your services, stored and searchable."
   - name: "Metrics"
+    kind: bars
     text: "Numbers over time: latency, error rate, CPU and your own business counters."
   - name: "Alarms"
+    kind: bell
     text: "Thresholds on metrics that notify you or trigger an automatic action."
   - name: "Dashboards"
+    kind: panel
     text: "Related metrics side by side for a fast health check."
+layout: row
+planner:
+  stage: observe
+  when: "true"
+  why: "Logs, metrics and alarms."
 reviewed: 2026-10-20
 ---
 

@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [layers, container, ecr]
+planner:
+  stage: containerize
+  when: "true"
+  why: "The versioned artifact you deploy."
 reviewed: 2026-10-20
 ---
 

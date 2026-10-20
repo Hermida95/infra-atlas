@@ -1,5 +1,5 @@
 # Dirección de diseño: Infra Atlas
-Fecha: 2026-10-20 · Estado: prototipo v2, holograma 3D (`prototypes/brain/index.html`). La v1 en 2D se conserva en `prototypes/brain/v1.html`.
+Fecha: 2026-10-20 · Estado: fase 1 en la app Next.js (`apps/web`): mapa holográfico, planificador, despiece y laboratorio de Docker. El prototipo HTML (`prototypes/brain/`) queda como referencia.
 
 ## Idea central
 La home es un **holograma 3D de conocimiento**, en la línea de la interfaz de Jarvis en Iron Man.
@@ -114,3 +114,33 @@ Pendiente de la parada Docker:
 - Etiquetas que se solapan en las zonas densas.
 - Transición del holograma a la parada: clic en Docker → la cámara entra → la explicación interactiva de capas se proyecta como panel holográfico.
 - Revisión en móvil (holograma reducido, con el planificador debajo).
+
+## Implementación en Next.js (fase 1)
+- **Planificador:** `src/lib/planner.ts` evalúa el `planner.when` de cada ficha con el mismo lenguaje que `brain` (Python). Los dos se prueban contra `content/planner-cases.yaml`, sacado del prototipo original.
+- **Despiece:** `src/components/teardown/`.
+  - Canvas propio y fijo, cuya separación de piezas avanza con el scroll de la superposición (se lee en cada fotograma, sin escuchar el evento de scroll).
+  - `IntersectionObserver` para saber qué pieza se está leyendo.
+  - El mapa principal deja de renderizar (`frameloop="never"`) mientras el despiece está abierto.
+- **Laboratorios:** se registran por id en `Teardown.tsx` (`LABS`) y la ficha los referencia con `lab: docker-layers`. Los pasos del Dockerfile viven en `labs/DockerLab.tsx`.
+- **Canvas opacos:** con canvas transparente, el blending aditivo de Three.js moderno pinta de negro la geometría aún apagada. Por eso los dos canvas son opacos y el resplandor de fondo se dibuja dentro de la escena.
+
+## Geometría propia por tecnología
+Cada parte de un despiece declara su **forma** (`parts[].kind`) y cada tecnología su **disposición** (`layout`), las dos en el frontmatter.
+- **Formas** (`apps/web/src/components/teardown/shapes.ts`): una primitiva 3D holográfica por tipo, con tres materiales (borde, relleno, detalle) para que el resaltado, el atenuado y los fundidos funcionen igual en todas.
+  - Kubernetes: `node`, `pod`, `bus`, `orbit`, `core`.
+  - Cómputo: `machine`.
+  - Datos y archivos: `cylinder`, `discs`, `sheet`, `plugin`, `modules`, `graph`.
+  - Pipelines: `trigger`, `jobs`, `chips`.
+  - Nube y red: `disc`, `zones`, `vpc`, `services`, `shell`, `ring`.
+  - Observabilidad e IA: `bars`, `bell`, `panel`, `sphere`, `satellites`.
+  - Docker conserva las placas `os`, `pkg`, `code`, `meta` y `rw`.
+- **Disposiciones** (`layouts.ts`):
+  - `stack`: pila vertical, con la separación calculada según la altura real de cada forma.
+  - `row`: pipeline de izquierda a derecha, con etiquetas arriba.
+  - `cluster`: Kubernetes. El plano de control arriba, la órbita de controladores, los pods que salen de los nodos y el Service por debajo.
+- **Asignación actual:**
+  - Kubernetes: `cluster`.
+  - GitHub Actions y CloudWatch: `row`.
+  - Terraform, AWS, Lambda, Bedrock, Localhost y Docker: `stack`.
+- **Encuadre:** la cámara se ajusta a lo que hay en escena (anchura y altura de las partes), en vez de usar una distancia fija.
+- **Enlaces directos:** `/?t=<id>` abre el despiece de una tecnología, para compartirla directamente.

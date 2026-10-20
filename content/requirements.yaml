@@ -1,0 +1,35 @@
+# What a user can say about their app. Planner rules in each node's `planner.when`
+# are boolean expressions over these ids: `and`, `or`, `not`, parentheses, `true`.
+- id: web
+  label: Web frontend
+  keywords: [web, frontend, react, next, website, site]
+- id: sql
+  label: Relational database
+  keywords: [postgres, postgresql, sql, mysql, database, relational]
+- id: files
+  label: File uploads
+  keywords: [upload, uploads, file, files, image, images, video, pdf]
+- id: jobs
+  label: Background jobs
+  keywords: [queue, job, jobs, worker, workers, async, cron, emails]
+- id: auth
+  label: User accounts
+  keywords: [login, auth, accounts, signup, sign up]
+- id: cache
+  label: Caching
+  keywords: [cache, redis, sessions]
+- id: ai
+  label: LLM features
+  keywords: [ai, llm, chatbot, rag, claude, embeddings, assistant]
+- id: k8s
+  label: Kubernetes
+  keywords: [kubernetes, k8s, microservices, eks, helm]
+- id: cheap
+  label: Small budget
+  keywords: [cheap, budget, free, hobby, side project, low cost]
+- id: scale
+  label: High steady traffic
+  keywords: [scale, millions, enterprise, high traffic, always on]
+- id: global
+  label: Global users
+  keywords: [global, worldwide, international, cdn]

@@ -1,8 +1,21 @@
 import data from "@/data/graph.json";
 
-export type PartKind = "os" | "pkg" | "code" | "meta" | "rw";
+export type PartKind =
+  | "os" | "pkg" | "code" | "meta" | "rw"
+  | "node" | "pod" | "bus" | "orbit" | "core" | "machine"
+  | "cylinder" | "discs" | "sheet" | "plugin" | "modules" | "graph"
+  | "trigger" | "jobs" | "chips"
+  | "disc" | "zones" | "vpc" | "services" | "shell" | "ring"
+  | "bars" | "bell" | "panel" | "sphere" | "satellites";
+export type Layout = "stack" | "row" | "cluster";
 export type Part = { name: string; kind: PartKind | null; text: string };
 export type Vec3 = [number, number, number];
+
+export const STAGES = ["build", "containerize", "infra", "run", "data", "secure", "ship", "observe"] as const;
+export type Stage = (typeof STAGES)[number];
+export type PlannerNote = { when: string; text: string };
+export type PlannerRule = { stage: Stage; when: string; why: string; notes: PlannerNote[] };
+export type Requirement = { id: string; label: string; keywords: string[] };
 
 export type GraphNode = {
   id: string;
@@ -17,7 +30,9 @@ export type GraphNode = {
   access: string;
   lead: string | null;
   parts: Part[];
+  layout: Layout;
   lab: string | null;
+  planner: PlannerRule | null;
   position: Vec3;
 };
 
@@ -27,6 +42,7 @@ export type Graph = {
   version: number;
   generatedAt: string;
   domains: Domain[];
+  requirements: Requirement[];
   nodes: GraphNode[];
   links: Link[];
 };

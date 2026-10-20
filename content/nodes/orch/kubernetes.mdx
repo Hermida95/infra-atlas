@@ -13,15 +13,25 @@ relations:
 lead: "A cluster is a set of control loops that keep reality equal to what you declared. Take it apart and you see who does what."
 parts:
   - name: "Nodes"
+    kind: node
     text: "The machines that run your workloads. Each one runs a kubelet and a container runtime."
   - name: "Pods"
+    kind: pod
     text: "Your containers, scheduled onto nodes. Containers in a pod share a network address and storage."
   - name: "Services"
+    kind: bus
     text: "Stable virtual addresses that spread traffic across pods that come and go."
   - name: "Controllers"
+    kind: orbit
     text: "Reconciliation loops. A Deployment controller notices a missing pod and creates a new one."
   - name: "API server and etcd"
+    kind: core
     text: "The front door and the memory of the cluster. Every change is written here first."
+layout: cluster
+planner:
+  stage: run
+  when: "k8s"
+  why: "Keeps your containers running and healed."
 reviewed: 2026-10-20
 ---
 

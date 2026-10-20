@@ -44,6 +44,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter web lint
       - run: pnpm --filter web logos
+      - run: pnpm --filter web test
       - run: pnpm --filter web typecheck
       - run: pnpm --filter web build
 

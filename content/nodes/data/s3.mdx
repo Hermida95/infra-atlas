@@ -7,6 +7,10 @@ summary: "Object storage for files, static sites, backups and state."
 logo: aws:s3
 level: core
 access: free
+planner:
+  stage: data
+  when: "web or global or files"
+  why: "Object storage for the static frontend and for uploads."
 reviewed: 2026-10-20
 ---
 

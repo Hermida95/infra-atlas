@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [ecr, alb, vpc, sqs, rds]
+planner:
+  stage: run
+  when: "not k8s and not (cheap and not scale)"
+  why: "Runs your container without managing servers."
 reviewed: 2026-10-20
 ---
 

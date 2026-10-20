@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [vpc, cloudfront]
+planner:
+  stage: run
+  when: "k8s or (not k8s and not (cheap and not scale))"
+  why: "Public entry point that spreads traffic across healthy containers."
 reviewed: 2026-10-20
 ---
 

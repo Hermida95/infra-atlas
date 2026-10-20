@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [oidc, cognito]
+planner:
+  stage: secure
+  when: "true"
+  why: "Least-privilege permissions for every service."
 reviewed: 2026-10-20
 ---
 

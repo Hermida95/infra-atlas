@@ -9,6 +9,10 @@ level: core
 access: free
 relations:
   related: [s3]
+planner:
+  stage: run
+  when: "web or global"
+  why: "Serves your frontend close to your users."
 reviewed: 2026-10-20
 ---
 

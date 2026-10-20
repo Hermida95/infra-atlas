@@ -13,15 +13,25 @@ relations:
 lead: "Before any cloud, there is your laptop. Even localhost has layers."
 parts:
   - name: "Operating system"
+    kind: os
     text: "macOS, Linux or Windows. Provides processes, files and the network stack."
   - name: "Language runtime"
+    kind: cylinder
     text: "The Python interpreter and a virtual environment with your dependencies."
   - name: "App process"
+    kind: machine
     text: "Uvicorn or the Django dev server, running your code."
   - name: "Port"
+    kind: ring
     text: "localhost:8000 is a port on the loopback interface. Only your own machine can reach it."
   - name: "Config"
+    kind: sheet
     text: "Environment variables and .env files that change behaviour without changing code."
+layout: stack
+planner:
+  stage: build
+  when: "true"
+  why: "Run and debug the app on your machine first."
 reviewed: 2026-10-20
 ---
 

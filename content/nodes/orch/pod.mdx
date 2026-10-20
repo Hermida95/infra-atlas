@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [container]
+planner:
+  stage: run
+  when: "k8s"
+  why: "Where your container actually runs."
 reviewed: 2026-10-20
 ---
 

@@ -7,6 +7,10 @@ summary: "Message queue. Moves slow work out of the request path."
 logo: aws:sqs
 level: core
 access: free
+planner:
+  stage: data
+  when: "jobs"
+  why: "Queues slow work so requests return fast."
 reviewed: 2026-10-20
 ---
 
