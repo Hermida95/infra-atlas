@@ -20,7 +20,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package api --no-install-workspace
 
 COPY pyproject.toml uv.lock ./
+# The API reuses brain's planner, so the package ships in the image (not the content).
 COPY packages/brain/pyproject.toml packages/brain/pyproject.toml
+COPY packages/brain/src packages/brain/src
 COPY apps/api apps/api
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package api --no-editable
