@@ -1,0 +1,6 @@
+apiVersion: v2
+name: api
+description: Infra Atlas API (FastAPI). The same image that runs in Compose and on Lambda.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

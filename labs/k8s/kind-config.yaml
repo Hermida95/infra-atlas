@@ -1,0 +1,7 @@
+# Local Kubernetes cluster for the API chart: one control plane, one worker.
+#   kind create cluster --name infra-atlas --config labs/k8s/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
