@@ -231,12 +231,12 @@ def node(node_id: str, atlas: AtlasDep) -> NodeDetail:
 def search(
     index: Annotated[VectorIndex, Depends(vector_index)],
     model: Annotated[Embedder, Depends(embedder)],
-    q: Annotated[str, Query(min_length=1, max_length=200)],
+    q: Annotated[str, Query(min_length=1, max_length=200, pattern=r"\S")],
     k: Annotated[int, Query(ge=1, le=20)] = 5,
 ) -> SemanticSearchOut:
     """Search by meaning: the best matching chunk of each concept, closest first."""
     try:
-        hits = semantic_search(index, model, q, k)
+        hits = semantic_search(index, model, q.strip(), k)
     except IndexModelMismatchError as exc:
         raise _unavailable(INDEX_MISMATCH, exc) from exc
     return SemanticSearchOut(
@@ -303,7 +303,8 @@ def _warm_up() -> None:
     """Load everything /ready checks, and run one query so the ONNX session is initialised.
 
     Failures are logged, not raised: the process still starts, /health answers and /ready
-    reports what is missing, which is easier to debug than a crash loop.
+    reports what is missing, which is easier to debug than a crash loop. That includes the
+    ONNX session failing on its first query (a RuntimeError), not only a model that did not load.
     """
     try:
         load_graph(graph_path())
@@ -312,8 +313,10 @@ def _warm_up() -> None:
         index.check(model)
         model.embed_query("warm up")
         log.info("warm-up complete", extra={"chunks": len(index), "model": model.model})
-    except (GraphUnavailableError, IndexUnavailableError) as exc:
+    except (GraphUnavailableError, IndexUnavailableError, EmbedderUnavailableError) as exc:
         log.warning("warm-up incomplete", extra={"cause": str(exc)})
+    except RuntimeError as exc:
+        log.warning("warm-up failed", extra={"cause": f"{type(exc).__name__}: {exc}"})
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

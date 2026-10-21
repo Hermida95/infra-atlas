@@ -11,6 +11,7 @@ from api import main, semantic
 from api.main import _load_graph_bytes, create_app, embedder
 from api.middleware import RateLimitMiddleware
 from api.observability import JsonFormatter, request_id
+from api.semantic import EmbedderUnavailableError
 from api.settings import Settings
 from brain.chunks import chunk_nodes
 from brain.loader import find_repo_root, load_content
@@ -276,6 +277,56 @@ def test_rate_limit_shares_one_bucket_when_the_proxy_is_not_trusted() -> None:
     assert (first, second) == (200, 429)
 
 
+def test_rate_limiter_is_bounded_and_keeps_recent_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(RateLimitMiddleware, "MAX_TRACKED", 50)
+    limiter = RateLimitMiddleware(_ok, per_minute=5, clock=lambda: 0.0)
+
+    for n in range(120):
+        _status_of(limiter, f"10.0.{n // 256}.{n % 256}")
+
+    assert len(limiter.windows) == 50
+    assert list(limiter.windows)[-1] == "10.0.0.119"  # the newest are kept
+    assert "10.0.0.0" not in limiter.windows  # the oldest are evicted
+
+
+def test_rate_limiter_refreshes_a_client_that_keeps_coming_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(RateLimitMiddleware, "MAX_TRACKED", 3)
+    limiter = RateLimitMiddleware(_ok, per_minute=100, clock=lambda: 0.0)
+
+    for ip in ["a", "b", "c", "a", "d"]:  # "a" is touched again before "d" pushes one out
+        _status_of(limiter, ip)
+
+    assert list(limiter.windows) == ["c", "a", "d"]
+
+
+# --- Unhandled errors ---------------------------------------------------------------------
+
+
+def test_unhandled_error_is_a_500_with_request_id_and_security_headers(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = create_app(Settings(warmup=False, rate_limit_per_minute=0, log_format="text"))
+
+    @app.get("/boom")
+    def boom() -> None:
+        raise RuntimeError("secret detail: /srv/private/path")
+
+    with caplog.at_level(logging.ERROR, logger="api"):
+        response = TestClient(app).get("/boom", headers={"x-request-id": "rid-500"})
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "internal error"}
+    assert "secret" not in response.text and "/srv" not in response.text
+    assert response.headers["x-request-id"] == "rid-500"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert (
+        response.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+    )
+    assert "secret detail" in caplog.text  # the cause goes to the log only
+
+
 # --- Readiness, warm-up and metrics ------------------------------------------------------
 
 
@@ -357,3 +408,97 @@ def test_metrics_use_route_templates(graph_file: Path) -> None:
     assert 'route="/nodes/{node_id}"' in body
     assert "/nodes/whatever" not in body
     assert "http_request_duration_seconds_bucket" in body
+
+
+def test_warm_up_survives_an_onnx_failure_on_the_first_query(
+    graph_file: Path, index_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Broken(HashEmbedder):
+        def embed_query(self, text: str) -> list[float]:
+            raise RuntimeError("onnxruntime: session failed")
+
+    monkeypatch.setenv("VECTORS_PATH", str(index_path))
+    monkeypatch.setattr(main, "get_embedder", Broken)
+    app = create_app(Settings(warmup=True, rate_limit_per_minute=0, log_format="text"))
+
+    with TestClient(app) as api:  # the lifespan must not raise
+        assert api.get("/health").status_code == 200
+
+
+def test_warm_up_survives_a_model_that_cannot_load(
+    graph_file: Path, index_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unavailable() -> HashEmbedder:
+        raise EmbedderUnavailableError("embedding model unavailable: corrupt file")
+
+    monkeypatch.setenv("VECTORS_PATH", str(index_path))
+    monkeypatch.setattr(main, "get_embedder", unavailable)
+    app = create_app(Settings(warmup=True, rate_limit_per_minute=0, log_format="text"))
+
+    with TestClient(app) as api:
+        assert api.get("/health").status_code == 200
+        ready = api.get("/ready")
+
+    assert ready.status_code == 503
+    assert ready.json()["checks"]["model"] == "unavailable"
+
+
+# --- The embedder is not reloaded on every call while it is failing -----------------------
+
+
+def test_failed_embedder_load_is_not_retried_until_the_backoff_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loads = []
+    now = [100.0]
+
+    def failing() -> HashEmbedder:
+        loads.append(True)
+        raise OSError("model file unreadable")
+
+    monkeypatch.setattr(semantic, "embedder_from_env", failing)
+    monkeypatch.setattr(semantic, "_clock", lambda: now[0])
+
+    for _ in range(5):
+        with pytest.raises(EmbedderUnavailableError):
+            semantic.get_embedder()
+    assert len(loads) == 1  # four of the five calls did not touch the model
+
+    now[0] += semantic.EMBEDDER_RETRY_SECONDS + 1
+    with pytest.raises(EmbedderUnavailableError):
+        semantic.get_embedder()
+    assert len(loads) == 2
+
+
+def test_embedder_recovers_after_the_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = [0.0]
+    attempts = []
+
+    def flaky() -> HashEmbedder:
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise ValueError("bad config")
+        return HashEmbedder()
+
+    monkeypatch.setattr(semantic, "embedder_from_env", flaky)
+    monkeypatch.setattr(semantic, "_clock", lambda: now[0])
+
+    with pytest.raises(EmbedderUnavailableError):
+        semantic.get_embedder()
+    now[0] = semantic.EMBEDDER_RETRY_SECONDS + 1
+
+    assert isinstance(semantic.get_embedder(), HashEmbedder)
+    assert isinstance(semantic.get_embedder(), HashEmbedder)
+    assert len(attempts) == 2  # loaded once more, then cached
+
+
+def test_a_bug_while_loading_the_model_is_not_hidden_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def buggy() -> HashEmbedder:
+        raise KeyError("a programming error")
+
+    monkeypatch.setattr(semantic, "embedder_from_env", buggy)
+
+    with pytest.raises(KeyError):
+        semantic.get_embedder()

@@ -151,3 +151,49 @@ def test_search_endpoint_returns_no_hits_under_the_floor(
     body = client.get("/search", params={"q": "containers"}).json()
 
     assert body["hits"] == []
+
+
+def test_whitespace_only_query_is_422(client: TestClient) -> None:
+    for blank in ["   ", "\t", " \n "]:
+        assert client.get("/search", params={"q": blank}).status_code == 422
+
+
+def test_query_is_trimmed_before_embedding(client: TestClient) -> None:
+    padded = client.get("/search", params={"q": "  containers  "}).json()
+    plain = client.get("/search", params={"q": "containers"}).json()
+
+    assert padded["hits"] == plain["hits"]
+
+
+def test_an_empty_index_answers_with_no_hits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LanceDB raises ValueError on limit(0): without a guard this was a 500."""
+    path = tmp_path / "empty.lance"
+    build_index([], HashEmbedder(), path)
+    monkeypatch.setenv("VECTORS_PATH", str(path))
+    semantic.clear_caches()
+    app.dependency_overrides[embedder] = HashEmbedder
+    try:
+        response = TestClient(app).get("/search", params={"q": "containers"})
+    finally:
+        app.dependency_overrides.clear()
+        semantic.clear_caches()
+
+    assert response.status_code == 200
+    assert response.json()["hits"] == []
+
+
+def test_index_length_is_read_once(real_index: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from brain.vectors import VectorIndex
+
+    index = VectorIndex(real_index)
+    expected = len(index)
+    assert expected > 0
+
+    def forbidden() -> int:
+        raise AssertionError("count_rows() called per request")
+
+    monkeypatch.setattr(index._table, "count_rows", forbidden, raising=False)
+    assert len(index) == expected
+    assert semantic.semantic_search(index, HashEmbedder(), "containers", 3)
