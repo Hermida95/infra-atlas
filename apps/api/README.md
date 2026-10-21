@@ -8,7 +8,9 @@ make api                   # builds the index, then http://localhost:8000 (docs 
 
 | Method | Path | What it returns |
 | --- | --- | --- |
-| GET | `/health` | `{"status": "ok"}` (liveness and readiness probes) |
+| GET | `/health` | `{"status": "ok"}`: liveness, the process answers. Checks nothing else |
+| GET | `/ready` | 200 when graph, index and model are loaded and compatible, else 503 with which one is not (readiness probe) |
+| GET | `/metrics` | Prometheus metrics: requests, latency and rejections by route template |
 | GET | `/graph` | The whole `graph.json`, as stored |
 | GET | `/domains` | Domains in map order, with `node_count` |
 | GET | `/requirements` | What a user can ask the planner for, with the keywords it detects in free text |
@@ -31,3 +33,22 @@ Semantic search reads the LanceDB index at `VECTORS_PATH` (default `apps/api/dat
 ```bash
 uv run python -m api.evaluation   # recall@k and MRR on content/search-eval.yaml, semantic vs keyword
 ```
+
+## Configuration
+
+Environment variables, read at startup (`api/settings.py`):
+
+| Variable | Default | What |
+| --- | --- | --- |
+| `GRAPH_PATH` | repo's `apps/web/src/data/graph.json` | Graph file |
+| `VECTORS_PATH` | `apps/api/data/vectors.lance` | LanceDB index written by `brain embed` |
+| `EMBEDDINGS_PROVIDER` | `local` | `local` (fastembed) or `bedrock` (Titan v2) |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated origins allowed to call the API from a browser |
+| `API_DOCS` | `true` | Serve `/docs`, `/redoc` and `/openapi.json` |
+| `RATE_LIMIT_PER_MINUTE` | `60` | Per client IP on `/search` and `/plan`; `0` disables |
+| `MAX_BODY_BYTES` | `16384` | Largest request body |
+| `WARMUP` | `true` | Load graph, index and model at startup, before `/ready` passes |
+| `LOG_FORMAT` / `LOG_LEVEL` | `json` / `INFO` | `text` for a terminal |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies uvicorn trusts for `X-Forwarded-For` |
+
+Responses carry `X-Request-ID` (echoed if the client sends a valid one) and security headers; every request logs one JSON line with that id. Security controls and why: [docs/SEGURIDAD.md](../../docs/SEGURIDAD.md).
