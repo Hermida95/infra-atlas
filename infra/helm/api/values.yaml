@@ -1,16 +1,27 @@
-# Default values for the Infra Atlas API chart.
+# Default values for the Infra Atlas API chart. Every key is validated by values.schema.json.
 
 replicaCount: 2
 
 image:
   repository: infra-atlas-api
   tag: ci
+  # In a real cluster, deploy by digest (sha256:...): the release then names exact bytes,
+  # signed and scanned in CI (.github/workflows/release.yml). When set, it wins over the tag.
+  digest: ""
   # IfNotPresent: kind loads the image straight into the nodes, there is no registry to pull from.
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+# A dedicated identity per workload, never the namespace's `default` account. The API does
+# not call the Kubernetes API, so no token is mounted. On EKS, an IRSA or Pod Identity role
+# goes in `annotations` (eks.amazonaws.com/role-arn) when the API needs AWS (Bedrock, S3).
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
 
 service:
   type: ClusterIP
@@ -19,12 +30,25 @@ service:
 # Port uvicorn listens on inside the container (see apps/api/Dockerfile).
 containerPort: 8000
 
+# Runtime configuration (apps/api/src/api/settings.py).
+config:
+  corsOrigins: "http://localhost:3000"
+  docs: true
+  rateLimitPerMinute: 60
+  logLevel: INFO
+  # Proxies whose X-Forwarded-For uvicorn trusts. Set it to the Ingress controller's pod
+  # CIDR when there is one; the default trusts nobody but localhost.
+  forwardedAllowIps: "127.0.0.1"
+
+# Measured in CI: ~300 MiB after the first search (ONNX model, LanceDB, pyarrow). The request
+# reserves that on the node; the limit leaves headroom before the kernel OOM-kills the pod.
+# No CPU limit on purpose: it throttles even when the node is idle.
 resources:
   requests:
-    cpu: 50m
-    memory: 96Mi
+    cpu: 100m
+    memory: 320Mi
   limits:
-    memory: 256Mi
+    memory: 512Mi
 
 podSecurityContext:
   runAsNonRoot: true
@@ -37,32 +61,77 @@ podSecurityContext:
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
+  privileged: false
   capabilities:
     drop: ["ALL"]
 
 probes:
-  readiness:
+  # Holds the other two back while the app warms up (loads the index and the model).
+  # Budget: failureThreshold x periodSeconds = 60 s.
+  startup:
     path: /health
-    initialDelaySeconds: 2
+    periodSeconds: 2
+    timeoutSeconds: 2
+    failureThreshold: 30
+  # Traffic only when graph, index and model are loaded (GET /ready).
+  readiness:
+    path: /ready
     periodSeconds: 5
     timeoutSeconds: 2
     failureThreshold: 3
+  # Restart only if the process stops answering. Never checks dependencies.
   liveness:
     path: /health
-    initialDelaySeconds: 10
     periodSeconds: 10
     timeoutSeconds: 2
     failureThreshold: 3
 
+# Pod stays in the Service's endpoints for a few seconds after SIGTERM is decided, so the
+# load balancer stops sending traffic before uvicorn stops accepting it.
+preStopSleepSeconds: 5
+terminationGracePeriodSeconds: 30
+
+# Voluntary disruptions (node drains, cluster upgrades) never take every replica at once.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Spread replicas across nodes and zones, so one node or AZ failure leaves one serving.
+# ScheduleAnyway: a preference, so a one-node cluster (kind) still schedules both.
+topologySpread:
+  enabled: true
+
+# Default deny: only TCP to the API port comes in, and nothing goes out. The API reads its
+# model and index from the image and never calls out, so egress stays closed; a stolen
+# process cannot exfiltrate data or reach the cloud metadata endpoint.
+# Enforced only by a CNI that implements NetworkPolicy (Calico, Cilium, the VPC CNI with
+# network policy enabled); kind's default kindnet ignores it.
+networkPolicy:
+  enabled: true
+  # Who may connect to the API port. Empty: any pod or source. Example for ingress-nginx:
+  #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+  ingressFrom: []
+  # Opt in to DNS egress if a future provider (Bedrock) needs it; add its endpoints too.
+  allowDNS: false
+
+podAnnotations: {}
+
 ingress:
   enabled: false
   className: ""
+  # Examples: ingress-nginx rate limit and TLS redirect, or the AWS Load Balancer Controller:
+  #   nginx.ingress.kubernetes.io/limit-rps: "10"
+  #   alb.ingress.kubernetes.io/scheme: internet-facing
+  #   alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
   annotations: {}
   hosts:
     - host: api.infra-atlas.local
       paths:
         - path: /
           pathType: Prefix
+  # Terminate TLS at the Ingress, e.g. with cert-manager:
+  #   - secretName: api-infra-atlas-tls
+  #     hosts: [api.infra-atlas.local]
   tls: []
 
 nodeSelector: {}
