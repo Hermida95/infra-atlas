@@ -49,6 +49,11 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
+            {{- if gt (int .Values.config.metricsPort) 0 }}
+            - name: metrics
+              containerPort: {{ .Values.config.metricsPort }}
+              protocol: TCP
+            {{- end }}
           env:
             - name: CORS_ORIGINS
               value: {{ .Values.config.corsOrigins | quote }}
@@ -56,6 +61,8 @@ spec:
               value: {{ .Values.config.docs | quote }}
             - name: RATE_LIMIT_PER_MINUTE
               value: {{ .Values.config.rateLimitPerMinute | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.config.metricsPort | quote }}
             - name: LOG_LEVEL
               value: {{ .Values.config.logLevel | quote }}
             - name: FORWARDED_ALLOW_IPS

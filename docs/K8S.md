@@ -102,6 +102,10 @@ Ejercicios para el CKAD:
 | Nodos como contenedores | Managed node groups o **Fargate**. Los `requests` deciden cuántos Pods caben por nodo y, por tanto, el coste. |
 | `helm install` desde el CI | Igual, o GitOps (Argo CD / Flux) leyendo el chart del repo. |
 
+### Qué queda público con el Ingress
+
+Un Ingress con `path: /` publica todo lo que sirve la app. Por eso el chart viene con `config.docs: false` (sin `/docs`, `/redoc` ni `/openapi.json`) y con `/metrics` en **otro puerto** (`config.metricsPort: 9000`, variable `METRICS_PORT`): el Service y el Ingress solo enrutan el puerto `http`, así que solo llega a las métricas quien alcance la IP del Pod, normalmente Prometheus. La NetworkPolicy abre ese puerto a cualquier Pod del cluster; `networkPolicy.metricsFrom` lo limita (p. ej. al namespace `monitoring`). Con `metricsPort: 0` `/metrics` vuelve al puerto principal y el Ingress lo expondría. Para activar la documentación en un entorno de pruebas: `--set config.docs=true`.
+
 ### Rate limit con Ingress
 
 El límite de la app (`config.rateLimitPerMinute`, 60/min por IP y por Pod, en memoria) es una **red de seguridad**, no el límite real: cada réplica cuenta por separado y no ve el tráfico de las demás. El límite efectivo se pone **en el borde**: anotaciones del Ingress (`nginx.ingress.kubernetes.io/limit-rpm`), reglas de rate en AWS WAF, o throttling de API Gateway si la API corre en Lambda.

@@ -50,4 +50,11 @@ expect_render "extraEgress works with allowDNS" 'port: 53' \
   --set-json 'networkPolicy.extraEgress=[{"ports":[{"port":443}]}]'
 expect_no_match "extraEgress empty adds nothing" 'port: 443' --set networkPolicy.allowDNS=true
 
+# C1: docs are off and /metrics has its own port, which the Service does not route.
+expect_render "docs off by default" 'value: "false"'
+expect_render "metrics env and container port" 'name: METRICS_PORT'
+expect_render "metrics container port is named" 'name: metrics'
+expect_no_match "service does not route metrics" 'targetPort: metrics'
+expect_no_match "metricsPort 0 drops the port" 'name: metrics$' --set config.metricsPort=0
+
 exit $fail

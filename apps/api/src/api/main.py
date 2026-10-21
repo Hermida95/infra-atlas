@@ -15,7 +15,7 @@ from anyio import to_thread
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest, start_http_server
 
 from api.atlas import Atlas, atlas_from_bytes
 from api.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, RequestContextMiddleware
@@ -182,9 +182,13 @@ def ready(request: Request) -> JSONResponse:
     )
 
 
-@router.get("/metrics", include_in_schema=False)
+metrics_router = APIRouter()
+
+
+@metrics_router.get("/metrics", include_in_schema=False)
 def metrics() -> Response:
-    """Prometheus metrics. In a cluster, scrape it from inside; do not route it publicly."""
+    """Prometheus metrics on the main port, used when METRICS_PORT is not set (local dev).
+    With METRICS_PORT they are served by their own listener and this route does not exist."""
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
@@ -324,15 +328,34 @@ def _warm_up() -> None:
         log.warning("warm-up failed", extra={"cause": f"{type(exc).__name__}: {exc}"})
 
 
+def _start_metrics_server(port: int) -> Any | None:
+    """Serve /metrics on its own port, on all interfaces so the scraper can reach the pod.
+    Not exposed by the Service or the Ingress unless the deployment adds it. A port that
+    cannot be bound is logged, not fatal: the API matters more than its metrics."""
+    if port <= 0:
+        return None
+    try:
+        server, _ = start_http_server(port, registry=REGISTRY)
+    except OSError as exc:
+        log.warning("metrics listener not started", extra={"cause": str(exc), "port": port})
+        return None
+    return server
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         configure_logging(settings.log_format, settings.log_level)
+        metrics_server = _start_metrics_server(settings.metrics_port)
         if settings.warmup:
             await to_thread.run_sync(_warm_up)
-        yield
+        try:
+            yield
+        finally:
+            if metrics_server is not None:
+                metrics_server.shutdown()
 
     docs: dict[str, Any] = (
         {}
@@ -345,6 +368,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application = FastAPI(title="Infra Atlas API", version="0.1.0", lifespan=lifespan, **docs)
     application.include_router(router)
+    if settings.metrics_port <= 0:
+        application.include_router(metrics_router)
     # Added inside out: the last one wraps all the others.
     application.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     application.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute)

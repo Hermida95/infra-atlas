@@ -502,3 +502,52 @@ def test_a_bug_while_loading_the_model_is_not_hidden_as_unavailable(
 
     with pytest.raises(KeyError):
         semantic.get_embedder()
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def test_metrics_move_to_their_own_port_when_configured(graph_file: Path) -> None:
+    import urllib.request
+
+    port = _free_port()
+    app = create_app(
+        Settings(warmup=False, rate_limit_per_minute=0, log_format="text", metrics_port=port)
+    )
+
+    with TestClient(app) as api:
+        api.get("/health")
+        assert api.get("/metrics").status_code == 404  # not on the public app
+        body = urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=2).read().decode()
+
+    assert "http_request_duration_seconds_bucket" in body
+
+
+def test_metrics_listener_that_cannot_bind_does_not_stop_the_api(graph_file: Path) -> None:
+    import socket
+
+    with socket.socket() as taken:
+        taken.bind(("0.0.0.0", 0))
+        taken.listen()
+        app = create_app(
+            Settings(
+                warmup=False,
+                rate_limit_per_minute=0,
+                log_format="text",
+                metrics_port=taken.getsockname()[1],
+            )
+        )
+        with TestClient(app) as api:
+            assert api.get("/health").status_code == 200
+
+
+def test_metrics_port_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("METRICS_PORT", "9000")
+    assert Settings.from_env().metrics_port == 9000
+    monkeypatch.delenv("METRICS_PORT")
+    assert Settings.from_env().metrics_port == 0

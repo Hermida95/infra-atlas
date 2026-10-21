@@ -33,7 +33,12 @@ containerPort: 8000
 # Runtime configuration (apps/api/src/api/settings.py).
 config:
   corsOrigins: "http://localhost:3000"
-  docs: true
+  # /docs, /redoc and /openapi.json. Off by default: an Ingress at path / would publish them.
+  docs: false
+  # Port of the separate /metrics listener inside the pod. The Service and the Ingress do not
+  # route it, so only something that reaches the pod IP (a Prometheus scraper) can read it.
+  # 0 puts /metrics back on the main port, which the Ingress would then expose.
+  metricsPort: 9000
   # Safety net per pod and per client IP, in memory. The effective limit belongs at the edge
   # (Ingress limit-rpm / limit-rps, or API Gateway throttling and WAF rate rules on Lambda),
   # which sees the traffic of every replica.
@@ -116,6 +121,10 @@ networkPolicy:
   # Who may connect to the API port. Empty: any pod or source. Example for ingress-nginx:
   #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
   ingressFrom: []
+  # Who may scrape the metrics port. Empty: any pod in the cluster. Example for a Prometheus
+  # in the monitoring namespace:
+  #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+  metricsFrom: []
   # Opt in to DNS egress if a future provider (Bedrock) needs it; add its endpoints too.
   allowDNS: false
   # Extra egress rules, appended as they are written (NetworkPolicyEgressRule). allowDNS opens
