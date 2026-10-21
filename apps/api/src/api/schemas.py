@@ -83,7 +83,13 @@ class SemanticChunkOut(BaseModel):
 class SemanticHitOut(BaseModel):
     id: str
     title: str
-    score: float = Field(description="Cosine similarity of the best chunk, up to 1.")
+    score: float = Field(
+        description=(
+            "Relevance of the concept: cosine similarity of its best chunk, up to 1, "
+            "multiplied by 0.85 when that chunk is a teardown part. Hits under the "
+            "model's noise floor are not returned."
+        )
+    )
     chunk: SemanticChunkOut
 
 

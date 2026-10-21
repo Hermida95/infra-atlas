@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { nodeById } from "@/lib/graph";
 import { search } from "@/lib/search";
-import { MIN_SEMANTIC_SCORE, mergeHits, semanticSearch, type SemanticHit } from "@/lib/semantic";
+import { mergeHits, semanticSearch, type SemanticHit } from "@/lib/semantic";
 
 const node = (id: string) => {
   const n = nodeById.get(id);
@@ -67,9 +67,9 @@ describe("mergeHits", () => {
     ]);
   });
 
-  it("drops meaning hits below the noise floor", () => {
-    const merged = mergeHits([], [meaning("vectordb", MIN_SEMANTIC_SCORE - 0.01)]);
-    expect(merged).toEqual([]);
+  it("trusts the API's threshold: it does not filter meaning hits by score itself", () => {
+    const merged = mergeHits([], [meaning("vectordb", 0.2)]);
+    expect(merged.map((h) => h.node.id)).toEqual(["vectordb"]);
   });
 
   it("shows the part a meaning hit matched, without the title prefix", () => {

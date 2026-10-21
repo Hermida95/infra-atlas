@@ -9,12 +9,6 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") || n
 
 /** Shortest query worth sending: one or two letters carry no meaning to embed. */
 export const MIN_SEMANTIC_QUERY = 3;
-/**
- * Cosine similarity below which a hit is noise. The API always returns k hits, even for
- * "asdf". Measured with bge-small: gibberish ("asdf qwer", "zzzz") tops out at 0.57, while
- * the expected concept for a real question scores 0.60 to 0.88.
- */
-export const MIN_SEMANTIC_SCORE = 0.58;
 /** A local hit at least this strong matched a title or its initials: the user typed a name. */
 const NAME_MATCH = 55;
 
@@ -65,7 +59,7 @@ function partSnippet(hit: SemanticHit): string | undefined {
 /**
  * One ranked list for the palette:
  * 1. local hits that matched a name, so typing "docker" still puts Docker first;
- * 2. meaning hits above the noise floor, closest first;
+ * 2. meaning hits, closest first (the API already dropped the noise);
  * 3. the remaining, weaker local hits.
  * A concept appears once, at its best position.
  */
@@ -79,9 +73,7 @@ export function mergeHits(local: Hit[], semantic: SemanticHit[], limit = 8): Pal
   };
   for (const h of local) if (h.score >= NAME_MATCH) add({ ...h, via: "keyword" });
   for (const h of semantic) {
-    if (h.score >= MIN_SEMANTIC_SCORE) {
-      add({ node: h.node, score: h.score, via: "meaning", snippet: partSnippet(h) });
-    }
+    add({ node: h.node, score: h.score, via: "meaning", snippet: partSnippet(h) });
   }
   for (const h of local) add({ ...h, via: "keyword" });
   return out;

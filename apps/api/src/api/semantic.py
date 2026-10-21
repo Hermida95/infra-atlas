@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from brain.embeddings import Embedder, embedder_from_env
+from brain.embeddings import LOCAL_MODEL, Embedder, embedder_from_env
 from brain.vectors import ChunkHit, IndexUnavailableError, VectorIndex, default_index_path
 
 # Chunks fetched per requested concept: a concept can own several of the top chunks.
@@ -17,6 +17,12 @@ OVERFETCH = 8
 # unrelated queries. Measured on content/search-eval.yaml (python -m api.evaluation):
 # recall@3 0.74 at 1.0, 0.93 anywhere from 0.9 to 0.8; 0.85 sits in the middle of that plateau.
 PART_WEIGHT = 0.85
+# Weighted score (cosine, times PART_WEIGHT for parts) under which a hit is noise, per model:
+# every model has its own scale, so a number measured on one says nothing about another.
+# bge-small, measured with the real model: gibberish and off-topic queries ("asdf qwer",
+# "zzzz", Spanish questions) top out at 0.576, while the expected concept of each query in
+# content/search-eval.yaml scores 0.581 or more. A model without an entry is not filtered.
+MIN_SCORE: dict[str, float] = {LOCAL_MODEL: 0.58}
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,12 +78,20 @@ def best_per_concept(
 
 
 def semantic_search(
-    index: VectorIndex, embedder: Embedder, query: str, k: int, part_weight: float = PART_WEIGHT
+    index: VectorIndex,
+    embedder: Embedder,
+    query: str,
+    k: int,
+    part_weight: float = PART_WEIGHT,
+    min_score: float | None = None,
 ) -> list[ConceptHit]:
+    """The best concepts for `query`. `min_score` defaults to the embedder's `MIN_SCORE`;
+    concepts under it are dropped, so a query that means nothing returns no hits."""
     index.check(embedder)
+    floor = MIN_SCORE.get(embedder.model, 0.0) if min_score is None else min_score
     vector = embedder.embed_query(query)
     hits = index.search(vector, limit=min(len(index), k * OVERFETCH))
-    return best_per_concept(hits, k, part_weight)
+    return [h for h in best_per_concept(hits, k, part_weight) if h.score >= floor]
 
 
 def clear_caches() -> None:

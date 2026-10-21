@@ -96,10 +96,10 @@ La paleta combina dos búsquedas:
 Cómo se combinan (`mergeHits`):
 
 1. Primero, los aciertos locales que coinciden con un **nombre** (título o iniciales). Si escribes "docker", Docker va primero.
-2. Después, los aciertos por significado con similitud ≥ **0,58**, marcados con la etiqueta *meaning*. Si el fragmento ganador es una pieza del despiece, la segunda línea muestra esa pieza.
+2. Después, los aciertos por significado (la API ya descarta los que quedan bajo su umbral, **0,58** para bge-small), marcados con la etiqueta *meaning*. Si el fragmento ganador es una pieza del despiece, la segunda línea muestra esa pieza.
 3. Al final, el resto de aciertos locales más débiles.
 
-El umbral sale de medir: la API siempre devuelve *k* resultados, también para "asdf qwer", y esa basura llega como mucho a 0,57. Las preguntas reales sacan su concepto esperado entre 0,60 y 0,88.
+El umbral sale de medir: sin umbral la API devolvería *k* resultados también para "asdf qwer". El umbral vive en la API (`MIN_SCORE` en `semantic.py`, por modelo) y se aplica a la puntuación ya ponderada (coseno × 0,85 en las piezas del despiece). Medido con el modelo real: la basura (incluida una pregunta en español, que el modelo inglés no entiende) llega como mucho a 0,576; el concepto esperado de cada pregunta del eval saca como mínimo 0,581. El margen por ambos lados es de unas milésimas: es un umbral frágil, y `test_nonsense_queries_stay_under_the_noise_floor` avisa si un cambio de modelo, de fragmentos o de peso lo rompe.
 
 Detalles:
 

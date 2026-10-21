@@ -14,8 +14,9 @@ from pathlib import Path
 import pytest
 
 from api.evaluation import BM25, Case, evaluate, load_cases, rank_of, report
-from api.semantic import semantic_search
+from api.semantic import MIN_SCORE, semantic_search
 from brain.chunks import chunk_nodes
+from brain.embeddings import LOCAL_MODEL
 from brain.loader import find_repo_root, load_content
 from brain.vectors import VectorIndex, build_index
 
@@ -76,6 +77,23 @@ def test_semantic_search_quality(local_embedder, tmp_path_factory, capsys) -> No
         print("\n" + report({"semantic": semantic, "keyword BM25": keyword}))
     assert semantic.recall_at_3 >= RECALL_AT_3_MIN, semantic.misses
     assert semantic.mrr >= MRR_MIN, semantic.misses
+
+
+# Queries with no answer in the content. The model is English-only, so the Spanish one is
+# also here as a known limit: it must not surface an unrelated concept as if it were a match.
+NO_ANSWER = ["asdf qwer", "zzzz", "qwertyuiop", "¿cómo despliego una base de datos en la nube?"]
+
+
+def test_nonsense_queries_stay_under_the_noise_floor(local_embedder, tmp_path_factory) -> None:
+    path = tmp_path_factory.mktemp("noise") / "vectors.lance"
+    build_index(chunk_nodes(load_content(CONTENT).nodes), local_embedder, path)
+    index = VectorIndex(path)
+    floor = MIN_SCORE[LOCAL_MODEL]
+
+    for query in NO_ANSWER:
+        unfiltered = semantic_search(index, local_embedder, query, 3, min_score=0.0)
+        assert unfiltered[0].score < floor, (query, unfiltered[0])
+        assert semantic_search(index, local_embedder, query, 3) == [], query
 
 
 def test_reciprocal_rank_fusion() -> None:

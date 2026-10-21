@@ -123,3 +123,31 @@ def test_part_weight_lets_overview_win() -> None:
     weighted = semantic.best_per_concept(hits, 2, part_weight=0.9)
     assert [h.node_id for h in weighted] == ["b", "a"]
     assert weighted[1].chunk.id == "a:part:0" and weighted[1].score == 0.72
+
+
+def test_min_score_comes_from_the_model_and_can_be_overridden(
+    real_index: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from brain.vectors import VectorIndex
+
+    index, model = VectorIndex(real_index), HashEmbedder()
+    everything = semantic.semantic_search(index, model, "containers", 5)
+    assert len(everything) == 5  # the test model has no entry: nothing is filtered
+
+    best = everything[0].score
+    monkeypatch.setitem(semantic.MIN_SCORE, model.model, best)
+    assert [h.node_id for h in semantic.semantic_search(index, model, "containers", 5)] == [
+        everything[0].node_id
+    ]
+    assert len(semantic.semantic_search(index, model, "containers", 5, min_score=0.0)) == 5
+    assert semantic.semantic_search(index, model, "containers", 5, min_score=1.1) == []
+
+
+def test_search_endpoint_returns_no_hits_under_the_floor(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(semantic.MIN_SCORE, HashEmbedder.model, 1.1)
+
+    body = client.get("/search", params={"q": "containers"}).json()
+
+    assert body["hits"] == []
