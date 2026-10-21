@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -127,9 +127,14 @@ def vector_index() -> VectorIndex:
         raise _unavailable(INDEX_UNAVAILABLE, exc) from exc
 
 
-def embedder() -> Embedder:
+def _default_resolver() -> Embedder:
+    return get_embedder()  # looked up per call, so it can be replaced in tests
+
+
+def embedder(request: Request) -> Embedder:
+    """The embedder of this app: the resolver given to `create_app`, else the configured one."""
     try:
-        return get_embedder()
+        return request.app.state.embedder_resolver()
     except EmbedderUnavailableError as exc:
         raise _unavailable(MODEL_UNAVAILABLE, exc) from exc
 
@@ -157,10 +162,8 @@ def readiness(request: Request) -> dict[str, str]:
         log.warning("readiness: index", extra={"cause": str(exc)})
         checks["index"] = checks["model"] = "unavailable"
         return checks
-    # Honour a test override of the `embedder` dependency, like the routes do.
-    resolve = request.app.dependency_overrides.get(embedder, get_embedder)
     try:
-        index.check(resolve())
+        index.check(request.app.state.embedder_resolver())
         checks["model"] = "ok"
     except IndexModelMismatchError as exc:
         log.warning("readiness: model", extra={"cause": str(exc)})
@@ -308,7 +311,7 @@ def plan(body: PlanIn, atlas: AtlasDep) -> PlanOut:
     )
 
 
-def _warm_up() -> None:
+def _warm_up(resolve: Callable[[], Embedder]) -> None:
     """Load everything /ready checks, and run one query so the ONNX session is initialised.
 
     Failures are logged, not raised: the process still starts, /health answers and /ready
@@ -318,7 +321,7 @@ def _warm_up() -> None:
     try:
         load_graph(graph_path())
         index = get_index()
-        model = get_embedder()
+        model = resolve()
         index.check(model)
         model.embed_query("warm up")
         log.info("warm-up complete", extra={"chunks": len(index), "model": model.model})
@@ -342,7 +345,11 @@ def _start_metrics_server(port: int) -> Any | None:
     return server
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, embedder_resolver: Callable[[], Embedder] | None = None
+) -> FastAPI:
+    """`embedder_resolver` returns the embedder to query with (raising EmbedderUnavailableError
+    when it cannot). The default loads the configured provider; tests pass a stand-in."""
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
@@ -350,7 +357,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         configure_logging(settings.log_format, settings.log_level)
         metrics_server = _start_metrics_server(settings.metrics_port)
         if settings.warmup:
-            await to_thread.run_sync(_warm_up)
+            await to_thread.run_sync(_warm_up, application.state.embedder_resolver)
         try:
             yield
         finally:
@@ -367,6 +374,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
     )
     application = FastAPI(title="Infra Atlas API", version="0.1.0", lifespan=lifespan, **docs)
+    application.state.embedder_resolver = embedder_resolver or _default_resolver
     application.include_router(router)
     if settings.metrics_port <= 0:
         application.include_router(metrics_router)

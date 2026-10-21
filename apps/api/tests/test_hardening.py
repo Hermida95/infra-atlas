@@ -8,7 +8,7 @@ from api_fakes import HashEmbedder
 from fastapi.testclient import TestClient
 
 from api import main, semantic
-from api.main import _load_graph_bytes, create_app, embedder
+from api.main import _load_graph_bytes, create_app
 from api.middleware import RateLimitMiddleware
 from api.observability import JsonFormatter, request_id
 from api.semantic import EmbedderUnavailableError
@@ -47,8 +47,7 @@ def index_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 def client(**settings) -> TestClient:
     defaults = {"warmup": False, "rate_limit_per_minute": 0, "log_format": "text"}
-    app = create_app(Settings(**{**defaults, **settings}))
-    app.dependency_overrides[embedder] = HashEmbedder
+    app = create_app(Settings(**{**defaults, **settings}), embedder_resolver=HashEmbedder)
     return TestClient(app)
 
 
@@ -366,7 +365,7 @@ def test_not_ready_with_another_model(graph_file: Path, index_path: Path, monkey
 
     monkeypatch.setenv("VECTORS_PATH", str(index_path))
     api = client()
-    api.app.dependency_overrides[embedder] = Other
+    api.app.state.embedder_resolver = Other
 
     assert api.get("/ready").json()["checks"]["model"] == "mismatch"
 

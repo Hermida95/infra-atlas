@@ -5,8 +5,8 @@ import pytest
 from api_fakes import HashEmbedder
 from fastapi.testclient import TestClient
 
-from api import semantic
-from api.main import app, embedder
+from api import main, semantic
+from api.main import app
 from brain.chunks import chunk_nodes
 from brain.loader import find_repo_root, load_content
 from brain.vectors import build_index
@@ -27,9 +27,9 @@ def real_index(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def client(real_index: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("VECTORS_PATH", str(real_index))
     semantic.clear_caches()
-    app.dependency_overrides[embedder] = HashEmbedder
+    app.state.embedder_resolver = HashEmbedder
     yield TestClient(app)
-    app.dependency_overrides.clear()
+    app.state.embedder_resolver = main._default_resolver
     semantic.clear_caches()
 
 
@@ -60,11 +60,11 @@ def test_search_k_bounds(client: TestClient) -> None:
 def test_search_without_index_is_503(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VECTORS_PATH", str(tmp_path / "missing.lance"))
     semantic.clear_caches()
-    app.dependency_overrides[embedder] = HashEmbedder
+    app.state.embedder_resolver = HashEmbedder
     try:
         response = TestClient(app).get("/search", params={"q": "docker"})
     finally:
-        app.dependency_overrides.clear()
+        app.state.embedder_resolver = main._default_resolver
 
     assert response.status_code == 503
     assert response.json()["detail"] == "search index not available; run `brain embed`"
@@ -75,7 +75,7 @@ def test_search_with_another_model_is_503(client: TestClient) -> None:
     class Other(HashEmbedder):
         model = "other"
 
-    app.dependency_overrides[embedder] = Other
+    app.state.embedder_resolver = Other
 
     response = client.get("/search", params={"q": "docker"})
 
@@ -173,11 +173,11 @@ def test_an_empty_index_answers_with_no_hits(
     build_index([], HashEmbedder(), path)
     monkeypatch.setenv("VECTORS_PATH", str(path))
     semantic.clear_caches()
-    app.dependency_overrides[embedder] = HashEmbedder
+    app.state.embedder_resolver = HashEmbedder
     try:
         response = TestClient(app).get("/search", params={"q": "containers"})
     finally:
-        app.dependency_overrides.clear()
+        app.state.embedder_resolver = main._default_resolver
         semantic.clear_caches()
 
     assert response.status_code == 200
