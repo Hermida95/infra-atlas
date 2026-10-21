@@ -6,10 +6,11 @@ A ClusterIP Service is only reachable inside the cluster. To call it from your m
 
 Then, in another terminal:
 
-  curl http://localhost:8000/health
-  curl http://localhost:8000/graph | head -c 300
+  curl http://localhost:8000/health    # liveness: the process answers
+  curl http://localhost:8000/ready     # readiness: graph, index and model loaded
+  curl "http://localhost:8000/search?q=where+do+I+keep+database+passwords&k=3"
 
-Watch the pods become Ready (readiness probe on {{ .Values.probes.readiness.path }}):
+Watch the pods start (startupProbe), then become Ready (readiness on {{ .Values.probes.readiness.path }}):
 
   kubectl --namespace {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -w
 {{- if .Values.ingress.enabled }}

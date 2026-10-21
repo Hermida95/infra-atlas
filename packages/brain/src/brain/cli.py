@@ -10,6 +10,7 @@ from typing import Annotated, get_args
 
 import typer
 
+from brain.chunks import chunk_nodes
 from brain.graph import build_graph, related_links, sort_nodes, write_graph
 from brain.loader import (
     DOMAINS_FILE,
@@ -90,6 +91,50 @@ def graph(
     )
     write_graph(data, target)
     typer.echo(f"Wrote {_display(target)}: {len(data['nodes'])} nodes, {len(data['links'])} links")
+
+
+@app.command()
+def embed(
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Index directory. Default: <repo>/apps/api/data/vectors.lance."),
+    ] = None,
+    force: Annotated[bool, typer.Option(help="Re-embed even if nothing changed.")] = False,
+    include_pro: Annotated[bool, typer.Option(help="Include access: pro nodes.")] = False,
+    content: ContentOption = None,
+) -> None:
+    """Chunk the content, embed it and write the LanceDB index the API searches.
+
+    Provider from EMBEDDINGS_PROVIDER (local by default). Idempotent: unchanged content and
+    model leave the index untouched.
+    """
+    try:
+        from brain.embeddings import embedder_from_env
+        from brain.vectors import build_index, default_index_path
+    except ImportError as exc:  # pragma: no cover - depends on the installed extras
+        typer.echo(f"ERROR {exc}. Install the search extra: uv sync --all-packages", err=True)
+        raise typer.Exit(code=1) from exc
+
+    report = _run_validation(content)
+    chunks = chunk_nodes(report.nodes, include_pro=include_pro)
+    try:
+        embedder = embedder_from_env()
+    except ValueError as exc:
+        typer.echo(f"ERROR {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    target = out if out is not None else default_index_path()
+    info = build_index(chunks, embedder, target, force=force)
+
+    model = (
+        f"{info.model['provider']}:{info.model['model']} {info.model['model_version']} "
+        f"({info.model['dimensions']}d)"
+    )
+    if digest := getattr(embedder, "onnx_sha256", None):
+        typer.echo(f"Model file sha256: {digest}")
+    state = "Wrote" if info.written else "Up to date"
+    typer.echo(
+        f"{state} {_display(target)}: {info.chunks} chunks, {model}, {info.fingerprint[:12]}"
+    )
 
 
 @app.command()

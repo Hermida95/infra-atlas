@@ -6,6 +6,7 @@ metadata:
     {{- include "api.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
       {{- include "api.selectorLabels" . | nindent 6 }}
@@ -19,18 +20,25 @@ spec:
     metadata:
       labels:
         {{- include "api.labels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: {{ include "api.serviceAccountName" . }}
       # The API does not talk to the Kubernetes API: no token in the pod.
       automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: api
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "api.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -38,11 +46,28 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
+          env:
+            - name: CORS_ORIGINS
+              value: {{ .Values.config.corsOrigins | quote }}
+            - name: API_DOCS
+              value: {{ .Values.config.docs | quote }}
+            - name: RATE_LIMIT_PER_MINUTE
+              value: {{ .Values.config.rateLimitPerMinute | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: FORWARDED_ALLOW_IPS
+              value: {{ .Values.config.forwardedAllowIps | quote }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startup.path }}
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
               port: http
-            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
             timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
             failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
@@ -50,10 +75,15 @@ spec:
             httpGet:
               path: {{ .Values.probes.liveness.path }}
               port: http
-            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
             timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
             failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- if .Values.preStopSleepSeconds }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.preStopSleepSeconds }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -64,6 +94,17 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        {{- range list "kubernetes.io/hostname" "topology.kubernetes.io/zone" }}
+        - maxSkew: 1
+          topologyKey: {{ . }}
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "api.selectorLabels" $ | nindent 14 }}
+        {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

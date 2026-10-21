@@ -7,12 +7,16 @@ on:
     paths:
       - infra/helm/**
       - apps/api/**
+      - packages/brain/**
+      - uv.lock
       - labs/k8s/**
       - .github/workflows/k8s-smoke.yml
   pull_request:
     paths:
       - infra/helm/**
       - apps/api/**
+      - packages/brain/**
+      - uv.lock
       - labs/k8s/**
       - .github/workflows/k8s-smoke.yml
 
@@ -33,17 +37,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
-      # The image copies apps/web/src/data/graph.json, so the graph is built first.
+      # The image copies graph.json, the vector index and the model, so they are built first.
       - run: uv sync --all-packages
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/api/data/models
+          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
+          restore-keys: fastembed-bge-small-en-v1.5-
       - run: uv run brain graph
+      - run: uv run brain embed
 
       - name: Build the API image
         run: docker build -f apps/api/Dockerfile -t "$IMAGE" .
 
-      - uses: azure/setup-helm@v5.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.3.1
       - name: Lint and render the chart
@@ -52,7 +64,7 @@ jobs:
           helm template "$RELEASE" infra/helm/api --set ingress.enabled=true > /dev/null
 
       - name: Create the kind cluster
-        uses: helm/kind-action@v1.15.1
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
         with:
           version: v0.33.0
           kubectl_version: v1.37.1
@@ -61,6 +73,11 @@ jobs:
 
       - name: Load the image into the nodes
         run: kind load docker-image "$IMAGE" --name infra-atlas
+
+      # The namespace refuses any pod that breaks the "restricted" Pod Security Standard,
+      # so a chart change that weakens the security context fails here.
+      - name: Enforce Pod Security "restricted"
+        run: kubectl label namespace default pod-security.kubernetes.io/enforce=restricted --overwrite
 
       - name: Install the chart
         run: |
@@ -76,6 +93,6 @@ jobs:
         if: failure()
         run: |
           kubectl get all -o wide || true
-          kubectl describe deployment,pods -l app.kubernetes.io/instance="$RELEASE" || true
+          kubectl describe deployment,pods,pdb,networkpolicy -l app.kubernetes.io/instance="$RELEASE" || true
           kubectl logs -l app.kubernetes.io/instance="$RELEASE" --all-containers --prefix --tail=200 || true
           kubectl get events --sort-by=.lastTimestamp || true

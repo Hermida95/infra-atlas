@@ -9,6 +9,17 @@ dependencies = [
   "typer>=0.12",
 ]
 
+[project.optional-dependencies]
+# Semantic index: `brain embed` and the API's /search.
+search = [
+  "fastembed>=0.9",
+  "lancedb>=0.40",
+]
+# Only needed with EMBEDDINGS_PROVIDER=bedrock.
+bedrock = [
+  "boto3>=1.35",
+]
+
 [project.scripts]
 brain = "brain.cli:app"
 

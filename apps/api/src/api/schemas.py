@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -74,8 +74,29 @@ class SearchOut(BaseModel):
     hits: list[SearchHitOut]
 
 
+class SemanticChunkOut(BaseModel):
+    id: str
+    kind: str = Field(description="overview, or part for a teardown part.")
+    text: str
+
+
+class SemanticHitOut(BaseModel):
+    id: str
+    title: str
+    score: float = Field(description="Cosine similarity of the best chunk, up to 1.")
+    chunk: SemanticChunkOut
+
+
+class SemanticSearchOut(BaseModel):
+    query: str
+    model: str
+    hits: list[SemanticHitOut]
+
+
 class PlanIn(BaseModel):
-    requirements: list[str] = Field(default=[], description="Requirement ids, see /requirements.")
+    requirements: list[Annotated[str, Field(max_length=32)]] = Field(
+        default=[], max_length=20, description="Requirement ids, see /requirements."
+    )
     text: str | None = Field(
         default=None,
         max_length=1000,
