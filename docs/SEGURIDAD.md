@@ -16,11 +16,11 @@ make audit     # pip-audit, pnpm audit y zizmor, lo mismo que la CI
 | S4 | Medio | DoS por coste: sin límite de peticiones ni de tamaño de body; `requirements` sin tope | ✅ Límite por IP en `/search` y `/plan`, body ≤ 16 KiB, ≤ 20 requisitos |
 | S5 | Bajo | Los 503 devolvían rutas internas y texto de excepciones | ✅ Mensajes genéricos; el detalle va al log |
 | S6 | Bajo | CORS fijo y `allow_headers=*`; `/docs` siempre público | ✅ `CORS_ORIGINS` y `API_DOCS` por variable de entorno, cabeceras CORS explícitas |
-| S7 | Bajo | El modelo se descargaba sin comprobar sus bytes | ✅ SHA-256 del ONNX en la versión del modelo y en el índice, con pin opcional |
+| S7 | Bajo | El modelo se descargaba sin comprobar sus bytes | ✅ SHA-256 del ONNX fijado (`PINNED_ONNX_SHA256`): otro archivo falla al cargar |
 | S8 | Bajo | Imágenes base por tag mutable | ✅ Por digest, actualizadas por Dependabot |
 | D1 | **Alto** | Límite de 256 Mi con un consumo real de ~300 MiB: `/search` acababa en OOMKilled | ✅ 320 Mi de request, 512 Mi de límite, y el smoke test llama a `/search` |
 | D2 | **Alto** | Readiness en `/health`: un Pod sin índice o sin modelo se marcaba Ready | ✅ `/ready` real, precalentamiento al arrancar y `startupProbe` |
-| D3 | Medio | La imagen no podía correr en Lambda | ✅ Lambda Web Adapter (inerte fuera de Lambda), readiness en `/ready` |
+| D3 | Medio | La imagen no podía correr en Lambda | ✅ Target `lambda` del Dockerfile con el Lambda Web Adapter; la imagen por defecto (Kubernetes) no lo lleva |
 | D4 | Medio | Dos réplicas sin PDB ni reparto entre nodos | ✅ PodDisruptionBudget y `topologySpreadConstraints` |
 | D5 | Medio | Imagen sin publicar, sin SBOM ni firma, con tag mutable | ✅ `release.yml`: escaneo, push a GHCR, SBOM, provenance y firma cosign |
 | D6 | Medio | Imagen de 809 MB (lancedb y pyarrow) | ⏳ Aceptado: LanceDB es lo que permite el índice en S3 (decisión 6). A revisar cuando se decida Lambda o EKS |
@@ -47,7 +47,7 @@ make audit     # pip-audit, pnpm audit y zizmor, lo mismo que la CI
 | **Usuario no root** (UID 10001) y **archivos de root** | El proceso no puede modificar su código, el modelo ni el índice, ni siquiera con el sistema de archivos escribible. |
 | **Base por digest** (`python:3.12-slim@sha256:…`) | Un tag puede cambiar de contenido de un día para otro; un digest no. Dependabot propone el digest nuevo. |
 | **Modelo e índice dentro**, `HF_HUB_OFFLINE=1` | Arranca sin red, siempre con los mismos bytes, y permite cerrar toda la salida con la NetworkPolicy. |
-| **Integridad del modelo** | `brain embed` imprime y guarda el SHA-256 del `.onnx`. Si el repositorio de Hugging Face cambia, cambia la versión del modelo, y la API rechaza un índice de otro modelo (503 en `/ready` y en `/search`). `PINNED_ONNX_SHA256` lo convierte en un error al cargar. |
+| **Integridad del modelo** | El SHA-256 del `.onnx` está fijado en `PINNED_ONNX_SHA256`: si el repositorio de Hugging Face cambia los bytes, cargar el modelo falla (`ModelIntegrityError`) en vez de cambiar en silencio todos los vectores. El digest también forma parte de la versión del modelo guardada en el índice. |
 | **Escaneo con Trivy** en cada PR y antes de publicar | Falla con vulnerabilidades HIGH o CRITICAL que tengan arreglo. Las aceptadas se apuntan en `.trivyignore`, con el motivo. |
 
 ## Kubernetes
@@ -95,15 +95,21 @@ En un cluster real, un *admission controller* (Kyverno, o el policy-controller d
 
 ## Lambda
 
-La imagen lleva el [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) en `/opt/extensions`. En Lambda, el adaptador arranca uvicorn, espera a que `/ready` responda 200 y traduce los eventos de Lambda a HTTP. Fuera de Lambda no hace nada. Al desplegarlo:
+El Dockerfile tiene un target `lambda`: la misma imagen más el [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) en `/opt/extensions`. En Lambda, el adaptador arranca uvicorn, espera a que `/ready` responda 200 y traduce los eventos de Lambda a HTTP.
+
+```bash
+docker build -f apps/api/Dockerfile --target lambda -t infra-atlas-api:lambda .
+```
+
+La imagen por defecto (Compose, Kubernetes, CI) no lo lleva: menos componentes, menos superficie de ataque. Además, ECR Public limita las descargas anónimas (los runners de GitHub ya topan con su *429 Data limit exceeded*), así que la CI no depende de él. Al desplegar en Lambda:
 - Memoria ≥ 1024 MB: la CPU de Lambda escala con la memoria, y el modelo necesita ~300 MiB.
 - El precalentamiento ocurre en la fase *init*, una vez por entorno de ejecución, no en cada petición.
 - El rol de ejecución solo necesita permisos de logs (y `bedrock:InvokeModel` si se cambia de proveedor).
 - El límite de peticiones va en API Gateway (throttling por stage o por clave).
+- Construir el target desde AWS (CodeBuild) o con `docker login public.ecr.aws`: las descargas autenticadas no tienen ese límite.
 
 ## Pendiente
 
 - **D6, tamaño de imagen:** medir la alternativa con numpy en memoria (unos −350 MB) cuando se decida entre Lambda y EKS.
-- **Pin del modelo:** rellenar `PINNED_ONNX_SHA256` con el SHA-256 que imprime `brain embed` en CI.
 - **Edge:** WAF (reglas gestionadas de AWS más una *rate-based*) y throttling de API Gateway, al montar la infraestructura con Terraform.
 - **Licencia:** el repositorio no declara ninguna. Elegirla también es una decisión de seguridad legal para quien lo reutilice.

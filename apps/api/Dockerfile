@@ -7,11 +7,12 @@
 # (.github/dependabot.yml) proposes the new digest when the tag moves.
 ARG PYTHON_IMAGE=python:3.12-slim@sha256:2259debdc6af85626058a15a7bf44ad6a68b8c98c9ae82a02cf5cdb92f096d47
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b
-# AWS Lambda Web Adapter: lets this same HTTP server run on Lambda. Outside Lambda it is inert.
+# AWS Lambda Web Adapter, only in the `lambda` target (docker build --target lambda): the
+# default image, the one Kubernetes runs, carries nothing it does not use. ECR Public also
+# rate-limits anonymous pulls, so CI builds never depend on it.
 ARG LAMBDA_ADAPTER_IMAGE=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1
 
 FROM ${UV_IMAGE} AS uv
-FROM ${LAMBDA_ADAPTER_IMAGE} AS lambda-adapter
 
 FROM ${PYTHON_IMAGE} AS builder
 COPY --from=uv /uv /uvx /bin/
@@ -36,7 +37,7 @@ COPY apps/api apps/api
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package api --no-editable
 
-FROM ${PYTHON_IMAGE}
+FROM ${PYTHON_IMAGE} AS runtime
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="infra-atlas-api" \
       org.opencontainers.image.description="Infra Atlas API: graph, planner and semantic search" \
@@ -49,7 +50,6 @@ WORKDIR /app
 # Files stay owned by root and only readable by the app user: even with a writable
 # filesystem, the process could not modify its own code, model or index.
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
 COPY apps/web/src/data/graph.json /app/graph.json
 COPY apps/api/data/models /app/data/models
 COPY apps/api/data/vectors.lance /app/data/vectors.lance
@@ -61,9 +61,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HF_HUB_OFFLINE=1 \
     LOG_FORMAT=json \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    AWS_LWA_PORT=8000 \
-    AWS_LWA_READINESS_CHECK_PATH=/ready
+    PYTHONDONTWRITEBYTECODE=1
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
@@ -72,3 +70,14 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
 # deployment sets it to its proxy), so rate limiting and logs see the real client.
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", \
      "--proxy-headers", "--no-server-header", "--no-access-log", "--timeout-graceful-shutdown", "20"]
+
+# Lambda: the same image plus the adapter extension, which starts uvicorn, waits for /ready
+# and translates Lambda events to HTTP.
+FROM ${LAMBDA_ADAPTER_IMAGE} AS lambda-adapter
+FROM runtime AS lambda
+COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
+ENV AWS_LWA_PORT=8000 \
+    AWS_LWA_READINESS_CHECK_PATH=/ready
+
+# Default target: the plain runtime (Compose, Kubernetes, CI).
+FROM runtime

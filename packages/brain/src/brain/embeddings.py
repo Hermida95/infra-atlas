@@ -25,7 +25,10 @@ BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 # SHA-256 of the ONNX file each local model must load. A model repository on Hugging Face
 # can change under the same name; pinning the bytes turns that into a loud failure instead
 # of a silent change in every vector. `brain embed` prints the digest it loaded.
-PINNED_ONNX_SHA256: dict[str, str] = {}
+PINNED_ONNX_SHA256: dict[str, str] = {
+    # Qdrant/bge-small-en-v1.5-onnx-Q, model_optimized.onnx, as fastembed 0.9.0 downloads it.
+    "BAAI/bge-small-en-v1.5": "51f1bd0addd6e859e42c2c8021a5e5461385bb676a649f4b269aa445449f2431",
+}
 
 TITAN_MODEL = "amazon.titan-embed-text-v2:0"
 TITAN_DIMENSIONS = 512
