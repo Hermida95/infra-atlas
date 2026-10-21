@@ -1,6 +1,6 @@
 PNPM := COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm
 
-.PHONY: help install content embed dev api test lint typecheck build up down
+.PHONY: help install content embed dev api test lint typecheck build up down audit
 
 help: ## Show available targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -31,6 +31,12 @@ lint: ## Lint Python and TypeScript
 	uv run ruff check .
 	uv run ruff format --check .
 	$(PNPM) --filter web lint
+
+audit: ## Supply-chain checks CI runs: Python CVEs (pip-audit), web CVEs, workflow security (zizmor)
+	uv export --frozen --all-packages --no-dev --no-emit-workspace --no-hashes -o .requirements-audit.txt
+	uvx pip-audit==2.10.1 --strict --disable-pip --no-deps -r .requirements-audit.txt; status=$$?; rm -f .requirements-audit.txt; exit $$status
+	$(PNPM) audit --prod
+	uvx zizmor==1.31.1 --offline --min-severity medium .github/workflows
 
 typecheck: content ## Type-check the web app
 	$(PNPM) --filter web logos
