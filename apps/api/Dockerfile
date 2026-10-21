@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context: repo root.  docker build -f apps/api/Dockerfile -t infra-atlas-api .
-# Requires apps/web/src/data/graph.json (run `uv run brain graph` first).
+# Requires apps/web/src/data/graph.json and apps/api/data (run `make embed` first): the image
+# ships the graph, the vector index and the embedding model, so it never downloads at runtime.
 
 ARG PYTHON_IMAGE=python:3.12-slim
 
@@ -34,8 +35,14 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app apps/web/src/data/graph.json /app/graph.json
+COPY --chown=app:app apps/api/data/models /app/data/models
+COPY --chown=app:app apps/api/data/vectors.lance /app/data/vectors.lance
 ENV PATH="/app/.venv/bin:$PATH" \
     GRAPH_PATH=/app/graph.json \
+    VECTORS_PATH=/app/data/vectors.lance \
+    EMBEDDINGS_PROVIDER=local \
+    FASTEMBED_CACHE_PATH=/app/data/models \
+    HF_HUB_OFFLINE=1 \
     PYTHONUNBUFFERED=1
 USER 10001:10001
 EXPOSE 8000

@@ -74,6 +74,25 @@ class SearchOut(BaseModel):
     hits: list[SearchHitOut]
 
 
+class SemanticChunkOut(BaseModel):
+    id: str
+    kind: str = Field(description="overview, or part for a teardown part.")
+    text: str
+
+
+class SemanticHitOut(BaseModel):
+    id: str
+    title: str
+    score: float = Field(description="Cosine similarity of the best chunk, up to 1.")
+    chunk: SemanticChunkOut
+
+
+class SemanticSearchOut(BaseModel):
+    query: str
+    model: str
+    hits: list[SemanticHitOut]
+
+
 class PlanIn(BaseModel):
     requirements: list[str] = Field(default=[], description="Requirement ids, see /requirements.")
     text: str | None = Field(

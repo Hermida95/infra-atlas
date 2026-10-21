@@ -3,7 +3,7 @@
 FastAPI over `graph.json`, the graph `brain graph` builds from `/content`. Read-only: the file is loaded once and indexed in memory. The planner reuses `brain.planner`, so `POST /plan`, `brain plan` and the planner in the web app follow the same rules (checked against `content/planner-cases.yaml`).
 
 ```bash
-make api                   # http://localhost:8000, interactive docs at /docs
+make api                   # builds the index, then http://localhost:8000 (docs at /docs)
 ```
 
 | Method | Path | What it returns |
@@ -14,13 +14,20 @@ make api                   # http://localhost:8000, interactive docs at /docs
 | GET | `/requirements` | What a user can ask the planner for, with the keywords it detects in free text |
 | GET | `/nodes?domain=&type=&level=` | Node summaries, optionally filtered |
 | GET | `/nodes/{id}` | One node: teardown parts, planner rule and related nodes. 404 if unknown |
-| GET | `/search?q=&limit=` | Nodes matching every word of `q`. Title and id rank above body text |
+| GET | `/search?q=&k=5` | Search by meaning: each concept's best matching chunk, closest first. 503 without an index (`make embed`) |
+| GET | `/search/keyword?q=&limit=` | Nodes matching every word of `q`. Title and id rank above body text |
 | POST | `/plan` | The deployment route for `{"requirements": [...], "text": "..."}`, grouped by stage, with notes. 422 on an unknown requirement |
 
 ```bash
-curl -s localhost:8000/search?q=kube
+curl -s --get localhost:8000/search --data-urlencode "q=where do I keep database passwords"
 curl -s -X POST localhost:8000/plan -H 'content-type: application/json' \
   -d '{"text": "FastAPI with Postgres, user login and image uploads on a small budget"}'
 ```
 
 `GRAPH_PATH` points at the graph file; without it the API looks for `apps/web/src/data/graph.json` in the repo. If the file is missing or invalid, every endpoint that needs it answers 503.
+
+Semantic search reads the LanceDB index at `VECTORS_PATH` (default `apps/api/data/vectors.lance`, written by `brain embed`) and embeds queries with `EMBEDDINGS_PROVIDER` (`local`, the default, or `bedrock`). The index records the model that built it and the API refuses to query it with a different one. How it works and how it is evaluated: [docs/BUSQUEDA.md](../../docs/BUSQUEDA.md).
+
+```bash
+uv run python -m api.evaluation   # recall@k and MRR on content/search-eval.yaml, semantic vs keyword
+```

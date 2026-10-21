@@ -24,8 +24,14 @@ from api.schemas import (
     RequirementOut,
     SearchHitOut,
     SearchOut,
+    SemanticChunkOut,
+    SemanticHitOut,
+    SemanticSearchOut,
 )
+from api.semantic import get_embedder, get_index, semantic_search
+from brain.embeddings import Embedder
 from brain.planner import UnknownRequirementError
+from brain.vectors import IndexUnavailableError, VectorIndex
 
 REPO_MARKER = "pnpm-workspace.yaml"
 DEFAULT_GRAPH_RELATIVE = Path("apps/web/src/data/graph.json")
@@ -141,12 +147,58 @@ def node(node_id: str, atlas: AtlasDep) -> NodeDetail:
     return NodeDetail.model_validate({**found, "related": related})
 
 
-@app.get("/search")
+def _unavailable(exc: IndexUnavailableError) -> HTTPException:
+    return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+
+
+def vector_index() -> VectorIndex:
+    try:
+        return get_index()
+    except IndexUnavailableError as exc:
+        raise _unavailable(exc) from exc
+
+
+def embedder() -> Embedder:
+    try:
+        return get_embedder()
+    except IndexUnavailableError as exc:
+        raise _unavailable(exc) from exc
+
+
+@app.get("/search", responses={503: {"description": "No vector index: run `brain embed`"}})
 def search(
+    index: Annotated[VectorIndex, Depends(vector_index)],
+    model: Annotated[Embedder, Depends(embedder)],
+    q: Annotated[str, Query(min_length=1, max_length=200)],
+    k: Annotated[int, Query(ge=1, le=20)] = 5,
+) -> SemanticSearchOut:
+    """Search by meaning: the best matching chunk of each concept, closest first."""
+    try:
+        hits = semantic_search(index, model, q, k)
+    except IndexUnavailableError as exc:
+        raise _unavailable(exc) from exc
+    return SemanticSearchOut(
+        query=q,
+        model=f"{model.provider}:{model.model}",
+        hits=[
+            SemanticHitOut(
+                id=h.node_id,
+                title=h.title,
+                score=h.score,
+                chunk=SemanticChunkOut(id=h.chunk.id, kind=h.chunk.kind, text=h.chunk.text),
+            )
+            for h in hits
+        ],
+    )
+
+
+@app.get("/search/keyword")
+def search_keyword(
     atlas: AtlasDep,
     q: Annotated[str, Query(min_length=1, max_length=200)],
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> SearchOut:
+    """Every word of `q` must appear in the concept. The baseline /search is measured against."""
     hits = [
         SearchHitOut(**NodeSummary.of(h.node).model_dump(), score=h.score)
         for h in atlas.search(q, limit)

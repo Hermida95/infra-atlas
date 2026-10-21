@@ -158,16 +158,16 @@ def test_unknown_node_is_404(client: TestClient) -> None:
     ],
 )
 def test_search_ranking(client: TestClient, query: str, expected: list[str]) -> None:
-    response = client.get("/search", params={"q": query})
+    response = client.get("/search/keyword", params={"q": query})
 
     assert response.status_code == 200
     assert [hit["id"] for hit in response.json()["hits"]] == expected
 
 
 def test_search_limit_and_validation(client: TestClient) -> None:
-    assert len(client.get("/search", params={"q": "o", "limit": 1}).json()["hits"]) == 1
-    assert client.get("/search", params={"q": ""}).status_code == 422
-    assert client.get("/search", params={"q": "docker", "limit": 0}).status_code == 422
+    assert len(client.get("/search/keyword", params={"q": "o", "limit": 1}).json()["hits"]) == 1
+    assert client.get("/search/keyword", params={"q": ""}).status_code == 422
+    assert client.get("/search/keyword", params={"q": "docker", "limit": 0}).status_code == 422
 
 
 def test_plan_groups_by_stage_order(client: TestClient) -> None:
