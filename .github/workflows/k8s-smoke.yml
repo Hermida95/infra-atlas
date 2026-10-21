@@ -1,0 +1,81 @@
+name: k8s-smoke
+
+# The API image deployed with the Helm chart on a throwaway kind cluster.
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/helm/**
+      - apps/api/**
+      - labs/k8s/**
+      - .github/workflows/k8s-smoke.yml
+  pull_request:
+    paths:
+      - infra/helm/**
+      - apps/api/**
+      - labs/k8s/**
+      - .github/workflows/k8s-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: infra-atlas-api:ci
+  RELEASE: atlas
+
+jobs:
+  smoke:
+    name: Helm chart on kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      # The image copies apps/web/src/data/graph.json, so the graph is built first.
+      - run: uv sync --all-packages
+      - run: uv run brain graph
+
+      - name: Build the API image
+        run: docker build -f apps/api/Dockerfile -t "$IMAGE" .
+
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: v4.3.1
+      - name: Lint and render the chart
+        run: |
+          helm lint --strict infra/helm/api
+          helm template "$RELEASE" infra/helm/api --set ingress.enabled=true > /dev/null
+
+      - name: Create the kind cluster
+        uses: helm/kind-action@v1.15.1
+        with:
+          version: v0.33.0
+          kubectl_version: v1.37.1
+          cluster_name: infra-atlas
+          config: labs/k8s/kind-config.yaml
+
+      - name: Load the image into the nodes
+        run: kind load docker-image "$IMAGE" --name infra-atlas
+
+      - name: Install the chart
+        run: |
+          helm install "$RELEASE" infra/helm/api \
+            --set image.repository="${IMAGE%%:*}" \
+            --set image.tag="${IMAGE##*:}" \
+            --wait --timeout 120s
+
+      - name: Smoke test
+        run: labs/k8s/smoke.sh "$RELEASE-api"
+
+      - name: Dump cluster state
+        if: failure()
+        run: |
+          kubectl get all -o wide || true
+          kubectl describe deployment,pods -l app.kubernetes.io/instance="$RELEASE" || true
+          kubectl logs -l app.kubernetes.io/instance="$RELEASE" --all-containers --prefix --tail=200 || true
+          kubectl get events --sort-by=.lastTimestamp || true

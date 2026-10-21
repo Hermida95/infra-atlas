@@ -1,0 +1,18 @@
+Infra Atlas API: {{ .Values.replicaCount }} replicas behind the Service {{ include "api.fullname" . }} ({{ .Values.service.type }}, port {{ .Values.service.port }}).
+
+A ClusterIP Service is only reachable inside the cluster. To call it from your machine:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "api.fullname" . }} 8000:{{ .Values.service.port }}
+
+Then, in another terminal:
+
+  curl http://localhost:8000/health
+  curl http://localhost:8000/graph | head -c 300
+
+Watch the pods become Ready (readiness probe on {{ .Values.probes.readiness.path }}):
+
+  kubectl --namespace {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -w
+{{- if .Values.ingress.enabled }}
+
+Ingress enabled for: {{ range .Values.ingress.hosts }}{{ .host }} {{ end }}
+{{- end }}
