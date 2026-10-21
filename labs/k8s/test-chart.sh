@@ -41,4 +41,13 @@ expect_render "ingress with a trusted CIDR" 'value: "10.0.0.0/8"' \
   --set ingress.enabled=true --set config.forwardedAllowIps=10.0.0.0/8
 expect_render "no ingress keeps the default" 'value: "127.0.0.1"'
 
+# C2: egress stays closed unless asked for.
+expect_render "egress closed by default" 'egress: \[\]'
+expect_render "extraEgress adds a rule" 'port: 443' \
+  --set-json 'networkPolicy.extraEgress=[{"to":[{"ipBlock":{"cidr":"10.1.0.0/16"}}],"ports":[{"port":443,"protocol":"TCP"}]}]'
+expect_render "extraEgress works with allowDNS" 'port: 53' \
+  --set networkPolicy.allowDNS=true \
+  --set-json 'networkPolicy.extraEgress=[{"ports":[{"port":443}]}]'
+expect_no_match "extraEgress empty adds nothing" 'port: 443' --set networkPolicy.allowDNS=true
+
 exit $fail

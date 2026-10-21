@@ -118,6 +118,14 @@ networkPolicy:
   ingressFrom: []
   # Opt in to DNS egress if a future provider (Bedrock) needs it; add its endpoints too.
   allowDNS: false
+  # Extra egress rules, appended as they are written (NetworkPolicyEgressRule). allowDNS opens
+  # only port 53; whatever else a provider needs, e.g. HTTPS to Bedrock, goes here. Empty by
+  # default: no outbound traffic. Example, HTTPS to a VPC endpoint range:
+  #   - to:
+  #       - ipBlock: {cidr: 10.0.0.0/16}
+  #     ports:
+  #       - {port: 443, protocol: TCP}
+  extraEgress: []
 
 podAnnotations: {}
 

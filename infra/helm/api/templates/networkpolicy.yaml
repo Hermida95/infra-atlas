@@ -18,8 +18,9 @@ spec:
       from:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-  {{- if .Values.networkPolicy.allowDNS }}
+  {{- if or .Values.networkPolicy.allowDNS .Values.networkPolicy.extraEgress }}
   egress:
+    {{- if .Values.networkPolicy.allowDNS }}
     - to:
         - namespaceSelector: {}
           podSelector:
@@ -30,6 +31,10 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- else }}
   # No egress rules with Egress in policyTypes: every outbound connection is denied.
   egress: []
