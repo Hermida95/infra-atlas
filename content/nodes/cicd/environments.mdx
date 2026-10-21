@@ -1,0 +1,21 @@
+---
+id: environments
+title: "Environments"
+type: concept
+domain: cicd
+summary: "dev and prod are the same code with different secrets, different data and very different blast radius."
+level: core
+access: free
+relations:
+  related: [ssm]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "true"
+  why: "Keeps dev and prod apart, with their own secrets and their own permissions."
+reviewed: 2026-10-21
+---
+
+An environment is a named place to run the artifact, with its own configuration, its own secrets and its own permissions. Keeping them apart is what lets a broken change be found by you instead of by your users.
+
+The discipline is that only the configuration differs. If dev runs a different image, a different schema or a different code path, then passing in dev stops predicting anything about prod and the environments are decoration.

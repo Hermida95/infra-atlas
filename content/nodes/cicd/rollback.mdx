@@ -1,0 +1,21 @@
+---
+id: rollback
+title: "Rollback"
+type: pattern
+domain: cicd
+summary: "Going back in minutes, and knowing what cannot come back with you."
+level: core
+access: free
+relations:
+  related: [promotion, migrations]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "true"
+  why: "Every release needs a way back that does not depend on a new build."
+reviewed: 2026-10-21
+---
+
+A rollback is a deploy of the previous artifact. It only takes minutes if that artifact still exists, is still signed and the deploy path does not have to build anything, which is exactly why delivery promotes digests instead of rebuilding.
+
+What does not roll back is state: a migration that dropped a column, a message already consumed from a queue, a file written in a new format. Those are what turn a two-minute rollback into an incident, and the reason the risky part of a release is rarely the code.

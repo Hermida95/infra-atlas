@@ -1,0 +1,36 @@
+---
+id: delivery
+title: "Delivery"
+type: concept
+domain: cicd
+hub: true
+summary: "Continuous delivery: the artifact is ready, and getting it to production is a pipeline of its own."
+level: core
+access: free
+relations:
+  related: [pipeline, environments, approval, promotion, bluegreen, canary, rollback, gitops, tfapply]
+lead: "CI ends with an artifact that could ship. Delivery is everything between could and did: environments, a human yes, a strategy for the switch, and a way back."
+parts:
+  - name: "Environments"
+    kind: lanes
+    text: "dev, staging, prod: the same artifact in each one, with its own configuration and its own blast radius."
+  - name: "Approval"
+    kind: gate
+    text: "The point where a person, or a policy, says yes before production changes."
+  - name: "Release strategy"
+    kind: split
+    text: "How the new version takes traffic: all at once, side by side, or a slice at a time."
+  - name: "Reconciliation"
+    kind: loop
+    text: "Something keeps comparing what is running with what was declared, and closes the gap."
+layout: row
+planner:
+  stage: deliver
+  when: "true"
+  why: "Publishing an image is not deploying it: the release is its own pipeline."
+reviewed: 2026-10-21
+---
+
+Continuous integration, continuous delivery and continuous deployment are three different promises. Integration says every commit is built and tested together. Delivery says every build that passes is ready to go to production at the press of a button. Deployment says there is no button.
+
+Most teams want delivery rather than deployment, and the difference between them is exactly the manual gate. Everything else in this stage — environments, promotion, the release strategy, the rollback — exists so that pressing that button is boring.
