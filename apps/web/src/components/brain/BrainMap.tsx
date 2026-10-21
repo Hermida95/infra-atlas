@@ -47,13 +47,21 @@ export default function BrainMap() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  // On phones the planner sits below the hologram: bring the map into view so the change is seen.
+  const revealMap = useCallback(() => {
+    if (!matchMedia("(max-width: 767px)").matches) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  }, []);
+
   const showRoute = useCallback((next: Route | null) => {
     store.current.route = next;
     store.current.routeAt = performance.now();
     store.current.selected = null;
     setSelected(null);
     setRoute(next);
-  }, []);
+    if (next) revealMap();
+  }, [revealMap]);
 
   const select = useCallback((node: GraphNode | null) => {
     store.current.selected = node;
@@ -101,7 +109,14 @@ export default function BrainMap() {
       </div>
       <div className="labels" ref={labels} aria-hidden="true" />
 
-      <Planner route={route} onRoute={showRoute} onSelect={select} />
+      <Planner
+        route={route}
+        onRoute={showRoute}
+        onSelect={(n) => {
+          select(n);
+          revealMap();
+        }}
+      />
 
       <aside className={`panel detail${selected ? " open" : ""}`} aria-live="polite">
         {selected && (

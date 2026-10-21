@@ -156,7 +156,7 @@ function Stage({ node, store, scroller, firstPart, labels }: Props) {
       return el;
     };
     node.parts.forEach((p, i) => (scene.pieces[i].el = make(p.name)));
-    scene.containers.forEach((c, i) => (c.el = make(`Container ${i + 1}, writable`)));
+    scene.containers.forEach((c, i) => (c.el = make(`Container ${i + 1}`)));
     return () => {
       for (const p of scene.pieces) p.el?.remove();
       for (const c of scene.containers) c.el?.remove();
@@ -211,7 +211,9 @@ function Stage({ node, store, scroller, firstPart, labels }: Props) {
       }
 
       const { w, h } = p.shape;
-      if (lead === "right") { p.from.set(w / 2 + 2, 0, 0); p.to.set(w / 2 + 90, 0, 0); }
+      // Narrow screens get shorter leader lines so the labels still fit.
+      const reach = size.width < 500 ? 34 : 90;
+      if (lead === "right") { p.from.set(w / 2 + 2, 0, 0); p.to.set(w / 2 + reach, 0, 0); }
       else { p.from.set(0, h / 2 + 2, 0); p.to.set(0, h / 2 + 64, 0); }
       const pos = p.lead.geometry.attributes.position as THREE.BufferAttribute;
       pos.setXYZ(0, p.from.x, p.from.y, p.from.z);
@@ -232,18 +234,22 @@ function Stage({ node, store, scroller, firstPart, labels }: Props) {
     scene.logo.position.set(0, maxY + (node.layout === "row" ? 110 : 40) + ex * 14, 0);
     scene.logo.material.opacity = ea * (1 - L);
 
+    // Containers line up along the screen's horizontal axis (perpendicular to the camera at the
+    // resting angle), each plate turned along that line, so three of them never overlap.
+    const across = 0.56 - restAngle, ax = Math.cos(across), az = -Math.sin(across);
     scene.containers.forEach((ct, k) => {
       const dropAt = lab?.containerDrops[k] ?? null;
       const on = lab && k < lab.containers && dropAt != null, ap = on ? eOut(clamp01((now - dropAt!) / 550)) : 0;
       const tx = (k - (lab ? lab.containers - 1 : 0) / 2) * 150;
       ct.x += (tx - ct.x) * 0.12;
       const y = topY + 96 + (1 - ap) * 70;
-      ct.g.position.set(ct.x, y, 0);
+      ct.g.position.set(ct.x * ax, y, ct.x * az);
+      ct.g.rotation.y = across;
       (ct.plate.material as THREE.LineDashedMaterial).opacity = ap * L * 0.95;
       (ct.fill.material as THREE.MeshBasicMaterial).opacity = ap * L * 0.07;
       const pa = ct.line.geometry.attributes.position as THREE.BufferAttribute;
-      pa.setXYZ(0, ct.x, y - 4, 0);
-      pa.setXYZ(1, ct.x * 0.2, topY + 4, 0);
+      pa.setXYZ(0, ct.x * ax, y - 4, ct.x * az);
+      pa.setXYZ(1, ct.x * ax * 0.2, topY + 4, ct.x * az * 0.2);
       pa.needsUpdate = true;
       (ct.line.material as THREE.LineBasicMaterial).opacity = ap * L * 0.45;
       ct.vis = ap * L;
@@ -262,7 +268,7 @@ function Stage({ node, store, scroller, firstPart, labels }: Props) {
     camera.lookAt(0, cy, 0);
     // Labels hang off the right side of each part: shift the object left to leave them room.
     const pc = camera as THREE.PerspectiveCamera;
-    const shift = node.layout === "row" ? 0 : Math.round(size.width * 0.1);
+    const shift = node.layout === "row" ? 0 : Math.round(size.width * (size.width < 500 ? 0.16 : 0.1));
     if (pc.view?.offsetX !== shift || pc.view?.fullWidth !== size.width) pc.setViewOffset(size.width, size.height, shift, 0, size.width, size.height);
 
     const v = tv.current;
@@ -281,8 +287,8 @@ function Stage({ node, store, scroller, firstPart, labels }: Props) {
       place(p.el, p.g, p.to, p.lo * (act >= 0 && act !== i && !labOn ? 0.5 : 1), places[i].lead === "up");
       p.el?.classList.toggle("act", act === i && !labOn);
     });
-    const plateEdge = new THREE.Vector3(66, 0, 0);
-    scene.containers.forEach((ct) => place(ct.el, ct.g, plateEdge, ct.vis, false));
+    const plateTop = new THREE.Vector3(0, 6, 0);
+    scene.containers.forEach((ct) => place(ct.el, ct.g, plateTop, ct.vis, true));
   });
 
   return <primitive object={scene.root} />;

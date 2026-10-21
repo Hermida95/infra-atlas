@@ -323,8 +323,23 @@ body::after {
 }
 
 @media (max-width: 767px) {
+  .topbar {
+    gap: 12px;
+    padding: 0 12px;
+  }
+  .topbar nav {
+    display: none;
+  }
+  .brand {
+    white-space: nowrap;
+    letter-spacing: 0.12em;
+  }
+  .search {
+    flex: 1;
+    min-width: 0;
+  }
   .search input {
-    width: 150px;
+    width: 100%;
   }
   .hint,
   .hud {
@@ -733,18 +748,32 @@ body::after {
   margin-top: 8px;
 }
 @media (max-width: 767px) {
+  /* Block layout, not a one-column grid: a sticky grid item is confined to its own row,
+     so the stage would scroll away. Here it pins to the top and the text scrolls under it. */
   .td-grid {
-    grid-template-columns: 1fr;
+    display: block;
   }
   .td-stage {
     height: 45dvh;
-    z-index: 1;
+    z-index: 2;
+    background: #06111a;
+    border-bottom: 1px solid var(--holo-line);
   }
   .td-col {
     padding: 0 16px;
     position: relative;
-    z-index: 2;
-    background: linear-gradient(transparent, rgba(4, 7, 11, 0.92) 12%);
+    z-index: 1;
+  }
+  .td-sec.intro {
+    min-height: 55dvh;
+  }
+  /* Keep the back button off the 3D object: sit it at the bottom edge of the pinned stage. */
+  .td-back {
+    top: calc(60px + 45dvh - 46px);
+    left: 12px;
+    height: 32px;
+    padding: 0 14px;
+    font-size: 12px;
   }
   .td-sec {
     min-height: 60vh;
