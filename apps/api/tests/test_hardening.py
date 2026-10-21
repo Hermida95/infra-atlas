@@ -527,22 +527,19 @@ def test_metrics_move_to_their_own_port_when_configured(graph_file: Path) -> Non
     assert "http_request_duration_seconds_bucket" in body
 
 
-def test_metrics_listener_that_cannot_bind_does_not_stop_the_api(graph_file: Path) -> None:
-    import socket
+def test_metrics_listener_that_cannot_bind_does_not_stop_the_api(
+    graph_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*args, **kwargs):
+        raise OSError(98, "Address already in use")
 
-    with socket.socket() as taken:
-        taken.bind(("0.0.0.0", 0))
-        taken.listen()
-        app = create_app(
-            Settings(
-                warmup=False,
-                rate_limit_per_minute=0,
-                log_format="text",
-                metrics_port=taken.getsockname()[1],
-            )
-        )
-        with TestClient(app) as api:
-            assert api.get("/health").status_code == 200
+    monkeypatch.setattr(main, "start_http_server", refuse)
+    app = create_app(
+        Settings(warmup=False, rate_limit_per_minute=0, log_format="text", metrics_port=9000)
+    )
+
+    with TestClient(app) as api:
+        assert api.get("/health").status_code == 200
 
 
 def test_metrics_port_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
