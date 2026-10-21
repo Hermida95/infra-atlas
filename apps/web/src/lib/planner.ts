@@ -66,15 +66,20 @@ export function evaluate(e: Expr, selected: ReadonlySet<string>): boolean {
   }
 }
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Whole-word pattern for a keyword, to run against lower-cased text. Same as brain.planner. */
+function keywordPattern(keyword: string): RegExp {
+  const words = keyword.toLowerCase().split(/\s+/).filter(Boolean).map(escapeRegExp).join("\\s+");
+  return new RegExp(`(^|[^a-z0-9])${words}([^a-z0-9]|$)`);
+}
+
 /** Requirement ids mentioned in free text, by whole-word keyword match. */
 export function detect(text: string, requirements: Requirement[] = graph.requirements): Set<string> {
-  const t = ` ${text.toLowerCase()} `;
+  const lowered = text.toLowerCase();
   const found = new Set<string>();
   for (const r of requirements) {
-    const hit = r.keywords.some((k) =>
-      new RegExp(`(^|[^a-z0-9])${k.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+")}([^a-z0-9]|$)`).test(t),
-    );
-    if (hit) found.add(r.id);
+    if (r.keywords.some((k) => keywordPattern(k).test(lowered))) found.add(r.id);
   }
   return found;
 }

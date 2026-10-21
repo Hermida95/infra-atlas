@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { detect, evaluate, parse, plan } from "@/lib/planner";
 
-type Case = { id: string; requirements: string[]; nodes: string[]; notes: number };
+type Case = {
+  id: string;
+  text?: string;
+  requirements: string[];
+  nodes: string[];
+  stages: { stage: string; nodes: string[] }[];
+  notes: number;
+};
 const cases = parseYaml(fs.readFileSync(new URL("../../../../../content/planner-cases.yaml", import.meta.url), "utf8")) as Case[];
 
 describe("rule language", () => {
@@ -39,5 +46,20 @@ describe("parity with the original prototype", () => {
     const route = plan(new Set(c.requirements));
     expect([...route.order.keys()].sort()).toEqual([...c.nodes].sort());
     expect(route.notes).toHaveLength(c.notes);
+    expect(route.stages.map((s) => ({ stage: s.stage, nodes: s.steps.map((step) => step.node.id) }))).toEqual(c.stages);
+  });
+
+  it.each(cases.filter((c) => c.text !== undefined).map((c) => [c.id, c] as const))("detects the text of %s", (_, c) => {
+    expect([...detect(c.text!)].sort()).toEqual(c.requirements);
+  });
+});
+
+describe("keyword matching", () => {
+  const scale = [{ id: "scale", label: "Scale", keywords: ["high  traffic"] }];
+
+  it("treats any run of whitespace in the text as the space of a keyword", () => {
+    expect(detect("a HIGH \t traffic site", scale)).toEqual(new Set(["scale"]));
+    expect(detect("high traffic", scale)).toEqual(new Set(["scale"]));
+    expect(detect("high-traffic", scale)).toEqual(new Set());
   });
 });

@@ -234,6 +234,33 @@ def test_plan_parity_with_planner_cases(
         sorted(step["id"] for stage in body["stages"] for step in stage["steps"]) == case["nodes"]
     )
     assert len(body["notes"]) == case["notes"]
+    assert [
+        {"stage": stage["stage"], "nodes": [step["id"] for step in stage["steps"]]}
+        for stage in body["stages"]
+    ] == case["stages"]
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in CASES if "text" in c], ids=[c["id"] for c in CASES if "text" in c]
+)
+def test_plan_from_text_matches_planner_cases(
+    case: dict[str, Any],
+    real_graph: dict[str, Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = client_for(real_graph, tmp_path, monkeypatch)
+
+    body = client.post("/plan", json={"text": case["text"]}).json()
+
+    assert sorted(body["requirements"]) == case["requirements"]
+    assert (
+        sorted(step["id"] for stage in body["stages"] for step in stage["steps"]) == case["nodes"]
+    )
+    assert [
+        {"stage": stage["stage"], "nodes": [step["id"] for step in stage["steps"]]}
+        for stage in body["stages"]
+    ] == case["stages"]
 
 
 def test_real_graph_node_detail(real_graph: dict[str, Any], tmp_path: Path, monkeypatch) -> None:

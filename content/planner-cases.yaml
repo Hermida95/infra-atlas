@@ -1,30 +1,179 @@
 # Expected planner routes, generated from the original prototype's plan() so the
 # content-driven planner (Python and TypeScript) keeps the same behaviour.
+#
+# Read by packages/brain, apps/api and apps/web. Per case:
+#   requirements  the selected requirement ids; with `text`, what detection must find in it
+#   text          optional free text: every suite checks that it detects exactly `requirements`
+#   nodes         the route's node ids, sorted
+#   stages        the route in order: each non-empty stage with its nodes in route order
+#   notes         how many notes the route carries
 - id: fastapi-postgres-login-uploads-budget
   requirements: [sql, files, auth, cheap]
   nodes: [apigw, app, aws, budgets, cloudwatch, cognito, compose, docker, dockerfile, ecr, env, gha, git, iam, image, lambda, localhost, oidc, rds, s3, ssm, terraform, tests, tfstate, vpc]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [compose, docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [apigw, vpc, lambda]}
+    - {stage: data, nodes: [rds, s3]}
+    - {stage: secure, nodes: [cognito, iam, ssm]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [budgets, cloudwatch]}
   notes: 2
 - id: django-chatbot-k8s-scale-global
   requirements: [jobs, ai, k8s, scale, global]
   nodes: [alb, app, aws, bedrock, cloudfront, cloudwatch, deployment, docker, dockerfile, ecr, eks, embeddings, env, gha, git, grafana, helm, hpa, iam, image, ingress, k8ssvc, kubernetes, localhost, oidc, pod, prometheus, rag, route53, s3, sqs, terraform, tests, tfstate, vectordb, vpc, waf, xray]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [deployment, helm, hpa, ingress, k8ssvc, kubernetes, pod, alb, cloudfront, route53, vpc, eks]}
+    - {stage: data, nodes: [s3, sqs, bedrock, embeddings, rag, vectordb]}
+    - {stage: secure, nodes: [iam, waf]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch, grafana, prometheus, xray]}
   notes: 0
 - id: minimal-api
   requirements: []
   nodes: [alb, app, aws, cloudwatch, docker, dockerfile, ecr, ecs, env, gha, git, iam, image, localhost, oidc, terraform, tests, tfstate, vpc]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, vpc, ecs]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch]}
   notes: 0
 - id: web-app-global-with-cache
   requirements: [web, global, cache]
   nodes: [alb, app, aws, cloudfront, cloudwatch, compose, docker, dockerfile, ecr, ecs, elasticache, env, gha, git, iam, image, localhost, oidc, route53, s3, terraform, tests, tfstate, vpc]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [compose, docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, cloudfront, route53, vpc, ecs]}
+    - {stage: data, nodes: [elasticache, s3]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch]}
   notes: 0
 - id: k8s-on-a-budget
   requirements: [k8s, cheap]
   nodes: [alb, app, aws, budgets, cloudwatch, deployment, docker, dockerfile, ecr, eks, env, gha, git, grafana, helm, iam, image, ingress, k8ssvc, kubernetes, localhost, oidc, pod, prometheus, terraform, tests, tfstate, vpc, xray]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [deployment, helm, ingress, k8ssvc, kubernetes, pod, alb, vpc, eks]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [budgets, cloudwatch, grafana, prometheus, xray]}
   notes: 1
 - id: serverless-ai-jobs
   requirements: [ai, jobs, cheap]
   nodes: [apigw, app, aws, bedrock, budgets, cloudwatch, docker, dockerfile, ecr, embeddings, env, gha, git, iam, image, lambda, localhost, oidc, rag, sqs, terraform, tests, tfstate, vectordb]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [apigw, lambda]}
+    - {stage: data, nodes: [sqs, bedrock, embeddings, rag, vectordb]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [budgets, cloudwatch]}
   notes: 0
 - id: high-traffic-sql
   requirements: [sql, scale]
   nodes: [alb, app, aws, cloudwatch, compose, docker, dockerfile, ecr, ecs, env, gha, git, iam, image, localhost, oidc, rds, ssm, terraform, tests, tfstate, vpc, waf, xray]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [compose, docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, vpc, ecs]}
+    - {stage: data, nodes: [rds]}
+    - {stage: secure, nodes: [iam, ssm, waf]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch, xray]}
+  notes: 0
+- id: text-mixed-case-and-punctuation
+  text: "Next.js frontend with POSTGRES and Redis; users sign up, then upload PDFs"
+  requirements: [auth, cache, files, sql, web]
+  nodes: [alb, app, aws, cloudfront, cloudwatch, cognito, compose, docker, dockerfile, ecr, ecs, elasticache, env, gha, git, iam, image, localhost, oidc, rds, route53, s3, ssm, terraform, tests, tfstate, vpc]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [compose, docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, cloudfront, route53, vpc, ecs]}
+    - {stage: data, nodes: [elasticache, rds, s3]}
+    - {stage: secure, nodes: [cognito, iam, ssm]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch]}
+  notes: 0
+- id: text-whole-words-only
+  text: "Users everywhere visit my sitemap and compile files nightly"
+  requirements: [files]
+  nodes: [alb, app, aws, cloudwatch, docker, dockerfile, ecr, ecs, env, gha, git, iam, image, localhost, oidc, s3, terraform, tests, tfstate, vpc]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, vpc, ecs]}
+    - {stage: data, nodes: [s3]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch]}
+  notes: 0
+- id: text-whitespace-inside-keyword
+  text: "A side   project with high\ttraffic and an always\non API"
+  requirements: [cheap, scale]
+  nodes: [alb, app, aws, budgets, cloudwatch, docker, dockerfile, ecr, ecs, env, gha, git, iam, image, localhost, oidc, terraform, tests, tfstate, vpc, waf, xray]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, vpc, ecs]}
+    - {stage: secure, nodes: [iam, waf]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [budgets, cloudwatch, xray]}
+  notes: 0
+- id: text-hyphen-and-slash-boundaries
+  text: "AI-powered chatbot on k8s/EKS, low-cost"
+  requirements: [ai, k8s]
+  nodes: [alb, app, aws, bedrock, cloudwatch, deployment, docker, dockerfile, ecr, eks, embeddings, env, gha, git, grafana, helm, iam, image, ingress, k8ssvc, kubernetes, localhost, oidc, pod, prometheus, rag, terraform, tests, tfstate, vectordb, vpc, xray]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [deployment, helm, ingress, k8ssvc, kubernetes, pod, alb, vpc, eks]}
+    - {stage: data, nodes: [bedrock, embeddings, rag, vectordb]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch, grafana, prometheus, xray]}
+  notes: 0
+- id: text-nothing-recognised
+  text: "Hello world"
+  requirements: []
+  nodes: [alb, app, aws, cloudwatch, docker, dockerfile, ecr, ecs, env, gha, git, iam, image, localhost, oidc, terraform, tests, tfstate, vpc]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [alb, vpc, ecs]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch]}
+  notes: 0
+- id: text-long-s-is-not-an-s
+  text: "ſql and kubernetes"
+  requirements: [k8s]
+  nodes: [alb, app, aws, cloudwatch, deployment, docker, dockerfile, ecr, eks, env, gha, git, grafana, helm, iam, image, ingress, k8ssvc, kubernetes, localhost, oidc, pod, prometheus, terraform, tests, tfstate, vpc, xray]
+  stages:
+    - {stage: build, nodes: [app, env, git, localhost]}
+    - {stage: containerize, nodes: [docker, dockerfile, ecr, image]}
+    - {stage: infra, nodes: [terraform, tfstate, aws]}
+    - {stage: run, nodes: [deployment, helm, ingress, k8ssvc, kubernetes, pod, alb, vpc, eks]}
+    - {stage: secure, nodes: [iam]}
+    - {stage: ship, nodes: [gha, oidc, tests]}
+    - {stage: observe, nodes: [cloudwatch, grafana, prometheus, xray]}
   notes: 0
