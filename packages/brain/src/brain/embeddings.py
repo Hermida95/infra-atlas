@@ -63,10 +63,16 @@ class LocalEmbedder:
     provider = "local"
     dimensions = 384
 
-    def __init__(self, model: str = LOCAL_MODEL, cache_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        model: str = LOCAL_MODEL,
+        cache_dir: Path | None = None,
+        query_prefix: str = BGE_QUERY_PREFIX,
+    ) -> None:
         import fastembed  # optional dependency: brain[search]
 
         self.model = model
+        self.query_prefix = query_prefix
         self.model_version = f"fastembed-{fastembed.__version__}"
         self._engine = fastembed.TextEmbedding(
             model, cache_dir=str(cache_dir or default_model_cache())
@@ -76,7 +82,7 @@ class LocalEmbedder:
         return [vector.tolist() for vector in self._engine.passage_embed(list(texts))]
 
     def embed_query(self, text: str) -> list[float]:
-        return next(iter(self._engine.query_embed(BGE_QUERY_PREFIX + text))).tolist()
+        return next(iter(self._engine.query_embed(self.query_prefix + text))).tolist()
 
 
 class BedrockEmbedder:

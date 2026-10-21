@@ -15,6 +15,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -113,7 +114,7 @@ def main() -> None:  # pragma: no cover - exercised in CI
     from api.main import graph_path
     from api.semantic import index_path, semantic_search
     from brain.chunks import chunk_nodes
-    from brain.embeddings import embedder_from_env
+    from brain.embeddings import LocalEmbedder, embedder_from_env
     from brain.loader import load_content
     from brain.vectors import VectorIndex
 
@@ -134,10 +135,59 @@ def main() -> None:  # pragma: no cover - exercised in CI
         ),
     }
     print(f"{len(cases)} queries\n\n{report(results)}\n")
+    if isinstance(embedder, LocalEmbedder):
+        print(f"Ablations\n\n{report(ablations(cases, loaded.nodes, embedder))}\n")
     for name, scores in results.items():
         print(f"{name}: not in top 3")
         for query, expected, top in scores.misses:
             print(f"  {query!r}: expected {expected}, got {top}")
+
+
+def ablations(cases: Sequence[Case], nodes: Sequence[Any], embedder: Any) -> dict[str, Scores]:
+    """What each choice buys: the same evaluation with one design decision undone."""
+    import tempfile
+
+    from api.semantic import semantic_search
+    from brain.chunks import chunk_nodes
+    from brain.embeddings import LocalEmbedder
+    from brain.vectors import VectorIndex, build_index
+
+    chunks = chunk_nodes(nodes)
+    variants = {
+        "all chunks + query instruction (shipped)": (chunks, embedder),
+        "all chunks, no query instruction": (chunks, LocalEmbedder(query_prefix="")),
+        "overview chunks only": ([c for c in chunks if c.kind == "overview"], embedder),
+    }
+    results = {}
+    indexes = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for number, (name, (subset, model)) in enumerate(variants.items()):
+            path = Path(tmp) / f"variant-{number}.lance"
+            build_index(subset, model, path)
+            index = VectorIndex(path)
+            indexes.append(index)
+            results[name] = evaluate(
+                cases,
+                lambda q, i=index, m=model: [h.node_id for h in semantic_search(i, m, q, DEPTH)],
+            )
+
+        bm25 = BM25(chunks)
+
+        def hybrid(query: str) -> list[str]:
+            semantic = [h.node_id for h in semantic_search(indexes[0], embedder, query, DEPTH)]
+            return reciprocal_rank_fusion([semantic, bm25.rank(query)[:DEPTH]])
+
+        results["hybrid: shipped + BM25 (RRF)"] = evaluate(cases, hybrid)
+    return results
+
+
+def reciprocal_rank_fusion(rankings: Sequence[Sequence[str]], k: int = 60) -> list[str]:
+    """Merge rankings by summing 1/(k + rank): robust to scores on different scales."""
+    scores: dict[str, float] = {}
+    for ranking in rankings:
+        for rank, item in enumerate(ranking, start=1):
+            scores[item] = scores.get(item, 0.0) + 1 / (k + rank)
+    return sorted(scores, key=lambda item: (-scores[item], item))
 
 
 if __name__ == "__main__":  # pragma: no cover

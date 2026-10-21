@@ -75,3 +75,10 @@ def test_semantic_search_quality(local_embedder, tmp_path_factory, capsys) -> No
         print("\n" + report({"semantic": semantic, "keyword BM25": keyword}))
     assert semantic.recall_at_3 >= RECALL_AT_3_MIN, semantic.misses
     assert semantic.mrr >= MRR_MIN, semantic.misses
+
+
+def test_reciprocal_rank_fusion() -> None:
+    from api.evaluation import reciprocal_rank_fusion
+
+    assert reciprocal_rank_fusion([["a", "b", "c"], ["b", "c", "a"]])[:1] == ["b"]
+    assert reciprocal_rank_fusion([["a"], []]) == ["a"]
