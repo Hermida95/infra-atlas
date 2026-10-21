@@ -1,3 +1,6 @@
+{{- if and .Values.ingress.enabled (eq (toString .Values.config.forwardedAllowIps) "127.0.0.1") }}
+{{- fail "ingress.enabled=true with config.forwardedAllowIps=127.0.0.1: uvicorn would ignore X-Forwarded-For, see the Ingress controller's address as the client and share one rate-limit bucket among all users of each pod. Set config.forwardedAllowIps to the Ingress controller's pod CIDR (e.g. --set config.forwardedAllowIps=10.0.0.0/8) or to the proxy IPs, comma-separated." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

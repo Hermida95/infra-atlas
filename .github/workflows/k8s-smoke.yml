@@ -61,7 +61,10 @@ jobs:
       - name: Lint and render the chart
         run: |
           helm lint --strict infra/helm/api
-          helm template "$RELEASE" infra/helm/api --set ingress.enabled=true > /dev/null
+          helm template "$RELEASE" infra/helm/api \
+            --set ingress.enabled=true --set config.forwardedAllowIps=10.0.0.0/8 > /dev/null
+      - name: Chart render checks
+        run: labs/k8s/test-chart.sh
 
       - name: Create the kind cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1

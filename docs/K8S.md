@@ -102,4 +102,10 @@ Ejercicios para el CKAD:
 | Nodos como contenedores | Managed node groups o **Fargate**. Los `requests` deciden cuántos Pods caben por nodo y, por tanto, el coste. |
 | `helm install` desde el CI | Igual, o GitOps (Argo CD / Flux) leyendo el chart del repo. |
 
+### Rate limit con Ingress
+
+El límite de la app (`config.rateLimitPerMinute`, 60/min por IP y por Pod, en memoria) es una **red de seguridad**, no el límite real: cada réplica cuenta por separado y no ve el tráfico de las demás. El límite efectivo se pone **en el borde**: anotaciones del Ingress (`nginx.ingress.kubernetes.io/limit-rpm`), reglas de rate en AWS WAF, o throttling de API Gateway si la API corre en Lambda.
+
+Para que el límite de la app cuente por usuario y no por controlador, uvicorn tiene que confiar en `X-Forwarded-For`: con `ingress.enabled=true` hay que poner `config.forwardedAllowIps` al CIDR de los Pods del controller (p. ej. `10.0.0.0/8`). Con el valor por defecto `127.0.0.1` el chart **se niega a renderizar**: uvicorn vería siempre la IP del controller y todos los usuarios de un Pod compartirían un solo cubo.
+
 El chart no cambia: solo cambia un `values-eks.yaml`. Esa es la gracia de separar templates y values.

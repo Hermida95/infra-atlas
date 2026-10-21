@@ -213,6 +213,69 @@ def test_rate_limit_window_resets() -> None:
     assert anyio.run(run) == 200
 
 
+async def _ok(scope, receive, send) -> None:
+    await send({"type": "http.response.start", "status": 200, "headers": []})
+    await send({"type": "http.response.body", "body": b""})
+
+
+def _status_of(app, client_ip: str, headers=()) -> int:
+    sent = []
+
+    async def send(message) -> None:
+        sent.append(message)
+
+    async def run() -> None:
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/search",
+            "client": (client_ip, 1),
+            "headers": list(headers),
+        }
+        await app(scope, None, send)
+
+    import anyio
+
+    anyio.run(run)
+    return [m for m in sent if m["type"] == "http.response.start"][-1]["status"]
+
+
+def test_rate_limit_keeps_a_bucket_per_client_ip() -> None:
+    limiter = RateLimitMiddleware(_ok, per_minute=1, clock=lambda: 0.0)
+
+    assert _status_of(limiter, "1.1.1.1") == 200
+    assert _status_of(limiter, "1.1.1.1") == 429
+    assert _status_of(limiter, "2.2.2.2") == 200  # another IP is not affected
+
+
+def test_rate_limit_sees_the_real_client_behind_a_trusted_proxy() -> None:
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    limiter = RateLimitMiddleware(_ok, per_minute=1, clock=lambda: 0.0)
+    app = ProxyHeadersMiddleware(limiter, trusted_hosts="10.0.0.0/8")
+    ingress = "10.1.2.3"
+
+    def via_ingress(user_ip: str) -> int:
+        return _status_of(app, ingress, [(b"x-forwarded-for", user_ip.encode())])
+
+    assert via_ingress("203.0.113.1") == 200
+    assert via_ingress("203.0.113.1") == 429
+    assert via_ingress("203.0.113.2") == 200  # a different user behind the same proxy
+
+
+def test_rate_limit_shares_one_bucket_when_the_proxy_is_not_trusted() -> None:
+    """The failure the chart refuses to render: default trust of 127.0.0.1 only."""
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    limiter = RateLimitMiddleware(_ok, per_minute=1, clock=lambda: 0.0)
+    app = ProxyHeadersMiddleware(limiter, trusted_hosts="127.0.0.1")
+
+    first = _status_of(app, "10.1.2.3", [(b"x-forwarded-for", b"203.0.113.1")])
+    second = _status_of(app, "10.1.2.3", [(b"x-forwarded-for", b"203.0.113.2")])
+
+    assert (first, second) == (200, 429)
+
+
 # --- Readiness, warm-up and metrics ------------------------------------------------------
 
 
