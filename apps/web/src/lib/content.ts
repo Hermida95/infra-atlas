@@ -18,7 +18,10 @@ export function conceptBody(node: GraphNode): string[] {
 
 /** The lines an `evidence` entry points at, read at build time. `brain validate` keeps them real. */
 export function evidenceSnippet(evidence: Evidence): string {
-  const file = path.join(REPO, evidence.path);
+  // Evidence points anywhere in the repo, so the path cannot be scoped to one folder. The read
+  // happens at build time on a prerendered page; turbopackIgnore keeps the tracer from pulling
+  // the whole repository into the server bundle because of it.
+  const file = path.join(/* turbopackIgnore: true */ REPO, evidence.path);
   if (!fs.existsSync(file)) return "";
   const [from, to] = evidence.lines;
   const lines = fs.readFileSync(file, "utf8").split("\n").slice(from - 1, to);
