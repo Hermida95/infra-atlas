@@ -9,7 +9,7 @@ import { domainById, graph, neighbours, nodeById } from "@/lib/graph";
 import { STAGE_LABEL } from "@/lib/planner";
 import { readableRule } from "@/lib/rule";
 
-// Every concept page is fully static: generateStaticParams prerenders all 53 ids at build time
+// Every concept page is fully static: generateStaticParams prerenders every id at build time
 // and ensureStatic makes Next.js fail the build if anything request-time sneaks in later.
 // That is also what makes navigating between concepts instant. Unknown ids hit notFound().
 export const ensureStatic = "navigation";
