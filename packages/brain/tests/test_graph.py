@@ -64,6 +64,7 @@ def test_shape_and_ordering(content_dir: Path, write_node, tmp_path: Path) -> No
         "parts",
         "layout",
         "lab",
+        "evidence",
         "position",
         "planner",
     }

@@ -1,5 +1,44 @@
 {
   "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Real code in this repo that proves the concept. `lines` is 1-based and inclusive.",
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "lines": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "minimum": 1,
+              "type": "integer"
+            }
+          ],
+          "title": "Lines",
+          "type": "array"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "lines",
+        "text"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
     "Part": {
       "additionalProperties": false,
       "properties": {
@@ -329,6 +368,14 @@
       ],
       "default": null,
       "title": "Lab"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
     },
     "reviewed": {
       "format": "date",
