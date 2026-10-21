@@ -47,11 +47,15 @@ def get_index() -> VectorIndex:
     return _open_index(index_path())
 
 
+class EmbedderUnavailableError(IndexUnavailableError):
+    """The configured embedding provider could not be loaded."""
+
+
 def get_embedder() -> Embedder:
     try:
         return _embedder(os.environ.get("EMBEDDINGS_PROVIDER", "local"))
     except Exception as exc:  # model download or provider config failed
-        raise IndexUnavailableError(f"embedding model unavailable: {exc}") from exc
+        raise EmbedderUnavailableError(f"embedding model unavailable: {exc}") from exc
 
 
 def best_per_concept(

@@ -27,6 +27,10 @@ class IndexUnavailableError(Exception):
     pass
 
 
+class IndexModelMismatchError(IndexUnavailableError):
+    """The index was embedded with a different model than the one configured for queries."""
+
+
 @dataclass(frozen=True, slots=True)
 class IndexInfo:
     path: Path
@@ -152,7 +156,7 @@ class VectorIndex:
     def check(self, embedder: Embedder) -> None:
         """Vectors from another model are not comparable: refuse instead of returning noise."""
         if self.model != identity(embedder):
-            raise IndexUnavailableError(
+            raise IndexModelMismatchError(
                 f"vector index at {self.path} was built with {self.model}, but the API embeds "
                 f"queries with {identity(embedder)}; run `brain embed` with the same provider"
             )

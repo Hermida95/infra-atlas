@@ -1,10 +1,8 @@
-import hashlib
-import math
-import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from api_fakes import HashEmbedder
 from fastapi.testclient import TestClient
 
 from api import semantic
@@ -14,28 +12,6 @@ from brain.loader import find_repo_root, load_content
 from brain.vectors import build_index
 
 CONTENT = find_repo_root(Path(__file__)) / "content"
-
-
-class HashEmbedder:
-    """Deterministic bag-of-words vectors: tests the endpoint, not the quality of the model."""
-
-    provider = "test"
-    model = "hash"
-    model_version = "1"
-    dimensions = 256
-
-    def _vector(self, text: str) -> list[float]:
-        vector = [0.0] * self.dimensions
-        for word in re.findall(r"[a-z0-9]+", text.lower()):
-            vector[int(hashlib.md5(word.encode()).hexdigest(), 16) % self.dimensions] += 1.0
-        norm = math.sqrt(sum(x * x for x in vector)) or 1.0
-        return [x / norm for x in vector]
-
-    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        return [self._vector(t) for t in texts]
-
-    def embed_query(self, text: str) -> list[float]:
-        return self._vector(text)
 
 
 @pytest.fixture(scope="module")
@@ -91,7 +67,8 @@ def test_search_without_index_is_503(tmp_path: Path, monkeypatch: pytest.MonkeyP
         app.dependency_overrides.clear()
 
     assert response.status_code == 503
-    assert "brain embed" in response.json()["detail"]
+    assert response.json()["detail"] == "search index not available; run `brain embed`"
+    assert str(tmp_path) not in response.text
 
 
 def test_search_with_another_model_is_503(client: TestClient) -> None:
@@ -103,7 +80,7 @@ def test_search_with_another_model_is_503(client: TestClient) -> None:
     response = client.get("/search", params={"q": "docker"})
 
     assert response.status_code == 503
-    assert "built with" in response.json()["detail"]
+    assert "another embedding model" in response.json()["detail"]
 
 
 def test_embedder_failure_is_503(real_index: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -114,7 +91,7 @@ def test_embedder_failure_is_503(real_index: Path, monkeypatch: pytest.MonkeyPat
     response = TestClient(app).get("/search", params={"q": "docker"})
 
     assert response.status_code == 503
-    assert "embedding model unavailable" in response.json()["detail"]
+    assert response.json()["detail"] == "embedding model not available"
     semantic.clear_caches()
 
 

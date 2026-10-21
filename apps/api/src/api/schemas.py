@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -94,7 +94,9 @@ class SemanticSearchOut(BaseModel):
 
 
 class PlanIn(BaseModel):
-    requirements: list[str] = Field(default=[], description="Requirement ids, see /requirements.")
+    requirements: list[Annotated[str, Field(max_length=32)]] = Field(
+        default=[], max_length=20, description="Requirement ids, see /requirements."
+    )
     text: str | None = Field(
         default=None,
         max_length=1000,

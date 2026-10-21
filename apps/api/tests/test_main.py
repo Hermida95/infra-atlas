@@ -62,7 +62,9 @@ def test_graph_missing_returns_503(
     response = client.get("/graph")
 
     assert response.status_code == 503
-    assert "not found" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail == "graph not available; run `brain graph`"
+    assert str(tmp_path) not in detail  # no internal paths leak to clients
 
 
 def test_graph_invalid_json_returns_503(
