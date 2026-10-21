@@ -144,3 +144,13 @@ Cada parte de un despiece declara su **forma** (`parts[].kind`) y cada tecnolog�
   - Terraform, AWS, Lambda, Bedrock, Localhost y Docker: `stack`.
 - **Encuadre:** la cámara se ajusta a lo que hay en escena (anchura y altura de las partes), en vez de usar una distancia fija.
 - **Enlaces directos:** `/?t=<id>` abre el despiece de una tecnología, para compartirla directamente.
+
+## Fichas y búsqueda (fase 1)
+- **Ficha por concepto** (`/c/<id>`): 53 páginas estáticas generadas con `generateStaticParams`. Llevan `ensureStatic = "navigation"`: si alguien añade algo dinámico, el build falla.
+  - El "App Shell" (la cabecera y el marco) es común a todas las fichas, así que no lee el id de la URL. La parte que depende de la URL va dentro de `<Suspense>`, que es lo que pide Next.js 16 para que la navegación sea instantánea.
+  - Contenido de la ficha: cabecera con logo, texto de la ficha, partes, regla del planificador en lenguaje legible (por ejemplo "not Kubernetes and Small budget"), conceptos conectados y enlace para editarla en GitHub.
+  - Desde la ficha: "Show on the map" (`/?focus=<id>`) y "Take it apart" (`/?t=<id>`).
+- **Búsqueda ⌘K** (también `/`): paleta con navegación por teclado y roles ARIA de combobox/listbox.
+  - Busca en título, iniciales, partes (así "etcd" encuentra Kubernetes), dominio y resumen. Cada palabra de la consulta tiene que coincidir con algo.
+  - En el mapa, Enter lleva la cámara al concepto. Fuera del mapa, abre su ficha. ⌘+Enter abre siempre la ficha.
+- `sitemap.xml` con todas las fichas. Usa `NEXT_PUBLIC_SITE_URL` cuando la web esté desplegada.
