@@ -1,22 +1,39 @@
 # Weekly update PRs for every dependency source, including the pinned action SHAs and the
 # base image digests (a pin without an update path just freezes vulnerabilities in place).
+#
+# Minor and patch updates share one PR per ecosystem. Each major update gets its own PR,
+# so one breaking upgrade (TypeScript 7 broke lint in #9) never holds back the safe ones.
+#
+# A release is proposed only once it is 7 days old: compromised packages are usually
+# caught and pulled within days, so the wait keeps them out of the lockfiles.
 version: 2
 updates:
   - package-ecosystem: uv
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
     groups:
-      python: {patterns: ["*"]}
+      python: {update-types: [minor, patch]}
   - package-ecosystem: npm
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
     groups:
-      web: {patterns: ["*"]}
+      web: {update-types: [minor, patch]}
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet. Lift this once it does.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # Node types must match the Node we run (24, see README); newer ones allow APIs it lacks.
+      - dependency-name: "@types/node"
+        versions: [">=25"]
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
     groups:
-      actions: {patterns: ["*"]}
+      actions: {update-types: [minor, patch]}
   - package-ecosystem: docker
     directory: /apps/api
     schedule: {interval: weekly}
+    cooldown: {default-days: 7}
