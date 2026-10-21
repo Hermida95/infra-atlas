@@ -4,11 +4,15 @@ Thresholds sit under the values measured in CI with bge-small-en-v1.5 (27 querie
 0.93, MRR 0.73; see docs/BUSQUEDA.md), leaving room for two more misses, so a change to
 chunking, the query instruction, part_weight or the model that loses quality fails here.
 
+They are applied to the `holdout` split, which was not used to choose those parameters. While
+it is empty the `tune` set stands in, which is a weaker check: the parameters were fitted to it.
+
 Without the model (no network and no cache) the quality test is skipped, unless
 REQUIRE_EMBEDDINGS=1, as in CI, where a skip would hide a regression.
 """
 
 import os
+import warnings
 from pathlib import Path
 
 import pytest
@@ -45,7 +49,21 @@ def test_eval_set_targets_published_concepts() -> None:
 
     assert len(cases) >= 25
     assert {c.expected for c in cases} <= published
-    assert len({c.query for c in cases}) == len(cases)
+    assert len({c.query for c in cases}) == len(cases)  # also across tune and holdout
+
+
+def test_eval_splits() -> None:
+    tune, holdout = load_cases(split="tune"), load_cases(split="holdout")
+
+    assert len(tune) + len(holdout) == len(load_cases())
+    assert not {c.query for c in tune} & {c.query for c in holdout}
+    with pytest.raises(ValueError):
+        load_cases(split="test")
+
+
+def gated_cases() -> list[Case]:
+    """The questions the CI thresholds apply to: holdout, or tune until holdout has some."""
+    return load_cases(split="holdout") or load_cases(split="tune")
 
 
 @pytest.fixture(scope="module")
@@ -66,12 +84,16 @@ def test_semantic_search_quality(local_embedder, tmp_path_factory, capsys) -> No
     path = tmp_path_factory.mktemp("eval") / "vectors.lance"
     build_index(chunks, local_embedder, path)
     index = VectorIndex(path)
-    cases = load_cases()
+    cases = gated_cases()
 
     semantic = evaluate(
         cases, lambda q: [h.node_id for h in semantic_search(index, local_embedder, q, 10)]
     )
     keyword = evaluate(cases, BM25(chunks).rank)
+    if not load_cases(split="holdout"):
+        warnings.warn(
+            "search-eval.yaml has no holdout questions: gating on the tune set", stacklevel=1
+        )
 
     with capsys.disabled():
         print("\n" + report({"semantic": semantic, "keyword BM25": keyword}))

@@ -1,57 +1,68 @@
 # Semantic search evaluation set: natural-language questions and the concept that answers
 # them. Phrased by meaning, avoiding the words in each concept's title and summary, so a
 # keyword search cannot simply match them. Used by apps/api/tests/test_search_eval.py.
-- query: where do I keep database passwords
-  expected: ssm
-- query: run code without managing servers
-  expected: lambda
-- query: restart crashed containers automatically
-  expected: kubernetes
-- query: spread traffic across instances
-  expected: alb
-- query: hand slow work to a background worker
-  expected: sqs
-- query: who is allowed to delete my bucket
-  expected: iam
-- query: let people create an account and log in
-  expected: cognito
-- query: get warned before the cloud bill gets too high
-  expected: budgets
-- query: store the photos my users upload
-  expected: s3
-- query: make my site fast for visitors in other countries
-  expected: cloudfront
-- query: point my domain name at the server
-  expected: route53
-- query: block sql injection and bad bots
-  expected: waf
-- query: follow one slow request through all my services
-  expected: xray
-- query: charts of cpu and memory over time
-  expected: grafana
-- query: keep hot data in memory to answer faster
-  expected: elasticache
-- query: relational database with automatic backups
-  expected: rds
-- query: rent a virtual server and install what I want
-  expected: ec2
-- query: deploy from ci without saving aws access keys
-  expected: oidc
-- query: add more pods when traffic grows
-  expected: hpa
-- query: install a packaged app on my cluster with one command
-  expected: helm
-- query: preview what will change before touching real infrastructure
-  expected: tfplan
-- query: where terraform remembers what it created
-  expected: tfstate
-- query: let the chatbot answer from our own documents
-  expected: rag
-- query: call claude from inside my aws account
-  expected: bedrock
-- query: turn sentences into numbers so similar meanings end up close
-  expected: embeddings
-- query: the recipe that builds my container image
-  expected: dockerfile
-- query: settings that differ between staging and production
-  expected: env
+#
+# Two sets, so a number measured here can be trusted:
+#   tune     questions that were looked at while choosing part_weight, the query instruction
+#            and the noise floor (MIN_SCORE). Fine to explore with; not a fair test any more.
+#   holdout  questions written after those choices and never used to make them. CI applies its
+#            thresholds only to this set. Do not tune on it: if a question here drives a
+#            change, move it to `tune` and write a new one.
+# The target is about 60 questions in all, at least one per concept the planner can reach.
+tune:
+  - query: where do I keep database passwords
+    expected: ssm
+  - query: run code without managing servers
+    expected: lambda
+  - query: restart crashed containers automatically
+    expected: kubernetes
+  - query: spread traffic across instances
+    expected: alb
+  - query: hand slow work to a background worker
+    expected: sqs
+  - query: who is allowed to delete my bucket
+    expected: iam
+  - query: let people create an account and log in
+    expected: cognito
+  - query: get warned before the cloud bill gets too high
+    expected: budgets
+  - query: store the photos my users upload
+    expected: s3
+  - query: make my site fast for visitors in other countries
+    expected: cloudfront
+  - query: point my domain name at the server
+    expected: route53
+  - query: block sql injection and bad bots
+    expected: waf
+  - query: follow one slow request through all my services
+    expected: xray
+  - query: charts of cpu and memory over time
+    expected: grafana
+  - query: keep hot data in memory to answer faster
+    expected: elasticache
+  - query: relational database with automatic backups
+    expected: rds
+  - query: rent a virtual server and install what I want
+    expected: ec2
+  - query: deploy from ci without saving aws access keys
+    expected: oidc
+  - query: add more pods when traffic grows
+    expected: hpa
+  - query: install a packaged app on my cluster with one command
+    expected: helm
+  - query: preview what will change before touching real infrastructure
+    expected: tfplan
+  - query: where terraform remembers what it created
+    expected: tfstate
+  - query: let the chatbot answer from our own documents
+    expected: rag
+  - query: call claude from inside my aws account
+    expected: bedrock
+  - query: turn sentences into numbers so similar meanings end up close
+    expected: embeddings
+  - query: the recipe that builds my container image
+    expected: dockerfile
+  - query: settings that differ between staging and production
+    expected: env
+
+holdout: []
