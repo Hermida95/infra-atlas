@@ -162,7 +162,7 @@ class VectorIndex:
             self._table.search(list(vector), vector_column_name="vector")
             .distance_type("cosine")
             .limit(limit)
-            .select(["id", "node_id", "kind", "title", "text"])
+            .select(["id", "node_id", "kind", "title", "text", "_distance"])
             .to_list()
         )
         return [

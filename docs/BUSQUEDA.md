@@ -69,17 +69,18 @@ Resultados en CI sobre el set (27 preguntas, `uv run python -m api.evaluation`):
 
 **Ablaciones**: la misma evaluación deshaciendo una decisión cada vez. Así se justifica cada elección con datos:
 
-| Variante | recall@1 | recall@3 | MRR |
+| Variante (el resto, como se despliega) | recall@1 | recall@3 | MRR |
 | --- | --- | --- | --- |
-| Todos los fragmentos, sin ajuste de piezas | 0,56 | 0,74 | 0,69 |
-| Sin instrucción de consulta de BGE | 0,52 | 0,81 | 0,65 |
+| **Lo que se despliega**: todos los fragmentos, instrucción de consulta, `part_weight` 0,85 | 0,56 | **0,93** | **0,73** |
+| Sin instrucción de consulta de BGE | 0,59 | 0,81 | 0,72 |
 | Solo fragmentos `overview` | 0,59 | 0,93 | 0,74 |
-| Híbrida: semántica + BM25 fusionadas con RRF | 0,44 | 0,74 | 0,62 |
-| `part_weight` 0,95 / 0,9 / **0,85** / 0,8 | 0,56 | 0,85 / 0,93 / **0,93** / 0,93 | 0,70 / 0,72 / **0,73** / 0,73 |
+| Solo `overview` y sin instrucción | 0,63 | 0,81 | 0,74 |
+| Híbrida: semántica + BM25 fusionadas con RRF | 0,48 | 0,74 | 0,65 |
+| `part_weight` 1,0 (sin ajuste) / 0,95 / 0,9 / 0,8 | 0,56 | 0,74 / 0,85 / 0,93 / 0,93 | 0,69 / 0,70 / 0,72 / 0,73 |
 
 Qué se aprende:
 - **Trocear no es gratis.** Más fragmentos dan más papeletas a conceptos con muchas piezas genéricas. Ponderar las piezas recupera lo mismo que quitarlas, sin perder la pieza como fragmento que se muestra.
-- **La instrucción de consulta ayuda en MRR**: pone el acierto más arriba.
+- **La instrucción de consulta ayuda en recall@3** (0,81 → 0,93): mete en el top 3 aciertos que sin ella se quedan fuera. Sin ella sube algo recall@1, así que el efecto no es gratis en todas las métricas, y por eso se miden varias.
 - **La búsqueda híbrida no siempre mejora.** Aquí BM25 mete ruido porque las preguntas evitan a propósito las palabras de las fichas. Con usuarios reales, que sí escriben "lambda" o "terraform", conviene volver a medirla.
 - El 0,85 está en mitad de una meseta (0,9 a 0,8 dan lo mismo), así que no está ajustado a medida de estas 27 preguntas.
 

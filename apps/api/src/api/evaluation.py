@@ -135,6 +135,12 @@ def main() -> None:  # pragma: no cover - exercised in CI
         ),
     }
     print(f"{len(cases)} queries\n\n{report(results)}\n")
+    shipped = next(iter(results))
+    print(f"{shipped}: rank of the expected concept per query")
+    for case in cases:
+        ranked = [h.node_id for h in semantic_search(index, embedder, case.query, DEPTH)]
+        print(f"  {rank_of(case.expected, ranked) or '-':>2}  {case.query} -> {case.expected}")
+    print()
     if isinstance(embedder, LocalEmbedder):
         print(f"Ablations\n\n{report(ablations(cases, loaded.nodes, embedder))}\n")
     for name, scores in results.items():
