@@ -1,7 +1,8 @@
 """Retrieval quality on content/search-eval.yaml. The real model, not a stand-in.
 
-Thresholds sit a little under the values measured in CI with bge-small-en-v1.5, so a change
-to chunking, prefixes or the model that loses quality fails here. Measured: see docs/BUSQUEDA.md.
+Thresholds sit under the values measured in CI with bge-small-en-v1.5 (27 queries: recall@3
+0.93, MRR 0.73; see docs/BUSQUEDA.md), leaving room for two more misses, so a change to
+chunking, the query instruction, part_weight or the model that loses quality fails here.
 
 Without the model (no network and no cache) the quality test is skipped, unless
 REQUIRE_EMBEDDINGS=1, as in CI, where a skip would hide a regression.
@@ -18,8 +19,8 @@ from brain.chunks import chunk_nodes
 from brain.loader import find_repo_root, load_content
 from brain.vectors import VectorIndex, build_index
 
-RECALL_AT_3_MIN = 0.70
-MRR_MIN = 0.60
+RECALL_AT_3_MIN = 0.85
+MRR_MIN = 0.65
 
 CONTENT = find_repo_root(Path(__file__)) / "content"
 

@@ -154,7 +154,7 @@ def ablations(cases: Sequence[Case], nodes: Sequence[Any], embedder: Any) -> dic
 
     chunks = chunk_nodes(nodes)
     variants = {
-        "all chunks + query instruction (shipped)": (chunks, embedder),
+        "shipped: all chunks + query instruction + part_weight": (chunks, embedder),
         "all chunks, no query instruction": (chunks, LocalEmbedder(query_prefix="")),
         "overview chunks only": ([c for c in chunks if c.kind == "overview"], embedder),
         "overview chunks only, no query instruction": (
@@ -182,7 +182,7 @@ def ablations(cases: Sequence[Case], nodes: Sequence[Any], embedder: Any) -> dic
             return reciprocal_rank_fusion([semantic, bm25.rank(query)[:DEPTH]])
 
         results["hybrid: shipped + BM25 (RRF)"] = evaluate(cases, hybrid)
-        for weight in (0.95, 0.9, 0.85, 0.8):
+        for weight in (1.0, 0.95, 0.9, 0.8):
             results[f"all chunks, part_weight {weight}"] = evaluate(
                 cases,
                 lambda q, w=weight: [

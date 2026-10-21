@@ -14,8 +14,9 @@ from brain.vectors import ChunkHit, IndexUnavailableError, VectorIndex, default_
 # Chunks fetched per requested concept: a concept can own several of the top chunks.
 OVERFETCH = 8
 # Teardown parts are short and generic ("Models", "Guardrails"), so on their own they win
-# unrelated queries. Down-weighting them was measured in api.evaluation's ablations.
-PART_WEIGHT = 1.0
+# unrelated queries. Measured on content/search-eval.yaml (python -m api.evaluation):
+# recall@3 0.74 at 1.0, 0.93 anywhere from 0.9 to 0.8; 0.85 sits in the middle of that plateau.
+PART_WEIGHT = 0.85
 
 
 @dataclass(frozen=True, slots=True)

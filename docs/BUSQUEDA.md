@@ -38,6 +38,7 @@ Un vector resume **todo** el texto que recibe. Si metes una ficha larga entera, 
 
 - Cada pieza lleva delante el título del concepto. Sin él, "Engine. The daemon…" no diría de qué tecnología es una vez convertido en vector (*contextual chunking*).
 - Al buscar se piden más fragmentos de los necesarios y se queda **el mejor de cada concepto**: la API devuelve conceptos, no fragmentos repetidos.
+- **Las piezas puntúan un 15 % menos** (`PART_WEIGHT = 0.85` en `apps/api/src/api/semantic.py`). Son textos cortos y genéricos ("Models", "Guardrails") y, sin ese ajuste, ganaban consultas que no tenían nada que ver: Bedrock, con cinco piezas, aparecía arriba en "keep hot data in memory". Con el ajuste, una pieza solo gana si encaja claramente mejor que el resumen, y la evaluación lo demuestra (abajo).
 - Las fichas de hoy son cortas, así que no hace falta trocear por tamaño (*sliding windows*). Si crecen, esa es la siguiente palanca.
 
 ## LanceDB: una base de datos vectorial sin servidor
@@ -56,15 +57,44 @@ Sin medir, "parece que funciona" no vale. [`content/search-eval.yaml`](../conten
 - **recall@k**: proporción de preguntas cuyo concepto esperado aparece entre los k primeros resultados. recall@3 = 0,8 quiere decir que 8 de cada 10 veces la respuesta está en el top 3.
 - **MRR** (*Mean Reciprocal Rank*): media de 1/posición del concepto esperado (1 si sale primero, 0,5 si sale segundo, 0 si no está en el top 10). Premia que salga **arriba**, no solo que salga.
 
-Resultados en CI sobre el set (27 preguntas):
+Resultados en CI sobre el set (27 preguntas, `uv run python -m api.evaluation`):
 
 | Método | recall@1 | recall@3 | MRR |
 | --- | --- | --- | --- |
-| Semántica (bge-small-en-v1.5) | — | — | — |
-| Palabra clave BM25 (cualquier palabra) | — | — | — |
-| Palabra clave `/search/keyword` (todas las palabras) | — | — | — |
+| **Semántica** (bge-small-en-v1.5, lo que se despliega) | 0,56 | **0,93** | **0,73** |
+| Palabra clave BM25 (cualquier palabra) | 0,41 | 0,59 | 0,51 |
+| Palabra clave `/search/keyword` (todas las palabras) | 0,00 | 0,00 | 0,00 |
 
-`apps/api/tests/test_search_eval.py` falla si la búsqueda semántica baja de **recall@3 ≥ —** o **MRR ≥ —**, un poco por debajo de lo medido. Así, un cambio en el troceado, en la instrucción de consulta o en el modelo que empeore la búsqueda no entra sin que se note. En CI (`REQUIRE_EMBEDDINGS=1`) el test no puede saltarse.
+`/search/keyword` exige todas las palabras de la consulta, así que con preguntas en lenguaje natural no encuentra nada. BM25 es la comparación justa: la búsqueda por palabras de toda la vida, la que usan Elasticsearch y OpenSearch por defecto.
+
+**Ablaciones**: la misma evaluación deshaciendo una decisión cada vez. Así se justifica cada elección con datos:
+
+| Variante | recall@1 | recall@3 | MRR |
+| --- | --- | --- | --- |
+| Todos los fragmentos, sin ajuste de piezas | 0,56 | 0,74 | 0,69 |
+| Sin instrucción de consulta de BGE | 0,52 | 0,81 | 0,65 |
+| Solo fragmentos `overview` | 0,59 | 0,93 | 0,74 |
+| Híbrida: semántica + BM25 fusionadas con RRF | 0,44 | 0,74 | 0,62 |
+| `part_weight` 0,95 / 0,9 / **0,85** / 0,8 | 0,56 | 0,85 / 0,93 / **0,93** / 0,93 | 0,70 / 0,72 / **0,73** / 0,73 |
+
+Qué se aprende:
+- **Trocear no es gratis.** Más fragmentos dan más papeletas a conceptos con muchas piezas genéricas. Ponderar las piezas recupera lo mismo que quitarlas, sin perder la pieza como fragmento que se muestra.
+- **La instrucción de consulta ayuda en MRR**: pone el acierto más arriba.
+- **La búsqueda híbrida no siempre mejora.** Aquí BM25 mete ruido porque las preguntas evitan a propósito las palabras de las fichas. Con usuarios reales, que sí escriben "lambda" o "terraform", conviene volver a medirla.
+- El 0,85 está en mitad de una meseta (0,9 a 0,8 dan lo mismo), así que no está ajustado a medida de estas 27 preguntas.
+
+`apps/api/tests/test_search_eval.py` falla si la búsqueda semántica baja de **recall@3 ≥ 0,85** o **MRR ≥ 0,65**. Deja margen para dos fallos más de los medidos. Así, un cambio en el troceado, en la instrucción de consulta, en el peso de las piezas o en el modelo que empeore la búsqueda no entra sin que se note. En CI (`REQUIRE_EMBEDDINGS=1`) el test no puede saltarse.
+
+## Lo que cuesta en la imagen
+
+| | Antes | Ahora |
+| --- | --- | --- |
+| Imagen de la API (CI, descomprimida) | ~250 MB | 809 MB |
+| Modelo bge-small (ONNX) | — | 65 MB |
+| Índice LanceDB (97 fragmentos) | — | 196 KB |
+| RAM del contenedor tras una búsqueda | — | ~300 MiB |
+
+Casi todo el crecimiento son librerías: lancedb (180 MB) y pyarrow (167 MB), y después onnxruntime (68 MB). El modelo es lo de menos. Si el tamaño molesta, con cientos de fragmentos un `numpy` en memoria bastaría, pero LanceDB es lo que permite el paso a S3 sin cambiar código (decisión 6).
 
 ## Pasar a Bedrock y a S3
 

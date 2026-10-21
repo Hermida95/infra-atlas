@@ -127,10 +127,10 @@ def test_best_per_concept_keeps_first_hit() -> None:
         ChunkHit("b:overview", "b", "overview", "B", "z", 0.7),
     ]
 
-    best = semantic.best_per_concept(hits, k=5)
+    best = semantic.best_per_concept(hits, k=5, part_weight=1.0)
 
     assert [(h.node_id, h.chunk.id) for h in best] == [("a", "a:part:0"), ("b", "b:overview")]
-    assert len(semantic.best_per_concept(hits, k=1)) == 1
+    assert len(semantic.best_per_concept(hits, k=1, part_weight=1.0)) == 1
 
 
 def test_part_weight_lets_overview_win() -> None:
