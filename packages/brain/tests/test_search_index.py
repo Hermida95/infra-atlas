@@ -200,3 +200,26 @@ def test_embedder_from_env_selects_bedrock(monkeypatch) -> None:
     monkeypatch.setattr(embeddings, "BedrockEmbedder", lambda: "bedrock-embedder")
 
     assert embedder_from_env() == "bedrock-embedder"
+
+
+def test_onnx_digest_and_pin(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from brain.embeddings import ModelIntegrityError, onnx_digest, verify_onnx
+
+    (tmp_path / "model.onnx").write_bytes(b"onnx bytes")
+    engine = SimpleNamespace(
+        model=SimpleNamespace(
+            _model_dir=tmp_path, model_description=SimpleNamespace(model_file="model.onnx")
+        )
+    )
+
+    digest = onnx_digest(engine)
+
+    assert digest == hashlib.sha256(b"onnx bytes").hexdigest()
+    verify_onnx("m", digest, {"m": digest})
+    verify_onnx("unpinned", "anything", {})
+    with pytest.raises(ModelIntegrityError, match="does not match"):
+        verify_onnx("m", "0" * 64, {"m": digest})
+    with pytest.raises(RuntimeError, match="cannot locate"):
+        onnx_digest(SimpleNamespace())

@@ -9,6 +9,7 @@ built it (`Embedder.identity`) and the API refuses to query it with another one.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Sequence
@@ -20,6 +21,11 @@ from brain.loader import RepoRootNotFoundError, find_repo_root
 LOCAL_MODEL = "BAAI/bge-small-en-v1.5"
 # BGE retrieval models expect this instruction in front of short queries (not passages).
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
+
+# SHA-256 of the ONNX file each local model must load. A model repository on Hugging Face
+# can change under the same name; pinning the bytes turns that into a loud failure instead
+# of a silent change in every vector. `brain embed` prints the digest it loaded.
+PINNED_ONNX_SHA256: dict[str, str] = {}
 
 TITAN_MODEL = "amazon.titan-embed-text-v2:0"
 TITAN_DIMENSIONS = 512
@@ -73,16 +79,44 @@ class LocalEmbedder:
 
         self.model = model
         self.query_prefix = query_prefix
-        self.model_version = f"fastembed-{fastembed.__version__}"
         self._engine = fastembed.TextEmbedding(
             model, cache_dir=str(cache_dir or default_model_cache())
         )
+        self.onnx_sha256 = onnx_digest(self._engine)
+        verify_onnx(model, self.onnx_sha256)
+        # The digest is part of the version: an index built from other bytes is a mismatch.
+        self.model_version = f"fastembed-{fastembed.__version__}+onnx-{self.onnx_sha256[:16]}"
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         return [vector.tolist() for vector in self._engine.passage_embed(list(texts))]
 
     def embed_query(self, text: str) -> list[float]:
         return next(iter(self._engine.query_embed(self.query_prefix + text))).tolist()
+
+
+def onnx_digest(engine: object) -> str:
+    """SHA-256 of the ONNX file fastembed loaded."""
+    inner = getattr(engine, "model", None)
+    model_dir = getattr(inner, "_model_dir", None)
+    description = getattr(inner, "model_description", None)
+    model_file = getattr(description, "model_file", None)
+    if model_dir is None or model_file is None:
+        raise RuntimeError("cannot locate the ONNX file fastembed loaded")
+    digest = hashlib.sha256()
+    with (Path(model_dir) / model_file).open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+class ModelIntegrityError(RuntimeError):
+    pass
+
+
+def verify_onnx(model: str, digest: str, pinned: dict[str, str] | None = None) -> None:
+    expected = (PINNED_ONNX_SHA256 if pinned is None else pinned).get(model)
+    if expected is not None and digest != expected:
+        raise ModelIntegrityError(f"{model}: ONNX sha256 {digest} does not match pinned {expected}")
 
 
 class BedrockEmbedder:

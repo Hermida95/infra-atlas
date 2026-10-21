@@ -125,7 +125,12 @@ def embed(
     target = out if out is not None else default_index_path()
     info = build_index(chunks, embedder, target, force=force)
 
-    model = f"{info.model['provider']}:{info.model['model']} ({info.model['dimensions']}d)"
+    model = (
+        f"{info.model['provider']}:{info.model['model']} {info.model['model_version']} "
+        f"({info.model['dimensions']}d)"
+    )
+    if digest := getattr(embedder, "onnx_sha256", None):
+        typer.echo(f"Model file sha256: {digest}")
     state = "Wrote" if info.written else "Up to date"
     typer.echo(
         f"{state} {_display(target)}: {info.chunks} chunks, {model}, {info.fingerprint[:12]}"
