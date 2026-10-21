@@ -7,17 +7,18 @@ import BrainScene, { type MapStore } from "./BrainScene";
 import { Mark } from "./Mark";
 import { Planner } from "./Planner";
 import { Teardown } from "../teardown/Teardown";
+import { Header } from "../Header";
 import type { Route } from "@/lib/planner";
 
 export default function BrainMap() {
   const store = useRef<MapStore>({ hover: null, selected: null, route: null, routeAt: 0, shiftX: 0 });
   const labels = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
-  const [query, setQuery] = useState("");
   const [route, setRoute] = useState<Route | null>(null);
   const [teardown, setTeardownState] = useState<GraphNode | null>(null);
 
-  // Deep links: /?t=<concept id> opens that teardown, so a technology can be shared directly.
+  // Deep links: /?t=<id> opens that teardown and /?focus=<id> flies to the concept, so a
+  // technology can be shared directly (concept pages link here with ?focus).
   const setTeardown = useCallback((node: GraphNode | null) => {
     setTeardownState(node);
     const url = new URL(window.location.href);
@@ -26,14 +27,15 @@ export default function BrainMap() {
     window.history.replaceState(null, "", url);
   }, []);
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("t");
-    const node = id ? nodeById.get(id) : undefined;
-    if (node?.parts.length) {
+    const params = new URLSearchParams(window.location.search);
+    const torn = nodeById.get(params.get("t") ?? "");
+    const node = torn?.parts.length ? torn : nodeById.get(params.get("focus") ?? "");
+    if (node) {
       store.current.selected = node;
       // Deferred so the state update does not run synchronously inside the effect.
       queueMicrotask(() => {
         setSelected(node);
-        setTeardownState(node);
+        if (node === torn) setTeardownState(node);
       });
     }
   }, []);
@@ -74,35 +76,9 @@ export default function BrainMap() {
     return () => window.removeEventListener("keydown", onKey);
   }, [select]);
 
-  const search = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = query.trim().toLowerCase();
-    if (!q) return;
-    const hit =
-      graph.nodes.find((n) => n.title.toLowerCase() === q) ?? graph.nodes.find((n) => n.title.toLowerCase().includes(q));
-    if (hit) select(hit);
-  };
-
   return (
     <>
-      <header className="topbar">
-        <div className="brand">
-          <span className="reactor" aria-hidden="true" />
-          Infra Atlas
-        </div>
-        <nav aria-label="Main">
-          <Link href="/" aria-current="page">Map</Link>
-        </nav>
-        <form className="search" role="search" onSubmit={search}>
-          <input
-            type="search"
-            placeholder="Find a concept"
-            aria-label="Find a concept"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </form>
-      </header>
+      <Header onPick={select} />
 
       <div className="stage" aria-label="3D knowledge map of DevOps and AWS concepts. Drag to rotate, scroll to zoom, click a node for details.">
         <BrainScene store={store} labels={labels} onSelect={select} paused={teardown !== null} />
@@ -133,6 +109,9 @@ export default function BrainMap() {
                 Take it apart
               </button>
             )}
+            <p className="detail-more">
+              <Link href={`/c/${selected.id}`}>Open concept page →</Link>
+            </p>
             <h4>Connected to</h4>
             <div className="links">
               {[...(neighbours.get(selected.id) ?? [])].map((id) => {
