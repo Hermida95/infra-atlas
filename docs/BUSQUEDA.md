@@ -93,7 +93,7 @@ Qué se aprende:
 | Imagen de la API (CI, descomprimida) | ~250 MB | 809 MB |
 | Modelo bge-small (ONNX) | — | 65 MB |
 | Índice LanceDB (97 fragmentos) | — | 196 KB |
-| RAM del contenedor tras una búsqueda | — | ~300 MiB |
+| RAM del contenedor tras una búsqueda | — | ~300 MiB (el chart reserva 320 Mi, con un límite de 512 Mi) |
 
 Casi todo el crecimiento son librerías: lancedb (180 MB) y pyarrow (167 MB), y después onnxruntime (68 MB). El modelo es lo de menos. Si el tamaño molesta, con cientos de fragmentos un `numpy` en memoria bastaría, pero LanceDB es lo que permite el paso a S3 sin cambiar código (decisión 6).
 
