@@ -898,6 +898,33 @@ kbd {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+.palette-via {
+  font-style: normal;
+  color: var(--holo);
+  border: 1px solid var(--holo-line);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 8px;
+  letter-spacing: 0.06em;
+}
+.palette-status {
+  margin-left: auto;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+}
+.palette-status::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--holo);
+  vertical-align: middle;
+}
+.palette-status.offline::before {
+  background: var(--faint);
+}
 .palette-list li.palette-empty {
   display: block;
   color: var(--muted);
@@ -1109,6 +1136,13 @@ a.btn {
   }
   .palette-backdrop {
     padding-top: 72px;
+  }
+  /* The title and summary need the width more than the domain; the meaning tag stays. */
+  .palette-domain-name {
+    display: none;
+  }
+  .palette-via {
+    margin-right: 0;
   }
 }
 .concept-skeleton {

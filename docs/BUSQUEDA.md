@@ -86,6 +86,28 @@ Qué se aprende:
 
 `apps/api/tests/test_search_eval.py` falla si la búsqueda semántica baja de **recall@3 ≥ 0,85** o **MRR ≥ 0,65**. Deja margen para dos fallos más de los medidos. Así, un cambio en el troceado, en la instrucción de consulta, en el peso de las piezas o en el modelo que empeore la búsqueda no entra sin que se note. En CI (`REQUIRE_EMBEDDINGS=1`) el test no puede saltarse.
 
+## En la web: la paleta ⌘K
+
+La paleta combina dos búsquedas:
+
+- **Palabra clave, en el navegador** (`apps/web/src/lib/search.ts`). Es instantánea y no necesita red. Encuentra nombres: "docker", "ag" (API Gateway), "etcd".
+- **Significado, con `GET /search`** (`apps/web/src/lib/semantic.ts`). Encuentra preguntas: "store secrets safely" lleva a *SSM* aunque ninguna palabra coincida.
+
+Cómo se combinan (`mergeHits`):
+
+1. Primero, los aciertos locales que coinciden con un **nombre** (título o iniciales). Si escribes "docker", Docker va primero.
+2. Después, los aciertos por significado con similitud ≥ **0,58**, marcados con la etiqueta *meaning*. Si el fragmento ganador es una pieza del despiece, la segunda línea muestra esa pieza.
+3. Al final, el resto de aciertos locales más débiles.
+
+El umbral sale de medir: la API siempre devuelve *k* resultados, también para "asdf qwer", y esa basura llega como mucho a 0,57. Las preguntas reales sacan su concepto esperado entre 0,60 y 0,88.
+
+Detalles:
+
+- Solo se activa si existe `NEXT_PUBLIC_API_URL` (ver `apps/web/.env.example`). Sin la variable, la web estática funciona igual con la búsqueda local.
+- Espera **250 ms** tras la última tecla y cancela la petición anterior con `AbortController`: escribir una palabra cuesta una petición, lejos del rate limit de 60 por minuto.
+- Cada respuesta se guarda junto a la consulta que responde, así que una respuesta lenta nunca aparece bajo una consulta más nueva.
+- Si la API falla o devuelve 503, la paleta sigue con la búsqueda local y muestra *meaning search offline*.
+
 ## Lo que cuesta en la imagen
 
 | | Antes | Ahora |

@@ -25,7 +25,7 @@ Requirements: Node 24 with corepack, [uv](https://docs.astral.sh/uv/), Docker fo
 ```bash
 make install   # Python and Node dependencies
 make dev       # validate content, build the graph, open http://localhost:3000
-make api       # API on http://localhost:8000
+make api       # API on http://localhost:8000 (semantic search for ⌘K: cp apps/web/.env.example apps/web/.env.local)
 make up        # the API in Docker
 make help      # everything else
 ```
