@@ -1,6 +1,12 @@
 [tool.uv.workspace]
 members = ["packages/brain", "apps/api"]
 
+[tool.uv]
+# fastembed 0.9 caps pillow below 13, and pillow 12.x has known CVEs in its image decoders
+# (TIFF, GIF, PPM, PDF, EPS). Only text embedding is used, which never touches pillow, and
+# CI runs the real model on pillow 13. Drop this once fastembed allows pillow 13.
+override-dependencies = ["pillow>=13"]
+
 [dependency-groups]
 dev = [
   "pytest>=8",
