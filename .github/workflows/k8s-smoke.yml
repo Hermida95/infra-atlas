@@ -7,12 +7,16 @@ on:
     paths:
       - infra/helm/**
       - apps/api/**
+      - packages/brain/**
+      - uv.lock
       - labs/k8s/**
       - .github/workflows/k8s-smoke.yml
   pull_request:
     paths:
       - infra/helm/**
       - apps/api/**
+      - packages/brain/**
+      - uv.lock
       - labs/k8s/**
       - .github/workflows/k8s-smoke.yml
 
@@ -36,9 +40,15 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.3.0
 
-      # The image copies apps/web/src/data/graph.json, so the graph is built first.
+      # The image copies graph.json, the vector index and the model, so they are built first.
       - run: uv sync --all-packages
+      - uses: actions/cache@v6.1.0
+        with:
+          path: apps/api/data/models
+          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
+          restore-keys: fastembed-bge-small-en-v1.5-
       - run: uv run brain graph
+      - run: uv run brain embed
 
       - name: Build the API image
         run: docker build -f apps/api/Dockerfile -t "$IMAGE" .

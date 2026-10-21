@@ -16,11 +16,23 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
       - run: uv sync --all-packages
+      # bge-small-en-v1.5 (~67 MB) downloads once from Hugging Face, then comes from the cache.
+      - uses: actions/cache@v6.1.0
+        with:
+          path: apps/api/data/models
+          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
+          restore-keys: fastembed-bge-small-en-v1.5-
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      # REQUIRE_EMBEDDINGS: the retrieval-quality test must run here, never skip.
       - run: uv run pytest -q
+        env:
+          REQUIRE_EMBEDDINGS: "1"
       - run: uv run brain validate
       - run: uv run brain graph
+      - run: uv run brain embed
+      - name: Search evaluation report
+        run: uv run python -m api.evaluation | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: graph
@@ -58,4 +70,28 @@ jobs:
         with:
           name: graph
           path: apps/web/src/data
+      # The image ships the vector index and the model: build them like the python job does.
+      - uses: astral-sh/setup-uv@v10.3.0
+      - run: uv sync --all-packages
+      - uses: actions/cache@v6.1.0
+        with:
+          path: apps/api/data/models
+          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
+          restore-keys: fastembed-bge-small-en-v1.5-
+      - run: uv run brain embed
       - run: docker build -f apps/api/Dockerfile -t infra-atlas-api:ci .
+      - name: Semantic search inside the image (read-only, offline model)
+        run: |
+          docker image ls infra-atlas-api:ci --format 'Image size: {{.Size}}'
+          du -sh apps/api/data/models apps/api/data/vectors.lance
+          docker run -d --name api --read-only --tmpfs /tmp -p 8000:8000 infra-atlas-api:ci
+          for _ in $(seq 1 30); do curl -fsS localhost:8000/health >/dev/null 2>&1 && break; sleep 1; done
+          for q in "where do I keep database passwords" "run code without managing servers" \
+                   "restart crashed containers automatically"; do
+            curl -fsS --get localhost:8000/search --data-urlencode "q=$q" --data-urlencode k=3 \
+              | python3 -c 'import json, sys; r = json.load(sys.stdin); print(repr(r["query"]), "->", [(h["id"], h["score"]) for h in r["hits"]])'
+          done
+          docker stats --no-stream --format 'Memory after search: {{.MemUsage}}' api
+      - name: Container logs
+        if: failure()
+        run: docker logs api || true
