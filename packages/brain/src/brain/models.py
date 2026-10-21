@@ -41,6 +41,11 @@ PartKind = Literal[
     "trigger",
     "jobs",
     "chips",
+    # delivery
+    "gate",
+    "lanes",
+    "split",
+    "loop",
     # cloud and network
     "disc",
     "zones",
@@ -61,7 +66,17 @@ Layout = Literal["stack", "row", "cluster"]
 Level = Literal["core", "intermediate", "advanced"]
 Access = Literal["free", "pro"]
 
-Stage = Literal["build", "containerize", "infra", "run", "data", "secure", "ship", "observe"]
+Stage = Literal[
+    "build",
+    "containerize",
+    "infra",
+    "run",
+    "data",
+    "secure",
+    "ship",
+    "deliver",
+    "observe",
+]
 
 SUMMARY_MAX_LENGTH = 200
 WHY_MAX_LENGTH = 160

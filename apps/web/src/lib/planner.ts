@@ -91,7 +91,8 @@ export const STAGE_LABEL: Record<Stage, string> = {
   run: "Run and expose",
   data: "Store and process",
   secure: "Secure",
-  ship: "Ship",
+  ship: "Build & publish",
+  deliver: "Release",
   observe: "Observe",
 };
 

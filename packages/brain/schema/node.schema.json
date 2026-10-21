@@ -32,6 +32,10 @@
                 "trigger",
                 "jobs",
                 "chips",
+                "gate",
+                "lanes",
+                "split",
+                "loop",
                 "disc",
                 "zones",
                 "vpc",
@@ -78,6 +82,7 @@
             "data",
             "secure",
             "ship",
+            "deliver",
             "observe"
           ],
           "title": "Stage",
