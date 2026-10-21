@@ -150,6 +150,9 @@ def main() -> None:  # pragma: no cover - exercised in CI
         )
         print(f"{len(holdout)} holdout queries (the numbers CI gates on)\n")
         print(f"{report({f'semantic ({embedder.model})': held})}\n")
+        for query, expected, top in held.misses:
+            print(f"  holdout miss {query!r}: expected {expected}, got {top}")
+        print()
     else:
         print("No holdout queries yet: CI falls back to the tune set.\n")
     shipped = next(iter(results))

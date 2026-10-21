@@ -52,16 +52,17 @@ Un vector resume **todo** el texto que recibe. Si metes una ficha larga entera, 
 
 ## Cómo se evalúa: recall@k y MRR
 
-Sin medir, "parece que funciona" no vale. [`content/search-eval.yaml`](../content/search-eval.yaml) tiene 27 preguntas en lenguaje natural, repartidas en dos conjuntos: `tune` (las 27 de hoy, con las que se eligieron `PART_WEIGHT`, la instrucción de consulta y el umbral) y `holdout` (vacío por ahora: preguntas escritas después y nunca usadas para decidir nada). Los umbrales de CI se aplican a `holdout`; mientras esté vacío usan `tune`, que es una comprobación más débil porque los parámetros se ajustaron a ella. La meta son unas 60 preguntas. Cada pregunta lleva el concepto que debería salir. Están redactadas **por significado**, evitando las palabras del título y del resumen de su concepto.
+Sin medir, "parece que funciona" no vale. [`content/search-eval.yaml`](../content/search-eval.yaml) tiene 53 preguntas en lenguaje natural, repartidas en dos conjuntos: `tune` (27, con las que se eligieron `PART_WEIGHT`, la instrucción de consulta y el umbral) y `holdout` (26, escritas después y nunca usadas para decidir nada). Los umbrales de CI se aplican a `holdout`; si quedara vacío, usarían `tune`, una comprobación más débil porque los parámetros se ajustaron a ella. Entre los dos cubren casi todos los conceptos; la meta son unas 60. Cada pregunta lleva el concepto que debería salir. Están redactadas **por significado**, evitando las palabras del título y del resumen de su concepto.
 
 - **recall@k**: proporción de preguntas cuyo concepto esperado aparece entre los k primeros resultados. recall@3 = 0,8 quiere decir que 8 de cada 10 veces la respuesta está en el top 3.
 - **MRR** (*Mean Reciprocal Rank*): media de 1/posición del concepto esperado (1 si sale primero, 0,5 si sale segundo, 0 si no está en el top 10). Premia que salga **arriba**, no solo que salga.
 
-Resultados en CI sobre el set (27 preguntas, `uv run python -m api.evaluation`):
+Resultados en CI (`uv run python -m api.evaluation`). Salvo la fila de `holdout`, son sobre `tune` (27 preguntas):
 
 | Método | recall@1 | recall@3 | MRR |
 | --- | --- | --- | --- |
 | **Semántica** (bge-small-en-v1.5, lo que se despliega) | 0,56 | **0,93** | **0,73** |
+| Semántica sobre `holdout` (26 preguntas, la nota honesta) | 0,69 | **0,88** | **0,80** |
 | Palabra clave BM25 (cualquier palabra) | 0,41 | 0,59 | 0,51 |
 | Palabra clave `/search/keyword` (todas las palabras) | 0,00 | 0,00 | 0,00 |
 

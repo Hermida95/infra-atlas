@@ -65,4 +65,56 @@ tune:
   - query: settings that differ between staging and production
     expected: env
 
-holdout: []
+holdout:
+  - query: Where do I define how my services talk to each other privately?
+    expected: vpc
+  - query: Show me the running CPU and memory of my cluster over time
+    expected: prometheus
+  - query: Make a build run automatically whenever I push code
+    expected: gha
+  - query: Replace old versions gradually and keep the desired number of copies running
+    expected: deployment
+  - query: Give my containers a place in the cloud to be downloaded from
+    expected: ecr
+  - query: A table that answers by key in a few milliseconds without servers
+    expected: dynamodb
+  - query: Reuse the same infrastructure recipe in several environments
+    expected: tfmodules
+  - query: Why does changing one line make the image rebuild so slowly?
+    expected: layers
+  - query: Expose several services under one public address
+    expected: ingress
+  - query: Start the app, database and cache together on my laptop
+    expected: compose
+  - query: Find passages whose meaning is close to what the user asked
+    expected: vectordb
+  - query: Block a release when something I changed breaks existing behaviour
+    expected: tests
+  - query: The provider hosting all the managed services on this map
+    expected: aws
+  - query: Run my containers on Amazon without looking after any virtual machines
+    expected: ecs
+  - query: Get a managed control plane for orchestrating many containers on Amazon
+    expected: eks
+  - query: The live instance started from a packaged app, with a small scratch area for writes
+    expected: container
+  - query: Bundle my program with everything it needs so it behaves the same on any computer
+    expected: docker
+  - query: The immutable artifact I publish and later start copies from
+    expected: image
+  - query: Describe my cloud resources in files and let a tool make reality match
+    expected: terraform
+  - query: The Python web service I wrote and the libraries it relies on
+    expected: app
+  - query: Track every edit and trigger automation when I upload them
+    expected: git
+  - query: Where I run things first, before anything reaches the internet
+    expected: localhost
+  - query: A front door that throttles and authenticates HTTP calls to my backend
+    expected: apigw
+  - query: Collect logs and raise alarms for everything running on Amazon
+    expected: cloudwatch
+  - query: A fixed address that keeps working while the replicas behind it change
+    expected: k8ssvc
+  - query: The smallest thing the orchestrator places on a machine, one or more containers together
+    expected: pod
