@@ -45,7 +45,7 @@ Un vector resume **todo** el texto que recibe. Si metes una ficha larga entera, 
 
 [LanceDB](https://lancedb.github.io/lancedb/) es una base de datos **embebida**, como SQLite: la tabla es una carpeta de archivos Lance (columnar, sobre Apache Arrow) que el proceso lee directamente. No hay que levantar nada, ni pagar una instancia encendida.
 
-- Para unos cientos de fragmentos, la búsqueda es exhaustiva y tarda milisegundos. Con muchos más, LanceDB crea un índice ANN (IVF-PQ) sin cambiar el código.
+- Para unos cientos de fragmentos, la búsqueda es exhaustiva y tarda milisegundos. Con muchos más haría falta un índice ANN (IVF-PQ), pero LanceDB **no lo crea por sí solo**: hay que llamar a `create_index` sobre la tabla. Si se crea, su `metric` tiene que ser `cosine`, igual que `.distance_type("cosine")` en `VectorIndex.search`; con otra métrica el índice ordenaría distinto de como se puntúa. Hoy no existe ningún índice: la búsqueda es exhaustiva.
 - La carpeta va dentro de la imagen. Cada despliegue lleva el índice que corresponde a su contenido, y si el contenido cambia, se regenera en CI.
 - `brain embed` es **idempotente**: guarda en los metadatos de la tabla el proveedor, el modelo, su versión, las dimensiones y una huella (SHA-256) de todos los fragmentos más el modelo. Si la huella coincide, no recalcula nada. Si cambia el texto o el modelo, regenera el índice entero en una carpeta temporal y la cambia de golpe.
 - Alternativas que no hacen falta aún: pgvector (base de datos encendida, unos 15 $/mes como mínimo en RDS) u OpenSearch (bastante más). DECISIONES.md fija cuándo revisarlo: más de unas 50k fichas o filtros complejos.

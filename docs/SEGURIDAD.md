@@ -95,7 +95,7 @@ En un cluster real, un *admission controller* (Kyverno, o el policy-controller d
 
 ## Lambda
 
-El Dockerfile tiene un target `lambda`: la misma imagen más el [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) en `/opt/extensions`. En Lambda, el adaptador arranca uvicorn, espera a que `/ready` responda 200 y traduce los eventos de Lambda a HTTP.
+El Dockerfile tiene un target `lambda`: la misma imagen más el [AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) en `/opt/extensions`. En Lambda se ejecuta el `CMD` de la imagen, que es lo que arranca uvicorn; el adaptador es una extensión de Lambda que corre al lado, espera a que `/ready` responda 200 y hace de proxy: traduce los eventos de Lambda a peticiones HTTP contra ese uvicorn.
 
 ```bash
 docker build -f apps/api/Dockerfile --target lambda -t infra-atlas-api:lambda .

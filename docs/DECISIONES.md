@@ -19,6 +19,37 @@ conocimiento buscable que crece con el tiempo.
   - Prima la calidad de cada parada sobre el número de fichas.
   - El pago pasa a ser secundario.
 
+## Estado actual
+Comprobado contra el repo el 2026-10-21. Las decisiones de abajo son el **diseño objetivo**; esta tabla dice qué existe hoy.
+**Hecho** = está en `main` y se prueba · **Parcial** = existe una parte · **Pendiente** = no existe todavía · **Distinto** = se hizo de otra forma que la decidida.
+
+| Pieza | Estado | Hoy |
+|---|---|---|
+| Monorepo pnpm + uv + Makefile | Hecho | `pnpm-workspace.yaml`, `pyproject.toml`, `Makefile`. |
+| Web Next.js (App Router, TS) | Hecho | `apps/web`, Next 16, React 19. |
+| Diseño de la web | Parcial | Tailwind v4, three.js y `@react-three/fiber`. No hay Radix/shadcn, Motion, GSAP ni React Flow. |
+| `packages/ui` (sistema de diseño) | Pendiente | No existe: solo `packages/brain`. Los componentes viven en `apps/web/src/components`. |
+| Contenido: nodos MDX tipados | Hecho | 53 fichas en `content/nodes/<dominio>/`. |
+| Contenido: recorridos (`content/journeys`) | Pendiente | No existe el directorio; hay `domains.yaml`, `requirements.yaml` y `planner-cases.yaml`. |
+| Esquema Pydantic → JSON Schema | Hecho | `brain schema` y `packages/brain/schema/node.schema.json`. Tipos TS/Zod generados: no comprobado. |
+| CLI `brain` | Hecho | `new`, `validate`, `graph`, `embed`, `schema` y `plan`. |
+| API FastAPI | Hecho | `apps/api`: `/graph`, `/nodes`, `/search`, `/plan`, `/health`, `/ready`, `/metrics`. `/ask` (RAG) no existe. |
+| Búsqueda en el cliente (F1) y semántica (F2) | Hecho | ⌘K con búsqueda local y por significado vía `GET /search`; evaluación en CI. |
+| Vectores: LanceDB | **Distinto** | El índice va **dentro de la imagen** (`apps/api/Dockerfile`, `COPY apps/api/data/vectors.lance`), no en S3. Ver [BUSQUEDA.md](BUSQUEDA.md). |
+| Embeddings en Bedrock | Parcial | `BedrockEmbedder` existe como extra opcional (`brain[bedrock]`); el proveedor por defecto es local (bge-small). |
+| Claude en Bedrock (RAG) | Pendiente | Fase 3. |
+| Imagen Docker de la API, target Lambda | Hecho | El target `lambda` añade el Lambda Web Adapter. **No hay** función Lambda desplegada. |
+| Chart de Helm + kind en CI | Hecho | `infra/helm/api`, `k8s-smoke.yml`. El módulo de EKS: pendiente. |
+| Terraform (`infra/terraform`) | Pendiente | Solo hay directorios vacíos (`bootstrap/`, `envs/dev`, `envs/prod`, `modules/`) que git no sigue. Sin módulos. |
+| Hosting web (OpenNext + CloudFront) | Pendiente | Depende de Terraform. |
+| CI | Hecho | `ci.yml`, `k8s-smoke.yml`, `release.yml` (imagen firmada, SBOM) y `security.yml`. |
+| `deploy.yml` | Pendiente | No existe (necesita Terraform y OIDC hacia AWS). |
+| `content.yml` | Pendiente | No existe; la validación del contenido corre dentro de `ci.yml`. |
+| Docker Compose | Parcial | `compose.yaml` levanta solo la API. Faltan `web` y `localstack`. |
+| Calidad | Parcial | ruff, pytest, eslint, vitest y trivy sí. pyright, Playwright, tflint y checkov: no están configurados. |
+| Observabilidad | Parcial | Logs JSON, métricas Prometheus y `x-request-id`. Powertools, X-Ray y alarmas de Budgets: pendientes. |
+| Auth, pagos y datos de usuario (F3) | Pendiente | Cognito, Stripe y DynamoDB no se han empezado. |
+
 ## Resumen del stack
 | Capa | Elección | Por qué |
 |---|---|---|
@@ -31,7 +62,7 @@ conocimiento buscable que crece con el tiempo.
 | Pipeline | CLI en Python `brain` (Typer): `new`, `validate`, `graph`, `embed` | Disciplina de metadatos automatizada; aquí está el Python de ingeniería |
 | Backend | FastAPI en imagen Docker → AWS Lambda (Lambda Web Adapter) | La misma imagen corre en compose, en kind y en Lambda |
 | Búsqueda | F1: búsqueda de texto en el cliente (índice generado al compilar). F2: búsqueda semántica en la API | Coste cero primero, IA después |
-| Vectores | LanceDB sobre S3 (generado en CI) | Sin base de datos encendida: céntimos al mes |
+| Vectores | LanceDB, índice generado en CI. **Hoy dentro de la imagen**; S3 queda como opción si el índice crece | Sin base de datos encendida: céntimos al mes |
 | IA | Claude vía Amazon Bedrock (modelo pequeño para RAG) + embeddings en Bedrock | Se queda en AWS, autenticación por IAM sin claves de API |
 | Datos de usuario (F3) | DynamoDB bajo demanda | Serverless, capa gratuita amplia, sin servidor |
 | Auth (F3) | Amazon Cognito | Nativo de AWS, JWT verificable por Next.js y FastAPI, gestionado con Terraform |
@@ -97,10 +128,10 @@ conocimiento buscable que crece con el tiempo.
 - **Cuándo revisarla:** tráfico sostenido alto, o latencia crítica → Fargate.
 
 ### 6. Cerebro IA: búsqueda en dos fases y RAG
-- **Opciones valoradas:** pgvector en RDS o Neon, OpenSearch, LanceDB sobre S3, numpy en memoria.
+- **Opciones valoradas:** pgvector en RDS o Neon, OpenSearch, LanceDB (en S3 o dentro de la imagen), numpy en memoria.
 - **Elegida y motivo:**
   - F1: índice de texto en el cliente, sin coste.
-  - F2: embeddings calculados en CI y guardados como tabla LanceDB en S3; la API consulta por significado.
+  - F2: embeddings calculados en CI y guardados como tabla LanceDB; la API consulta por significado. Hoy el índice va dentro de la imagen (cada despliegue lleva el que corresponde a su contenido); subirlo a S3 solo compensa si crece o debe cambiar sin redesplegar.
   - F3: asistente RAG con Claude en Bedrock, **solo para usuarios con sesión** (controla el coste y es una ventaja de pago).
 - **Qué se pierde / riesgo:** un endpoint de IA público puede dispararse en coste. Se mitiga con: el asistente solo con sesión, throttling en API Gateway, cuota diaria por usuario en DynamoDB y alarma de AWS Budgets.
 - **Cuándo revisarla:** más de unas 50k fichas, o necesidad de filtros complejos → pgvector.
