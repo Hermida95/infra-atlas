@@ -131,3 +131,18 @@ def test_best_per_concept_keeps_first_hit() -> None:
 
     assert [(h.node_id, h.chunk.id) for h in best] == [("a", "a:part:0"), ("b", "b:overview")]
     assert len(semantic.best_per_concept(hits, k=1)) == 1
+
+
+def test_part_weight_lets_overview_win() -> None:
+    from brain.vectors import ChunkHit
+
+    hits = [
+        ChunkHit("a:part:0", "a", "part", "A", "x", 0.80),
+        ChunkHit("b:overview", "b", "overview", "B", "y", 0.76),
+        ChunkHit("a:overview", "a", "overview", "A", "z", 0.50),
+    ]
+
+    assert [h.node_id for h in semantic.best_per_concept(hits, 2, part_weight=1.0)] == ["a", "b"]
+    weighted = semantic.best_per_concept(hits, 2, part_weight=0.9)
+    assert [h.node_id for h in weighted] == ["b", "a"]
+    assert weighted[1].chunk.id == "a:part:0" and weighted[1].score == 0.72

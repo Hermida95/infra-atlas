@@ -13,6 +13,9 @@ from brain.vectors import ChunkHit, IndexUnavailableError, VectorIndex, default_
 
 # Chunks fetched per requested concept: a concept can own several of the top chunks.
 OVERFETCH = 8
+# Teardown parts are short and generic ("Models", "Guardrails"), so on their own they win
+# unrelated queries. Down-weighting them was measured in api.evaluation's ablations.
+PART_WEIGHT = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,21 +53,26 @@ def get_embedder() -> Embedder:
         raise IndexUnavailableError(f"embedding model unavailable: {exc}") from exc
 
 
-def best_per_concept(hits: Sequence[ChunkHit], k: int) -> list[ConceptHit]:
-    """Keep each concept's best chunk. Hits arrive best first, so the first one wins."""
-    seen: dict[str, ConceptHit] = {}
+def best_per_concept(
+    hits: Sequence[ChunkHit], k: int, part_weight: float = PART_WEIGHT
+) -> list[ConceptHit]:
+    """Rank concepts by their best chunk. A part chunk's score is multiplied by `part_weight`,
+    so an overview wins unless a teardown part matches clearly better."""
+    best: dict[str, ConceptHit] = {}
     for hit in hits:
-        if hit.node_id not in seen:
-            seen[hit.node_id] = ConceptHit(hit.node_id, hit.title, hit.score, hit)
-            if len(seen) == k:
-                break
-    return list(seen.values())
+        score = round(hit.score * (part_weight if hit.kind == "part" else 1.0), 4)
+        if hit.node_id not in best or score > best[hit.node_id].score:
+            best[hit.node_id] = ConceptHit(hit.node_id, hit.title, score, hit)
+    return sorted(best.values(), key=lambda h: -h.score)[:k]
 
 
-def semantic_search(index: VectorIndex, embedder: Embedder, query: str, k: int) -> list[ConceptHit]:
+def semantic_search(
+    index: VectorIndex, embedder: Embedder, query: str, k: int, part_weight: float = PART_WEIGHT
+) -> list[ConceptHit]:
     index.check(embedder)
     vector = embedder.embed_query(query)
-    return best_per_concept(index.search(vector, limit=min(len(index), k * OVERFETCH)), k)
+    hits = index.search(vector, limit=min(len(index), k * OVERFETCH))
+    return best_per_concept(hits, k, part_weight)
 
 
 def clear_caches() -> None:
