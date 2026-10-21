@@ -197,3 +197,14 @@ def test_index_length_is_read_once(real_index: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(index._table, "count_rows", forbidden, raising=False)
     assert len(index) == expected
     assert semantic.semantic_search(index, HashEmbedder(), "containers", 3)
+
+
+def test_index_and_model_failures_are_siblings_under_search_unavailable() -> None:
+    from brain.vectors import IndexModelMismatchError, IndexUnavailableError, SearchUnavailableError
+
+    assert issubclass(IndexUnavailableError, SearchUnavailableError)
+    assert issubclass(semantic.EmbedderUnavailableError, SearchUnavailableError)
+    assert issubclass(IndexModelMismatchError, IndexUnavailableError)
+    # A model failure is not an index failure, and the other way round.
+    assert not issubclass(semantic.EmbedderUnavailableError, IndexUnavailableError)
+    assert not issubclass(IndexUnavailableError, semantic.EmbedderUnavailableError)

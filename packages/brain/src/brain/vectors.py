@@ -23,8 +23,12 @@ METADATA_KEY = b"infra_atlas"
 INDEX_FORMAT = 1
 
 
-class IndexUnavailableError(Exception):
-    pass
+class SearchUnavailableError(Exception):
+    """Semantic search cannot answer right now. Subclasses say which part is missing."""
+
+
+class IndexUnavailableError(SearchUnavailableError):
+    """There is no readable vector index (or it does not fit the model)."""
 
 
 class IndexModelMismatchError(IndexUnavailableError):

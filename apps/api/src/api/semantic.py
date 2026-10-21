@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from brain.embeddings import LOCAL_MODEL, Embedder, ModelIntegrityError, embedder_from_env
-from brain.vectors import ChunkHit, IndexUnavailableError, VectorIndex, default_index_path
+from brain.vectors import ChunkHit, SearchUnavailableError, VectorIndex, default_index_path
 
 # Chunks fetched per requested concept: a concept can own several of the top chunks.
 OVERFETCH = 8
@@ -55,8 +55,8 @@ def get_index() -> VectorIndex:
     return _open_index(index_path())
 
 
-class EmbedderUnavailableError(IndexUnavailableError):
-    """The configured embedding provider could not be loaded."""
+class EmbedderUnavailableError(SearchUnavailableError):
+    """The configured embedding provider could not be loaded. Not an index failure."""
 
 
 # After a failed load, wait this long before trying again: /search and /ready (every few

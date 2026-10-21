@@ -40,7 +40,12 @@ from api.semantic import EmbedderUnavailableError, get_embedder, get_index, sema
 from api.settings import Settings
 from brain.embeddings import Embedder
 from brain.planner import UnknownRequirementError
-from brain.vectors import IndexModelMismatchError, IndexUnavailableError, VectorIndex
+from brain.vectors import (
+    IndexModelMismatchError,
+    IndexUnavailableError,
+    SearchUnavailableError,
+    VectorIndex,
+)
 
 REPO_MARKER = "pnpm-workspace.yaml"
 DEFAULT_GRAPH_RELATIVE = Path("apps/web/src/data/graph.json")
@@ -313,7 +318,7 @@ def _warm_up() -> None:
         index.check(model)
         model.embed_query("warm up")
         log.info("warm-up complete", extra={"chunks": len(index), "model": model.model})
-    except (GraphUnavailableError, IndexUnavailableError, EmbedderUnavailableError) as exc:
+    except (GraphUnavailableError, SearchUnavailableError) as exc:
         log.warning("warm-up incomplete", extra={"cause": str(exc)})
     except RuntimeError as exc:
         log.warning("warm-up failed", extra={"cause": f"{type(exc).__name__}: {exc}"})
