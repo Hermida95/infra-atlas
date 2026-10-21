@@ -1,0 +1,21 @@
+---
+id: buildcache
+title: "Build cache"
+type: pattern
+domain: cicd
+summary: "Dependencies and layers reused between runs, because a slow pipeline stops being run."
+level: intermediate
+access: free
+relations:
+  related: [layers, runner]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [27, 32]
+    text: "The embedding model is cached on the lockfile hash, so only a dependency change pays for the download."
+reviewed: 2026-10-21
+---
+
+Two caches matter. The dependency cache keys on the lockfile, so a run that changes no dependencies downloads nothing. The layer cache lets an image build reuse everything above the first instruction whose inputs changed.
+
+The trade-off is correctness. A cache keyed too loosely serves yesterday's bytes and hides a broken build, and a poisoned cache ends up inside a published image. That is why the job that builds what gets signed in this repo runs with caching turned off.

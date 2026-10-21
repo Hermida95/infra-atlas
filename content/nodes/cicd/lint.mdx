@@ -1,0 +1,25 @@
+---
+id: lint
+title: "Lint and format"
+type: tool
+domain: cicd
+summary: "Style and obvious mistakes, caught in seconds before anything runs."
+level: core
+access: free
+relations:
+  related: [tests]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [33, 34]
+    text: "Ruff checks and format checks run before the test suite, so a missing import fails in seconds."
+planner:
+  stage: ship
+  when: "true"
+  why: "The cheapest check in the pipeline, and it runs before the tests."
+reviewed: 2026-10-21
+---
+
+A linter reads the code without executing it and flags what it knows is wrong or inconsistent: an unused import, a mutable default argument, a branch that can never run. A formatter removes the question of style altogether by rewriting the file.
+
+In a pipeline they go first, because they are the cheapest signal available. Failing in twenty seconds on a typo beats failing on the same typo eight minutes later, after the test job has installed every dependency.

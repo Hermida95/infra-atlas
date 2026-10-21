@@ -1,0 +1,25 @@
+---
+id: signing
+title: "Signing"
+type: concept
+domain: cicd
+summary: "Proof that this exact image came out of this pipeline, from this commit."
+level: intermediate
+access: free
+relations:
+  related: [sbom, oidc]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/release.yml
+    lines: [100, 105]
+    text: "This repo signs its own API image with cosign, keyless: the identity is the OIDC token GitHub gives the job, so there is no private key to leak."
+planner:
+  stage: ship
+  when: "true"
+  why: "A consumer can verify the image came from this repo, not from a swapped tag."
+reviewed: 2026-10-21
+---
+
+Signing binds an artifact's digest to the identity that produced it. In keyless mode there is no private key to protect: the pipeline proves who it is with its OIDC token, and the signature and certificate are stored next to the image in the registry.
+
+Provenance goes one step further and records how the image was built: which workflow, which commit, which inputs. Together they answer the question a registry alone cannot. Not "is this image here", but "did we build it, and from what".

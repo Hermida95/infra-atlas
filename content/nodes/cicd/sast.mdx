@@ -1,0 +1,25 @@
+---
+id: sast
+title: "SAST"
+type: concept
+domain: cicd
+summary: "Scanning your own source for vulnerable patterns, without running it."
+level: intermediate
+access: free
+relations:
+  related: [sca, imagescan]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/security.yml
+    lines: [87, 108]
+    text: "CodeQL analyses the Python, the TypeScript and the workflows of this repo on every pull request."
+planner:
+  stage: ship
+  when: "true"
+  why: "Finds injection and unsafe patterns in the code you wrote, not in your dependencies."
+reviewed: 2026-10-21
+---
+
+Static application security testing builds a model of the code and queries it: user input reaching a shell command, a template rendered without escaping, a secret compared without a constant-time function. No execution, so it runs on every pull request.
+
+It trades false positives for coverage, and the way to keep it useful is to treat its findings as review comments rather than as a gate that everyone learns to click through.

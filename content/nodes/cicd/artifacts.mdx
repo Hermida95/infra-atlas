@@ -1,0 +1,25 @@
+---
+id: artifacts
+title: "Artifacts"
+type: concept
+domain: cicd
+summary: "What one job hands to the next, and what outlives the pipeline."
+level: core
+access: free
+relations:
+  related: [ecr, image]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [44, 47]
+    text: "The content job builds graph.json once; the web and image jobs download it instead of rebuilding."
+planner:
+  stage: ship
+  when: "true"
+  why: "Build once, then let every later stage use exactly what was built."
+reviewed: 2026-10-21
+---
+
+Jobs are isolated: each one gets its own runner, its own filesystem and nothing from the job before it. Anything that has to travel between them — a built image, a lockfile, a generated index — travels as an artifact.
+
+The artifacts that outlive the run are the ones that matter: the container image in a registry, a wheel on an index, a static bundle in a bucket. Everything downstream should consume one of those by digest, never rebuild its own copy.

@@ -1,0 +1,21 @@
+---
+id: matrix
+title: "Build matrix"
+type: pattern
+domain: cicd
+summary: "The same job, run across several versions or platforms at once."
+level: intermediate
+access: free
+relations:
+  related: [tests, runner]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/security.yml
+    lines: [87, 96]
+    text: "CodeQL runs once per language here, from a single job definition expanded by a matrix."
+reviewed: 2026-10-21
+---
+
+A matrix expands one job definition into one run per combination: two Python versions, two operating systems, each language a scanner has to analyse. They run in parallel, so the wall-clock cost stays close to one job, and each combination reports separately.
+
+The thing to watch is the combinatorics. Three dimensions with three values each is twenty-seven runners on every push. Most matrices want the short list of combinations you actually support, not the full product.
