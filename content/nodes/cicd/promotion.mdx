@@ -16,6 +16,6 @@ planner:
 reviewed: 2026-10-21
 ---
 
-Promotion means production runs the exact bytes that dev and staging ran, referenced by digest rather than by a tag somebody can move. Rebuilding per environment puts back every variable CI removed: a newer base image, a different transitive dependency, another build time.
+Promotion means prod runs the exact bytes that dev ran, referenced by digest rather than by a tag somebody can move. Rebuilding per environment puts back every variable CI removed: a newer base image, a different transitive dependency, another build time.
 
-What does change between environments is configuration, and it is injected when the container starts. If a build needs to know which environment it is for, the configuration has leaked into the artifact and the promotion no longer proves anything.
+What does change is the values each environment injects when the container starts. If a build needs to know which environment it is for, those values have leaked into the artifact and the promotion no longer proves anything.

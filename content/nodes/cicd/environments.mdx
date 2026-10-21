@@ -16,6 +16,6 @@ planner:
 reviewed: 2026-10-21
 ---
 
-An environment is a named place to run the artifact, with its own configuration, its own secrets and its own permissions. Keeping them apart is what lets a broken change be found by you instead of by your users.
+An environment is a named place to run the artifact, with its own credentials, its own data and its own permissions. Keeping them apart is what lets a broken change be found by you instead of by your users.
 
-The discipline is that only the configuration differs. If dev runs a different image, a different schema or a different code path, then passing in dev stops predicting anything about prod and the environments are decoration.
+The discipline is that only the injected values change, and they arrive as env variables at start-up. If dev runs a different image, a different schema or a different code path, then passing in dev stops predicting anything about prod and the environments are decoration.

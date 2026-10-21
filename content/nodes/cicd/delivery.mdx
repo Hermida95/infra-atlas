@@ -13,7 +13,7 @@ lead: "CI ends with an artifact that could ship. Delivery is everything between 
 parts:
   - name: "Environments"
     kind: lanes
-    text: "dev, staging, prod: the same artifact in each one, with its own configuration and its own blast radius."
+    text: "dev and prod: the same artifact in each one, with its own credentials and its own blast radius."
   - name: "Approval"
     kind: gate
     text: "The point where a person, or a policy, says yes before production changes."
