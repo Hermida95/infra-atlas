@@ -11,7 +11,7 @@ relations:
   part_of: [delivery]
 evidence:
   - path: .github/workflows/deploy.yml
-    lines: [438, 508]
+    lines: [440, 515]
     text: "This repo builds its API image once per commit and copies that one manifest into each environment's registry, so the digest prod runs is the digest dev ran and the digest CI signed; the copy asserts the digest did not change in transit."
 planner:
   stage: deliver
