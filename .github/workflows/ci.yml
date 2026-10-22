@@ -126,7 +126,9 @@ jobs:
   terraform:
     name: Terraform (fmt, validate, tflint, checkov)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The AWS provider is a ~180 MB download. With the cache below a run takes two or three
+    # minutes; the budget is for the run after a provider bump, which has to fetch it again.
+    timeout-minutes: 25
     env:
       # Downloaded and checksum-verified rather than installed by a third-party action: the
       # same reasoning as pinning every action by SHA (docs/SEGURIDAD.md). Bump the version
@@ -144,6 +146,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Keyed on the provider constraints, so a version bump in any versions.tf fetches the
+      # provider again and nothing else does. This job publishes nothing, so a stale or
+      # poisoned entry here could only make a lint result wrong, not ship anything.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.terraform-plugin-cache
+          key: terraform-providers-${{ hashFiles('infra/terraform/**/versions.tf') }}
+          restore-keys: terraform-providers-
 
       - name: Install Terraform and tflint
         run: |
