@@ -415,17 +415,22 @@ resource "aws_cloudfront_distribution" "web" {
     }
   }
 
-  # A private bucket returns 403, not 404, for a key that does not exist, so both map to the
-  # app's own 404 page. 404.html is what `next build` emits for App Router not-found.
+  # 403 only, and deliberately NOT 404, because a custom error response is configured per
+  # *distribution* and so applies to every behaviour -- including /api/*.
+  #
+  # The bucket policy below grants CloudFront s3:GetObject and nothing else: with no
+  # s3:ListBucket, S3 answers a missing key with 403 AccessDenied, never 404. So the pages
+  # path only ever needs the 403 mapping, and adding 404 bought the site nothing while
+  # swallowing the API's own 404 bodies: GET /api/nodes/nope returns
+  # {"detail": "no node 'nope'"} from apps/api (main.py), and CloudFront would replace that
+  # JSON with this HTML page. A client asking for JSON would get a web page instead.
+  #
+  # What this does not fix: a 403 from the API itself would still be rewritten. Nothing
+  # returns one today -- the API has no authentication -- but Cognito does in phase 3
+  # (decision 7), and at that point /api/* needs either its own distribution or a path that
+  # does not share this one. Noted in the PR rather than solved here.
   custom_error_response {
     error_code            = 403
-    response_code         = 404
-    response_page_path    = "/404.html"
-    error_caching_min_ttl = 60
-  }
-
-  custom_error_response {
-    error_code            = 404
     response_code         = 404
     response_page_path    = "/404.html"
     error_caching_min_ttl = 60

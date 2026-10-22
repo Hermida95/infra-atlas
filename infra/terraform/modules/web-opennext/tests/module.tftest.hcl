@@ -90,3 +90,16 @@ run "pages_behaviour_rewrites_directories_to_index_html" {
     error_message = "append-index.js must rewrite a directory URI to the index.html inside it."
   }
 }
+
+# A custom error response is per distribution, not per behaviour, so every code mapped here is
+# also mapped for /api/*. S3 returns 403 (not 404) for a missing key when the reader has no
+# s3:ListBucket, so 403 is the only one the pages path needs -- and mapping 404 as well would
+# replace the API's own JSON error bodies with this HTML page.
+run "only_403_is_mapped_to_the_404_page" {
+  command = plan
+
+  assert {
+    condition     = [for r in aws_cloudfront_distribution.web.custom_error_response : r.error_code] == [403]
+    error_message = "Map 403 and only 403: a 404 mapping also catches the API's own 404 bodies and serves them as HTML."
+  }
+}
