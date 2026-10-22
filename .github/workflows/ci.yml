@@ -123,3 +123,72 @@ jobs:
         if: failure()
         run: docker logs api || true
 
+  terraform:
+    name: Terraform (fmt, validate, tflint, checkov)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Downloaded and checksum-verified rather than installed by a third-party action: the
+      # same reasoning as pinning every action by SHA (docs/SEGURIDAD.md). Bump the version
+      # and the hash together; the hashes come from the publishers' own SHA256SUMS files.
+      TERRAFORM_VERSION: 1.14.4
+      TERRAFORM_SHA256: 4a24b18865d9419ba7882567cb7429dd1525b3e2029a9e38f612d476ba8c3dea
+      TFLINT_VERSION: 0.60.0
+      TFLINT_SHA256: 3476ceedcf0c4f9f2bed35e92988e1411bec2caa543c9387bffaa720df9efaf7
+      CHECKOV_VERSION: 3.2.489
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Terraform and tflint
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSLo "$tmp/terraform.zip" \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  $tmp/terraform.zip" | sha256sum -c -
+          curl -sSLo "$tmp/tflint.zip" \
+            "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip"
+          echo "${TFLINT_SHA256}  $tmp/tflint.zip" | sha256sum -c -
+          unzip -o -q "$tmp/terraform.zip" -d /usr/local/bin
+          unzip -o -q "$tmp/tflint.zip" -d /usr/local/bin
+          terraform version
+          tflint --version
+
+      # Formatting first: it is the cheapest failure and the one that makes every diff noisy.
+      - name: terraform fmt
+        run: terraform fmt -check -recursive infra/terraform
+
+      # -backend=false: no credentials, no state bucket, nothing to lock. validate type-checks
+      # the configuration and the wiring between modules; it never calls AWS.
+      - name: terraform validate
+        run: |
+          set -euo pipefail
+          for dir in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      - name: tflint
+        env:
+          # tflint downloads its AWS ruleset from GitHub releases; without a token the
+          # anonymous API rate limit is what fails the job, not the code.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tflint --chdir=infra/terraform --init
+          for dir in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
+            echo "::group::$dir"
+            tflint --chdir="$dir" --config="$PWD/infra/terraform/.tflint.hcl"
+            echo "::endgroup::"
+          done
+
+      # Decision 10: "escaneo del código Terraform (checkov)". Every accepted finding is a
+      # `checkov:skip` next to the resource with the reason on the line, so this job failing
+      # means something new and undocumented.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: checkov
+        run: uvx "checkov==${CHECKOV_VERSION}" --directory infra/terraform --framework terraform --compact --quiet

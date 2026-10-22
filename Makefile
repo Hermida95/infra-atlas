@@ -3,7 +3,7 @@ PNPM := COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm
 .PHONY: help install content embed dev api test lint typecheck build up down audit
 
 help: ## Show available targets
-	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
 
 install: ## Install Python and Node dependencies
 	uv sync --all-packages
@@ -73,3 +73,34 @@ k8s-deploy: embed ## Build the API image, load it into kind and install the Helm
 
 k8s-down: ## Delete the local kind cluster
 	kind delete cluster --name $(K8S_CLUSTER)
+
+# Terraform. Same tools and versions as the `terraform` job of .github/workflows/ci.yml, so a
+# green `make tf-check` means a green CI. tfvars and backend.hcl are never needed: validate
+# runs with -backend=false, so none of this touches AWS or the state bucket.
+TF_DIRS := infra/terraform/bootstrap $(wildcard infra/terraform/modules/*) $(wildcard infra/terraform/envs/*)
+TFLINT_CONFIG := $(CURDIR)/infra/terraform/.tflint.hcl
+CHECKOV_VERSION := 3.2.489
+
+.PHONY: tf-fmt tf-validate tf-lint tf-sec tf-check
+
+tf-fmt: ## Check Terraform formatting (terraform fmt -check -recursive)
+	terraform fmt -check -recursive infra/terraform
+
+tf-validate: ## Type-check every Terraform module and environment, without credentials
+	@for dir in $(TF_DIRS); do \
+		echo "==> $$dir"; \
+		terraform -chdir=$$dir init -backend=false -input=false >/dev/null || exit 1; \
+		terraform -chdir=$$dir validate || exit 1; \
+	done
+
+tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
+	tflint --chdir=infra/terraform --init
+	@for dir in $(TF_DIRS); do \
+		echo "==> $$dir"; \
+		tflint --chdir=$$dir --config=$(TFLINT_CONFIG) || exit 1; \
+	done
+
+tf-sec: ## Scan the Terraform for insecure and costly misconfiguration (checkov)
+	uvx checkov==$(CHECKOV_VERSION) --directory infra/terraform --framework terraform --compact --quiet
+
+tf-check: tf-fmt tf-validate tf-lint tf-sec ## All four Terraform checks, the same as CI
