@@ -56,6 +56,9 @@ resource "aws_s3_bucket_ownership_controls" "assets" {
   }
 }
 
+# Trivy's AWS-0132: a customer-managed key would be 1 USD/month to encrypt files that are
+# served to the public internet by the next resource down.
+#trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   bucket = aws_s3_bucket.assets.id
 
@@ -270,6 +273,8 @@ resource "aws_cloudfront_function" "strip_api_prefix" {
   code    = file("${path.module}/functions/strip-api-prefix.js")
 }
 
+# Trivy's AWS-0011 is checkov's CKV_AWS_68: no WAF. See the reason inside the block.
+#trivy:ignore:AVD-AWS-0011
 resource "aws_cloudfront_distribution" "web" {
   # checkov:skip=CKV_AWS_374:No geo restriction. The atlas is public technical writing in
   # English for a European job market; blocking countries would hide it from its readers.

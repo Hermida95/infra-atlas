@@ -118,11 +118,33 @@ touches the state bucket.
 | Syntax, types, module wiring | `terraform init -backend=false` + `terraform validate` in all 7 directories |
 | Terraform and AWS lint | `tflint` with the AWS ruleset |
 | Security and cost misconfiguration | `checkov`, 0 failures, every skip carrying a reason |
+| The same, by a second scanner | `trivy --scanners misconfig`, which `security.yml` already runs over the whole repo |
 | **Nothing else** | There is no AWS account. Nothing here has ever been applied. |
 
 `validate` type-checks a plan; it does not call AWS. It cannot tell you that an IAM condition
 key is spelled right, that a metric name exists, or that a quota allows what you asked for.
 The open questions are listed in the pull request that added this directory.
+
+## Two scanners, two ignore files
+
+`checkov` and `trivy` both read this Terraform, and they disagree about what counts as a
+finding -- which is the point of running both. They also accept an exception in different
+places, so an accepted trade-off is written twice:
+
+| Scanner | Where the exception goes | Scope |
+| --- | --- | --- |
+| checkov | `# checkov:skip=CKV_AWS_68:reason`, **inside** the resource block | that resource |
+| trivy | `#trivy:ignore:AVD-AWS-0011`, on the line **above** `resource` | that resource |
+
+Both are per-resource on purpose. Trivy would also accept an id in the repo's `.trivyignore`,
+and that is where accepted **image CVEs** go ([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)),
+but an id there silences the rule for every future resource as well -- including the one
+somebody adds next year without the same reason to be sure.
+
+The exceptions that exist today, and all of them are the same decision seen from four angles:
+no customer-managed KMS key (1 USD/month per key, on buckets and a topic that hold no
+secrets), and no WAF (~5 USD/month before the first visitor). The reason is on the line in
+every case.
 
 ## Provider lock files
 

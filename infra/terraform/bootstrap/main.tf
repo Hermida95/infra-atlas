@@ -55,6 +55,10 @@ resource "aws_s3_bucket_versioning" "state" {
 # aws:kms with no key id means the AWS-managed aws/s3 key: no monthly key charge, unlike a
 # customer-managed key (1 USD/month each). bucket_key_enabled uses one data key per bucket
 # instead of one per object, which cuts the KMS request bill to almost nothing.
+# Trivy's AWS-0132 asks for a customer-managed key here. Same answer as the comment above:
+# a CMK is 1 USD/month, a fifth of the whole budget, to encrypt a state file that holds no
+# secrets. Trivy reads this directive; checkov reads the ones inside the resource blocks.
+#trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 

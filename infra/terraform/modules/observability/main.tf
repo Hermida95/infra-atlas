@@ -23,6 +23,9 @@ data "aws_caller_identity" "current" {}
 # alias/aws/sns is the AWS-managed key: encryption at rest with no monthly key charge. A
 # customer-managed key would cost 1 USD/month, a fifth of the budget, to protect "your bill
 # went over 5 euros".
+# Trivy's AWS-0136 wants a customer-managed key on the topic. The topic carries "your bill
+# went over 5 euros"; the key would cost 1 USD/month, which is a fifth of that budget.
+#trivy:ignore:AVD-AWS-0136
 resource "aws_sns_topic" "alerts" {
   name              = "${local.name}-alerts"
   display_name      = "Infra Atlas ${var.environment}"
