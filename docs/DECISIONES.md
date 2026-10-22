@@ -165,6 +165,32 @@ Comprobado contra el repo el 2026-10-21. Las decisiones de abajo son el **diseñ
 - Escaneo de la imagen Docker (trivy) y del código Terraform (checkov).
 - Contenido `pro` excluido de la compilación estática.
 
+### 11. Multinube: el contenido se organiza por capacidad, no por proveedor
+Aceptada el 2026-10-21. Plan de ejecución: [PLAN-CICD-MULTICLOUD.md](PLAN-CICD-MULTICLOUD.md), fases 2 a 5.
+
+- **Opciones valoradas:** seguir solo con AWS; una ficha por servicio y nube (`s3`, `blob`, `gcs` como tres fichas completas e independientes); separar **capacidad** (ficha neutra) de **servicio** (ficha por nube).
+- **Elegida y motivo:** capacidad + proveedor. El concepto *"almacenamiento de objetos"* es el mismo en las tres nubes: la explicación, el `lead`, el teardown 3D y la regla `planner` viven una sola vez en la ficha de capacidad, y cada nube aporta una ficha corta (`provider: aws`, `capability: objectstore`) con su nombre, sus límites y lo que cambia.
+  - El planificador razona en capacidades: **una sola regla `when` sirve para los tres proveedores**. Elegir nube no cambia la ruta, cambia la etiqueta de cada parada.
+  - El proveedor **no** es un `requirement`: se filtra antes de evaluar la expresión (`provider is None or provider == seleccionado`). La gramática de `when` no se toca y `content/planner-cases.yaml` sigue siendo válido sin editarlo.
+  - `alternative_to` se deriva de la capacidad en vez de escribirse a mano, y aparece gratis la vista comparativa (el tipo de nodo `comparison`, hoy sin usar).
+  - Fuentes de verdad nuevas: `content/providers.yaml` y `content/capabilities.yaml`. `brain coverage` imprime la matriz capacidad × proveedor y falla en CI si un proveedor declarado como cubierto tiene huecos en el núcleo.
+- **Qué se pierde / riesgo:** el alcance, que es el riesgo nº 1 del proyecto. Tres nubes completas son más de 60 fichas de servicio. Se mitiga con un **núcleo de 14 capacidades** por nube y un `status` por proveedor (`full` / `core` / `planned`) que la interfaz enseña tal cual, en vez de ofrecer un selector que lleva a un mapa medio vacío. Riesgo menor: el grafo entero viaja hoy en el bundle de la web (`import data from "@/data/graph.json"`); con posiciones por proveedor hay que medirlo y, si crece, pasar a `fetch` por nube.
+- **Qué no incluye:** desplegar nada en Azure o GCP. El atlas **enseña** tres nubes; el proyecto se **despliega** en una. No habrá Terraform ni estado remoto para las otras dos.
+- **Cuándo revisarla:** si el núcleo de Azure no se cubre en un plazo razonable, replegar a "AWS con notas comparativas" en vez de sostener tres mapas a medias.
+
+### 12. CI/CD como parada de primera clase del viaje
+Aceptada el 2026-10-21. Plan de ejecución: [PLAN-CICD-MULTICLOUD.md](PLAN-CICD-MULTICLOUD.md), fases 1 y 6. Es el contenido que corresponde a la infraestructura ya decidida en el punto 9.
+
+- **Opciones valoradas:** dejar CI/CD como está (tres fichas y una etapa `ship`); ampliar solo con fichas de integración continua; modelar también la entrega continua con etapa propia.
+- **Elegida y motivo:** etapa nueva `deliver` entre `ship` y `observe`, y dos hubs en el dominio `cicd`.
+  - `ship` queda como **integración continua**: construir, probar, escanear, firmar y publicar el artefacto.
+  - `deliver` es **entrega continua**: entornos, aprobación manual, promoción del mismo artefacto, estrategia de despliegue (blue/green, canary, rolling), verificación post-despliegue, migraciones y rollback.
+  - Se añade `deliver` en vez de renombrar `ship` a `ci`/`cd`: renombrar toca los casos dorados, la API, la web y el prototipo sin ganar nada.
+  - Un solo dominio `cicd` con los hubs `pipeline` y `delivery`. Partirlo en dos dominios obligaría a recolocar posiciones en el espacio 3D y a rehacer el equilibrio visual del mapa.
+  - Campo nuevo `evidence` (fichero, rango de líneas y una frase): cada ficha enlaza con el código real del repo que la demuestra. `brain validate` comprueba que la línea existe, así que **borrar código rompe el CI del contenido**. Es el principio rector ("el proyecto se despliega siguiendo el viaje que enseña") hecho comprobable, y en CI/CD las pruebas ya están escritas: pinning por SHA, trivy, cosign, SBOM, CodeQL y zizmor.
+- **Qué se pierde / riesgo:** el dominio pasa de 3 fichas a unas 25 y se vuelve el más denso del mapa; hay que vigilar que no se apelmace. La etapa nueva obliga a regenerar `content/planner-cases.yaml` y a comprobar las tres suites (Python, API y web) a la vez. `evidence` crea una dependencia entre contenido y código que puede romper el CI en un refactor: es el efecto buscado, pero conviene que los rangos de líneas sean generosos.
+- **Cuándo revisarla:** si el dominio supera las 30 fichas, partirlo en `ci` y `cd` con posiciones 3D propias.
+
 ## Coste mensual estimado
 | Concepto | Estimación | Verificado |
 |---|---|---|
