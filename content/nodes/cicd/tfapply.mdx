@@ -10,9 +10,9 @@ relations:
   related: [terraform, tfplan]
   part_of: [delivery]
 evidence:
-  - path: .github/workflows/security.yml
-    lines: [54, 67]
-    text: "There is no apply job here yet, because infra/terraform is still empty. The gate that does run reviews the infrastructure this repo already has: Trivy checks the Helm chart, the Dockerfile and the workflows for misconfiguration on every pull request."
+  - path: .github/workflows/deploy.yml
+    lines: [328, 345]
+    text: "The apply job of this repo declares a GitHub environment, and that is the gate: the role it needs only trusts the subject repo:<owner>/<repo>:environment:<name>, so removing the line does not skip the approval, it makes the credentials unobtainable."
 planner:
   stage: deliver
   when: "true"
