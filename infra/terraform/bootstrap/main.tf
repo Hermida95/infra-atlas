@@ -28,6 +28,8 @@ locals {
 # Private, versioned, encrypted, TLS-only. Public access is blocked at the bucket level *and*
 # by the account-level setting; both are cheap and the bucket holds every resource id, name and
 # non-sensitive attribute of the whole deployment.
+# AWS-0089 is checkov's CKV_AWS_18: no server access logging. Reason inside the block.
+#trivy:ignore:AVD-AWS-0089
 resource "aws_s3_bucket" "state" {
   # checkov:skip=CKV_AWS_18:Server access logging needs a second bucket whose own storage and
   # request costs are billed forever. CloudTrail data events on this one bucket are the cheaper
