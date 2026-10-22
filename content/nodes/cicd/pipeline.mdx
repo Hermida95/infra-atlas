@@ -1,0 +1,36 @@
+---
+id: pipeline
+title: "Pipeline"
+type: concept
+domain: cicd
+hub: true
+summary: "The path a commit takes from push to a published artifact."
+level: core
+access: free
+relations:
+  related: [gha, runner, artifacts, lint, tests, sbom, signing, delivery]
+lead: "A pipeline is not one long script. It is a trigger, jobs that run in parallel, gates that can stop everything, and one artifact at the end."
+parts:
+  - name: "Trigger"
+    kind: trigger
+    text: "The event that starts the run: a push, a pull request, a schedule or a manual dispatch."
+  - name: "Jobs"
+    kind: jobs
+    text: "Isolated units of work, each on its own machine. They run in parallel unless one declares it needs another."
+  - name: "Gate"
+    kind: gate
+    text: "The checks that have to pass. A red test here is a pipeline that never publishes anything."
+  - name: "Artifact"
+    kind: discs
+    text: "What survives the run: an image, a wheel, a bundle. Everything else is thrown away with the runner."
+layout: row
+planner:
+  stage: ship
+  when: "true"
+  why: "Every change takes the same path from push to artifact."
+reviewed: 2026-10-21
+---
+
+Continuous integration means every commit is built and verified on a shared machine, not only on the laptop that wrote it. The pipeline is where that happens, and its only product is an artifact that the delivery side can deploy.
+
+Two properties make it worth trusting. It starts from a clean checkout every time, so nothing left over on somebody's machine can make it pass. And it is the same pipeline for every branch, so the main branch has no privileges the pull request did not already exercise.

@@ -1,0 +1,25 @@
+---
+id: tfapply
+title: "Plan on PR, apply on merge"
+type: howto
+domain: cicd
+summary: "Terraform plan posted on the pull request, apply on merge, with a human reading the diff in between."
+level: intermediate
+access: free
+relations:
+  related: [terraform, tfplan]
+  part_of: [delivery]
+evidence:
+  - path: .github/workflows/security.yml
+    lines: [54, 67]
+    text: "There is no apply job here yet, because infra/terraform is still empty. The gate that does run reviews the infrastructure this repo already has: Trivy checks the Helm chart, the Dockerfile and the workflows for misconfiguration on every pull request."
+planner:
+  stage: deliver
+  when: "true"
+  why: "Infrastructure changes are reviewed as a diff against reality before anything is applied."
+reviewed: 2026-10-21
+---
+
+The shape is always the same. On a pull request, a job runs a plan with read-only credentials and posts it as a comment, so the review is of a diff against real infrastructure rather than of the HCL alone. On merge, a second job applies it with write credentials, from a protected environment that requires an approval.
+
+Credentials come from OIDC, so there is no access key to store, and only the apply job can write. The failure this avoids is the classic one: a destroy hidden inside a refactor, approved because nobody read a plan.

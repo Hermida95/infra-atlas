@@ -1,0 +1,25 @@
+---
+id: artifacts
+title: "Build artifacts"
+type: concept
+domain: cicd
+summary: "What one job hands to the next, and what the pipeline keeps when it ends."
+level: core
+access: free
+relations:
+  related: [ecr, image]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [44, 47]
+    text: "The content job builds graph.json once; the web and image jobs download it instead of rebuilding."
+planner:
+  stage: ship
+  when: "true"
+  why: "Build once, then let every later stage use exactly what was built."
+reviewed: 2026-10-21
+---
+
+Jobs are isolated: each one gets its own machine, its own filesystem and nothing from the job before it. Anything that has to travel between them — a lockfile, a generated index, a compiled bundle — travels as an artifact, uploaded by one job and downloaded by the next.
+
+What the pipeline keeps when it ends is a smaller set, with a retention window and a size budget: the files a reviewer may need to open later, and the handle to whatever the registry now stores. Later stages refer to that handle by digest instead of building their own.

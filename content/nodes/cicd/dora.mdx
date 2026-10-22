@@ -1,0 +1,21 @@
+---
+id: dora
+title: "DORA metrics"
+type: concept
+domain: cicd
+summary: "Four numbers that say whether your delivery is getting better or worse."
+level: intermediate
+access: free
+relations:
+  related: [grafana]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "scale"
+  why: "Speed and stability measured together, so neither one can hide the other."
+reviewed: 2026-10-21
+---
+
+Deployment frequency and lead time for changes measure how fast work reaches users. Change failure rate and time to restore measure what that speed costs. Having all four is the point: each pair keeps the other honest, because shipping less often improves the failure rate and makes everything else worse.
+
+They are a thermometer, not a target. Read per team and as a trend they show where delivery hurts; turned into a goal they are trivially gamed, by splitting deploys and by calling incidents something else.

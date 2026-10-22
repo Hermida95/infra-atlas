@@ -31,6 +31,9 @@ reviewed: 2026-10-20
 """
 
 
+EVIDENCE = {"path": ".github/workflows/release.yml", "lines": [100, 105], "text": "Signed here."}
+
+
 def docker_data() -> dict:
     return yaml.safe_load(DOCKER_FRONTMATTER)
 
@@ -43,6 +46,12 @@ def test_accepts_docker_like_frontmatter() -> None:
     assert meta.relations.requires == []
     assert [part.kind for part in meta.parts] == ["os", "rw"]
     assert meta.reviewed == date(2026, 10, 20)
+
+
+def test_accepts_evidence_pointing_at_the_repo() -> None:
+    meta = NodeFrontmatter.model_validate(docker_data() | {"evidence": [EVIDENCE]})
+
+    assert meta.evidence[0].lines == (100, 105)
 
 
 def test_applies_defaults() -> None:
@@ -64,6 +73,15 @@ def test_applies_defaults() -> None:
         pytest.param(lambda d: d.update(summary="x" * 201), id="summary-too-long"),
         pytest.param(lambda d: d.update(monogram="ecrx"), id="bad-monogram"),
         pytest.param(lambda d: d.pop("reviewed"), id="missing-reviewed"),
+        pytest.param(
+            lambda d: d.update(evidence=[EVIDENCE | {"lines": [9, 2]}]), id="lines-reversed"
+        ),
+        pytest.param(
+            lambda d: d.update(evidence=[EVIDENCE | {"lines": [0, 2]}]), id="lines-not-1-based"
+        ),
+        pytest.param(
+            lambda d: d.update(evidence=[EVIDENCE | {"lines": [1]}]), id="lines-not-a-range"
+        ),
     ],
 )
 def test_rejects_invalid_frontmatter(mutate) -> None:

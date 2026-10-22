@@ -44,11 +44,14 @@ class ValidationReport:
         return not self.errors
 
 
-def validate_content(content_dir: Path, today: date | None = None) -> ValidationReport:
+def validate_content(
+    content_dir: Path, today: date | None = None, repo_root: Path | None = None
+) -> ValidationReport:
     loaded = load_content(content_dir)
     issues = [Issue(error.path, error.message) for error in loaded.errors]
     issues += check_domains(loaded.domains, content_dir / DOMAINS_FILE)
     issues += check_nodes(loaded.nodes, loaded.domains, today or date.today())
+    issues += check_evidence(loaded.nodes, repo_root or content_dir.parent)
     requirements_path = content_dir / REQUIREMENTS_FILE
     issues += check_requirements(loaded.requirements, requirements_path)
     issues += check_planner_rules(loaded.nodes, loaded.requirements, requirements_path)
@@ -112,10 +115,49 @@ def _check_node(
     if meta.lab and not meta.parts:
         issues.append(Issue(path, f"lab '{meta.lab}' requires non-empty parts"))
 
+    rule = meta.planner
+    if (
+        rule is not None
+        and rule.stage == "deliver"
+        and not (meta.relations.part_of or meta.relations.related)
+    ):
+        issues.append(
+            Issue(path, "a deliver node needs a part_of or a related, or it is an orphan")
+        )
+
     if today - meta.reviewed > STALE_AFTER:
         issues.append(
             Issue(path, f"not reviewed since {meta.reviewed.isoformat()}", severity="warning")
         )
+    return issues
+
+
+def check_evidence(nodes: Sequence[Node], repo_root: Path) -> list[Issue]:
+    """Every `evidence` entry points at a file in the repo and at lines that still exist."""
+    issues: list[Issue] = []
+    for node in nodes:
+        for index, evidence in enumerate(node.meta.evidence):
+            location = f"evidence[{index}]"
+            target = Path(evidence.path)
+            if target.is_absolute() or ".." in target.parts:
+                issues.append(
+                    Issue(node.source, f"{location}: '{evidence.path}' is not a repo-relative path")
+                )
+                continue
+            resolved = repo_root / target
+            if not resolved.is_file():
+                issues.append(Issue(node.source, f"{location}: no such file '{evidence.path}'"))
+                continue
+            length = len(resolved.read_text(encoding="utf-8", errors="replace").splitlines())
+            first, last = evidence.lines
+            if last > length:
+                issues.append(
+                    Issue(
+                        node.source,
+                        f"{location}: lines {first}-{last} fall outside "
+                        f"'{evidence.path}' ({length} lines)",
+                    )
+                )
     return issues
 
 

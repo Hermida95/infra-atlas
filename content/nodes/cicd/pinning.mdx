@@ -1,0 +1,25 @@
+---
+id: pinning
+title: "SHA pinning"
+type: pattern
+domain: cicd
+summary: "Third-party actions pinned to a commit, because a version tag can be moved."
+level: intermediate
+access: free
+relations:
+  related: [signing, gha]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [22, 25]
+    text: "Every action this repo uses is pinned to a full commit SHA, with the human-readable version in a trailing comment that Dependabot keeps current."
+planner:
+  stage: ship
+  when: "true"
+  why: "A mutable tag on a third-party action is a way into your pipeline."
+reviewed: 2026-10-21
+---
+
+A pipeline runs other people's code next to your repository and your cloud credentials. An action referenced by a version tag resolves to whatever commit that tag points at today, and tags are mutable: the maintainer can move one, and so can whoever takes over the account.
+
+Pinning to a full commit SHA freezes the exact tree that runs, and the version goes in a trailing comment so the line is still readable. It is the cheapest supply-chain control available in CI, and the one most pipelines skip.

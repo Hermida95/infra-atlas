@@ -1,0 +1,21 @@
+---
+id: migrations
+title: "Database migrations"
+type: pattern
+domain: cicd
+summary: "The hard part of a release: the database does not roll back with the deploy."
+level: advanced
+access: free
+relations:
+  related: [rds, rollback]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "sql"
+  why: "The database does not roll back with the deploy."
+reviewed: 2026-10-21
+---
+
+Code can be swapped for the previous version in seconds. A schema change cannot: the old code may not understand the new column, and everything written since the change is already in the new shape.
+
+The way out is to make every migration backwards compatible for one release. Add the column, deploy code that writes both, backfill, deploy code that reads the new one, and only then drop the old one. Four boring deploys instead of one exciting one, and a safe rollback at every step.
