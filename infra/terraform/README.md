@@ -85,15 +85,26 @@ touches the state bucket.
 
    # push the lambda target of apps/api/Dockerfile into it
    make embed
-   docker build -f apps/api/Dockerfile --target lambda -t "$(terraform output -raw ecr_repository_url):bootstrap" .
    aws ecr get-login-password | docker login --username AWS --password-stdin "$(terraform output -raw ecr_repository_url)"
-   docker push "$(terraform output -raw ecr_repository_url):bootstrap"
+
+   # --platform linux/amd64 is not optional on an Apple Silicon machine. Without it docker
+   # builds for the host, so an arm64 image lands in a registry a function declared
+   # architectures = ["x86_64"] pulls from; the apply succeeds and the first invocation
+   # fails with `exec format error`.
+   #
+   # --provenance=false keeps buildx from wrapping the result in an OCI index with an
+   # attestation manifest beside the image. Lambda wants a plain single-platform manifest
+   # and refuses the index with "The image manifest, config or layer media type ... is not
+   # supported".
+   docker buildx build -f apps/api/Dockerfile --target lambda \
+     --platform linux/amd64 --provenance=false \
+     -t "$(terraform output -raw ecr_repository_url):bootstrap" --push .
 
    # step 2: everything, with api_image_uri set to the digest that push printed
    terraform apply
    ```
 
-   Every later apply is one step: `deploy.yml` builds, pushes and passes the new digest.
+   Every later apply is one step: `deploy.yml` promotes a digest and passes it in.
 4. **`envs/prod`** — the same, and then confirm the SNS subscription emails. An unconfirmed
    subscription is the usual reason an alarm "did not fire".
 
