@@ -1,0 +1,21 @@
+---
+id: canary
+title: "Canary release"
+type: pattern
+domain: cicd
+summary: "A slice of real traffic hits the new version first, and the slice only grows if the metrics hold."
+level: advanced
+access: free
+relations:
+  related: [bluegreen, cloudwatch]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "scale or global"
+  why: "Sends a slice of traffic to the new version first, and watches what happens."
+reviewed: 2026-10-21
+---
+
+A canary routes a small percentage of requests to the new version and compares the two on error rate, latency and saturation. If the new one looks worse the slice goes back to zero; if it holds, the slice grows until the old version is idle.
+
+It is the only strategy that tests a release against real traffic before that release owns all of it, and it needs the most machinery: traffic splitting, metrics labelled per version, and something that decides. Without the metrics it is just a slow deploy.

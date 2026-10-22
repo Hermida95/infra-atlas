@@ -99,6 +99,39 @@ def test_stale_review_is_a_warning(content_dir: Path, write_node) -> None:
     assert [w.message for w in report.warnings] == ["not reviewed since 2025-01-01"]
 
 
+def test_evidence_must_point_at_lines_that_exist(content_dir: Path, write_node) -> None:
+    workflow = content_dir.parent / ".github" / "release.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("one\ntwo\nthree\n")
+    evidence = {"path": ".github/release.yml", "lines": [1, 3], "text": "How this repo signs."}
+    write_node("docker", evidence=[evidence])
+    write_node("image", evidence=[evidence | {"lines": [2, 9]}])
+    write_node("layers", evidence=[evidence | {"path": ".github/gone.yml"}])
+
+    assert messages(validate_content(content_dir, today=TODAY)) == [
+        "evidence[0]: lines 2-9 fall outside '.github/release.yml' (3 lines)",
+        "evidence[0]: no such file '.github/gone.yml'",
+    ]
+
+
+def test_evidence_path_cannot_escape_the_repo(content_dir: Path, write_node) -> None:
+    write_node("docker", evidence=[{"path": "../keys.env", "lines": [1, 1], "text": "Nope."}])
+
+    assert messages(validate_content(content_dir, today=TODAY)) == [
+        "evidence[0]: '../keys.env' is not a repo-relative path"
+    ]
+
+
+def test_deliver_node_without_relations_is_an_orphan(content_dir: Path, write_node) -> None:
+    rule = {"stage": "deliver", "when": "true", "why": "Go back to the previous version."}
+    write_node("rollback", planner=rule)
+    write_node("canary", planner=rule, relations={"part_of": ["rollback"]})
+
+    assert messages(validate_content(content_dir, today=TODAY)) == [
+        "a deliver node needs a part_of or a related, or it is an orphan"
+    ]
+
+
 def test_real_content_has_no_errors() -> None:
     content = find_repo_root(Path(__file__).parent) / "content"
 

@@ -4,12 +4,12 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Mark } from "@/components/brain/Mark";
 import { Header } from "@/components/Header";
-import { conceptBody, sourceUrl } from "@/lib/content";
+import { conceptBody, evidenceSnippet, evidenceUrl, sourceUrl } from "@/lib/content";
 import { domainById, graph, neighbours, nodeById } from "@/lib/graph";
 import { STAGE_LABEL } from "@/lib/planner";
 import { readableRule } from "@/lib/rule";
 
-// Every concept page is fully static: generateStaticParams prerenders all 53 ids at build time
+// Every concept page is fully static: generateStaticParams prerenders every id at build time
 // and ensureStatic makes Next.js fail the build if anything request-time sneaks in later.
 // That is also what makes navigating between concepts instant. Unknown ids hit notFound().
 export const ensureStatic = "navigation";
@@ -130,6 +130,29 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
               {n.text}
             </p>
           ))}
+        </section>
+      )}
+
+      {node.evidence.length > 0 && (
+        <section>
+          <h2>Proof in this repo</h2>
+          <p className="section-lead">
+            This project deploys itself along the journey it teaches. These lines run in CI today,
+            and <code>brain validate</code> fails the build if they move or disappear.
+          </p>
+          <ul className="evidence">
+            {node.evidence.map((e) => (
+              <li key={`${e.path}:${e.lines[0]}`}>
+                <p>{e.text}</p>
+                <pre>
+                  <code>{evidenceSnippet(e)}</code>
+                </pre>
+                <a href={evidenceUrl(e)} target="_blank" rel="noreferrer">
+                  {e.path}:{e.lines[0]}-{e.lines[1]}
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

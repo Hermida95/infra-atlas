@@ -1,0 +1,25 @@
+---
+id: sca
+title: "Dependency scanning"
+type: concept
+domain: cicd
+summary: "Checking the libraries you depend on against known vulnerabilities."
+level: core
+access: free
+relations:
+  related: [sast, imagescan]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/security.yml
+    lines: [20, 30]
+    text: "pip-audit runs against exactly what the image installs: the locked runtime dependencies, without dev tools."
+planner:
+  stage: ship
+  when: "true"
+  why: "Most of the code you ship is somebody else's, and it is where the known CVEs are."
+reviewed: 2026-10-21
+---
+
+Software composition analysis reads your lockfile and compares it with vulnerability databases. It is the highest-yield security check in a pipeline, because most of the lines you deploy were written by somebody else and the problems in them are already public.
+
+Run it against the locked set the artifact actually installs, not the loose ranges in your manifest, and pair it with something that opens the upgrade pull request for you. A report nobody acts on is not a control.

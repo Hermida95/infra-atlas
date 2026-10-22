@@ -1,0 +1,21 @@
+---
+id: gitops
+title: "GitOps"
+type: pattern
+domain: cicd
+summary: "The repository holds the desired state and the cluster pulls it, instead of CI pushing."
+level: advanced
+access: free
+relations:
+  related: [kubernetes, helm]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "k8s"
+  why: "The cluster pulls its desired state from git instead of CI pushing into it."
+reviewed: 2026-10-21
+---
+
+In a push model, CI holds credentials for the cluster and runs the deploy. In GitOps an agent inside the cluster — Argo CD, Flux — watches a repository and continuously reconciles what is running with what is declared there.
+
+Two things follow. Cluster credentials never leave the cluster, so a compromised pipeline cannot deploy. And drift becomes visible: anything changed by hand is reverted on the next reconcile, or flagged, instead of quietly surviving until the next release.

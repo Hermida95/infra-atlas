@@ -12,7 +12,9 @@ planner:
   stage: containerize
   when: "true"
   why: "The versioned artifact you deploy."
-reviewed: 2026-10-20
+reviewed: 2026-10-22
 ---
 
-A read-only, versioned stack of layers. The thing you ship.
+An image is immutable. Once built it never changes, and what you publish to a registry is addressed by a digest that moves the moment a single byte does. Tags are labels you can repoint at will; the digest is the identity, and it is what a deployment should name.
+
+Starting one does not modify it. Each container is a thin writable layer on top of the same read-only stack, so a single published image can be running a hundred times, on a laptop and in production at once, and every one of them is a copy of exactly the same thing.

@@ -1,0 +1,25 @@
+---
+id: imagescan
+title: "Image scanning"
+type: concept
+domain: cicd
+summary: "Scanning the built image, because the base layer ships code your lockfile never mentions."
+level: core
+access: free
+relations:
+  related: [sbom, image]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [110, 121]
+    text: "Trivy scans the API image on every pull request and fails on HIGH or CRITICAL findings that have a fix."
+planner:
+  stage: ship
+  when: "true"
+  why: "The base image brings OS packages that no lockfile of yours lists."
+reviewed: 2026-10-21
+---
+
+Dependency scanning covers what you declared. An image also contains a base operating system, its package manager and whatever that brings in, and those are where a long-lived image rots: the code never changed, but the CVE count climbs every week.
+
+Fail the build on high severity findings that have a fix available, and keep an explicit ignore file for the ones you have assessed and accepted. Both halves matter: without the first the scan is decorative, without the second it blocks on things nobody can fix.

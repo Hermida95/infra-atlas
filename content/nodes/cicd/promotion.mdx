@@ -1,0 +1,21 @@
+---
+id: promotion
+title: "Promotion"
+type: pattern
+domain: cicd
+summary: "The same artifact moves up through the environments; it is never rebuilt per environment."
+level: intermediate
+access: free
+relations:
+  related: [artifacts, ecr]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "true"
+  why: "What you tested in dev reaches prod unchanged, down to the digest."
+reviewed: 2026-10-21
+---
+
+Promotion means prod runs the exact bytes that dev ran, referenced by digest rather than by a tag somebody can move. Rebuilding per environment puts back every variable CI removed: a newer base image, a different transitive dependency, another build time.
+
+What does change is the values each environment injects when the container starts. If a build needs to know which environment it is for, those values have leaked into the artifact and the promotion no longer proves anything.

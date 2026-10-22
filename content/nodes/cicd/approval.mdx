@@ -1,0 +1,21 @@
+---
+id: approval
+title: "Approval gate"
+type: pattern
+domain: cicd
+summary: "The manual gate: a person says yes before production changes."
+level: core
+access: free
+relations:
+  related: [environments, tfapply]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "true"
+  why: "Somebody signs off before a change reaches production."
+reviewed: 2026-10-21
+---
+
+An approval gate pauses the pipeline between "the artifact is ready" and "it is in production". In GitHub Actions it is an environment with required reviewers: the job waits there until somebody with the right role approves it, and who approved what is recorded.
+
+It is not a substitute for tests, and it goes stale fast if it becomes a rubber stamp on twenty deploys a day. Its real value is on the changes nothing can test for you: an apply that would destroy a database, a migration that is not reversible, a release at the end of a Friday.
