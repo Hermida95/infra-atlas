@@ -42,6 +42,12 @@ services:
       # Bind mounts do not deliver inotify events on every host (notably macOS and Windows),
       # and without this the dev server silently stops reloading.
       WATCHPACK_POLLING: "true"
+    # The container runs as uid 1000 (the image's `node` user, see apps/web/Dockerfile), and
+    # the dev server writes generated files back into the bind mount below -- graph.json,
+    # logos.json, the Next.js cache. On Linux the first user is usually uid 1000 too, so this
+    # lines up; Docker Desktop on macOS and Windows maps ownership for you. If you get
+    # permission errors on the mounted tree, export UID and GID and add:
+    #   user: "${UID}:${GID}"
     volumes:
       # The working tree, so an edit on the host reloads in the browser. graph.json and
       # logos.json are generated into it by `make up`, which runs `make embed` first.
