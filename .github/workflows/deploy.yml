@@ -313,9 +313,15 @@ jobs:
   # and expensive to reason about. "The image is whatever this commit builds" needs no state
   # and no lookup; "reuse the digest already deployed" needs both, and reading it back out of
   # an environment's registry is how the two environments drifted apart in the first place.
+  # Deliberately NOT gated on the AWS variables, unlike the two jobs around it. Publishing a
+  # signed image needs GHCR, not AWS, and `release.yml` lost its own `push` trigger when it
+  # became reusable -- so gating this too would mean a merge to main publishes nothing at all
+  # until somebody creates an AWS account. docs/SEGURIDAD.md and docs/K8S.md both tell the
+  # reader to `cosign verify ghcr.io/<owner>/infra-atlas-api@sha256:...` and deploy that digest
+  # with Helm, and that path has to keep working on a repo with no cloud behind it.
   image:
     name: Build, scan and sign the API image
-    if: github.event_name != 'pull_request' && vars.AWS_REGION != '' && vars.TF_STATE_BUCKET != ''
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write # push to ghcr.io/<owner>/infra-atlas-api
@@ -327,7 +333,8 @@ jobs:
   # ------------------------------------------------------------------------------------------
   apply:
     name: Apply ${{ matrix.environment }}
-    # Same switch as the plan job above.
+    # Same switch as the plan job above. The image job above is not gated this way: it skips
+    # only on pull requests, so the signed image keeps reaching GHCR with no AWS account.
     if: github.event_name != 'pull_request' && vars.AWS_REGION != '' && vars.TF_STATE_BUCKET != ''
     needs: image
     runs-on: ubuntu-latest
