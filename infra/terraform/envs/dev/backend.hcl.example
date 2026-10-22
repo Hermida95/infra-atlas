@@ -1,0 +1,7 @@
+# Copy to backend.hcl and set the bucket the bootstrap stack created
+# (`terraform -chdir=../../bootstrap output -raw state_bucket`), then:
+#
+#   terraform init -backend-config=backend.hcl
+#
+# backend.hcl is not committed: the bucket name usually carries the account id.
+bucket = "infra-atlas-tfstate-000000000000"
