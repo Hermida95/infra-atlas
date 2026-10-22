@@ -1,4 +1,12 @@
-# Local stack. Step one of the journey: the same API image that later runs on AWS Lambda.
+# The local stack decision 2 and the stack table promise: web + api + LocalStack. Step one of
+# the journey, and the only step where all three run on one machine.
+#
+#   make up     builds the graph and the vector index, then starts everything
+#   make down   stops it
+#
+#   web         http://localhost:3000   Next.js dev server, hot reload
+#   api         http://localhost:8000   the same image that runs on Lambda and in kind
+#   localstack  http://localhost:4566   fake AWS for the labs and the S3/IAM parts of Terraform
 services:
   api:
     build:
@@ -6,8 +14,69 @@ services:
       dockerfile: apps/api/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      # The browser calls the API from the dev server's origin, so that origin has to be
+      # allowed. In AWS this is not needed at all: CloudFront serves /api/* from the same
+      # origin as the pages (infra/terraform/modules/web-opennext).
+      CORS_ORIGINS: "http://localhost:3000"
+      # Local only. The published API keeps them off (docs/SEGURIDAD.md, finding S6).
+      API_DOCS: "1"
+      LOG_FORMAT: text
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
       timeout: 3s
       retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      # Browser-side variable, so it is the *host's* view of the API, not the compose network's:
+      # the fetch runs in the reader's browser, which has no idea what "api" resolves to.
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+      # Bind mounts do not deliver inotify events on every host (notably macOS and Windows),
+      # and without this the dev server silently stops reloading.
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # The working tree, so an edit on the host reloads in the browser. graph.json and
+      # logos.json are generated into it by `make up`, which runs `make embed` first.
+      - .:/app
+      # node_modules comes from the image, not from the host: pnpm's store is full of symlinks
+      # and a host install done on another OS would not work in here. Docker seeds each of
+      # these volumes from the image the first time it starts.
+      - web-node-modules:/app/node_modules
+      - web-app-node-modules:/app/apps/web/node_modules
+      # Keeping .next out of the bind mount makes the first compile much faster and stops the
+      # container's cache from fighting with a `pnpm dev` running on the host.
+      - web-next-cache:/app/apps/web/.next
+    depends_on:
+      api:
+        condition: service_healthy
+
+  localstack:
+    # Pinned by digest for the same reason as the base images in the two Dockerfiles.
+    image: localstack/localstack:4.9@sha256:59373b4a27dba3ec15c4db0b7455f0cb68c8a42300e2cbbe362b440f9a131697
+    ports:
+      - "4566:4566"
+    environment:
+      # Only what is actually used, so startup stays a few seconds instead of a minute.
+      SERVICES: "s3,iam,sts,logs,lambda,sns,cloudwatch"
+      DEBUG: "0"
+      # Nothing is persisted: a torn-down stack comes back empty, which is what makes it a
+      # rehearsal rather than a second environment to keep in sync.
+      PERSISTENCE: "0"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  web-node-modules:
+  web-app-node-modules:
+  web-next-cache:

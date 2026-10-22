@@ -37,3 +37,10 @@ updates:
     directory: /apps/api
     schedule: {interval: weekly}
     cooldown: {default-days: 7}
+  # The local dev image of the web app (compose.yaml). Not deployed -- decision 2 ships the
+  # web with OpenNext -- but its base image is pinned by digest like every other, and a pin
+  # without an update path just freezes vulnerabilities in place.
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule: {interval: weekly}
+    cooldown: {default-days: 7}
