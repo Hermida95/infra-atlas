@@ -299,6 +299,16 @@ resource "aws_cloudfront_function" "strip_api_prefix" {
   code    = file("${path.module}/functions/strip-api-prefix.js")
 }
 
+# Maps a directory URI to the index.html inside it, which is what an exported Next.js site
+# needs from S3. See functions/append-index.js: without it every page but the home is a 404.
+resource "aws_cloudfront_function" "append_index" {
+  name    = "${local.name}-append-index"
+  runtime = "cloudfront-js-2.0"
+  comment = "Map directory URIs to index.html for the ${local.name} site"
+  publish = true
+  code    = file("${path.module}/functions/append-index.js")
+}
+
 # Trivy's AWS-0011 is checkov's CKV_AWS_68 (no WAF) and AWS-0010 is CKV_AWS_86 (no access
 # logging). See the reasons inside the block: both bill before the first visitor arrives.
 #trivy:ignore:AVD-AWS-0011
@@ -360,6 +370,11 @@ resource "aws_cloudfront_distribution" "web" {
 
     cache_policy_id            = aws_cloudfront_cache_policy.pages.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.append_index.arn
+    }
   }
 
   # /_next/static/* carries a content hash in the filename, so it is immutable: cache it for
@@ -400,17 +415,22 @@ resource "aws_cloudfront_distribution" "web" {
     }
   }
 
-  # A private bucket returns 403, not 404, for a key that does not exist, so both map to the
-  # app's own 404 page. 404.html is what `next build` emits for App Router not-found.
+  # 403 only, and deliberately NOT 404, because a custom error response is configured per
+  # *distribution* and so applies to every behaviour -- including /api/*.
+  #
+  # The bucket policy below grants CloudFront s3:GetObject and nothing else: with no
+  # s3:ListBucket, S3 answers a missing key with 403 AccessDenied, never 404. So the pages
+  # path only ever needs the 403 mapping, and adding 404 bought the site nothing while
+  # swallowing the API's own 404 bodies: GET /api/nodes/nope returns
+  # {"detail": "no node 'nope'"} from apps/api (main.py), and CloudFront would replace that
+  # JSON with this HTML page. A client asking for JSON would get a web page instead.
+  #
+  # What this does not fix: a 403 from the API itself would still be rewritten. Nothing
+  # returns one today -- the API has no authentication -- but Cognito does in phase 3
+  # (decision 7), and at that point /api/* needs either its own distribution or a path that
+  # does not share this one. Noted in the PR rather than solved here.
   custom_error_response {
     error_code            = 403
-    response_code         = 404
-    response_page_path    = "/404.html"
-    error_caching_min_ttl = 60
-  }
-
-  custom_error_response {
-    error_code            = 404
     response_code         = 404
     response_page_path    = "/404.html"
     error_caching_min_ttl = 60
