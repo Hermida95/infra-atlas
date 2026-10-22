@@ -84,7 +84,7 @@ CHECKOV_VERSION := 3.2.489
 # downloads the AWS provider again: about 180 MB, seven times.
 export TF_PLUGIN_CACHE_DIR := $(CURDIR)/.terraform-plugin-cache
 
-.PHONY: tf-fmt tf-validate tf-lint tf-sec tf-check
+.PHONY: tf-fmt tf-validate tf-test tf-lint tf-sec tf-check
 
 tf-fmt: ## Check Terraform formatting (terraform fmt -check -recursive)
 	terraform fmt -check -recursive infra/terraform
@@ -97,6 +97,16 @@ tf-validate: ## Type-check every Terraform module and environment, without crede
 		terraform -chdir=$$dir validate || exit 1; \
 	done
 
+tf-test: ## Run the terraform test suites (mocked provider, no credentials)
+	@mkdir -p $(TF_PLUGIN_CACHE_DIR)
+	@found=0; for dir in $$(find infra/terraform -type d -name tests -printf '%h\n' | sort); do \
+		echo "==> $$dir"; \
+		terraform -chdir=$$dir init -backend=false -input=false >/dev/null || exit 1; \
+		terraform -chdir=$$dir test || exit 1; \
+		found=$$((found + 1)); \
+	done; \
+	test $$found -gt 0 || { echo "No .tftest.hcl suites found"; exit 1; }
+
 tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
 	tflint --chdir=infra/terraform --init
 	@for dir in $(TF_DIRS); do \
@@ -107,4 +117,4 @@ tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
 tf-sec: ## Scan the Terraform for insecure and costly misconfiguration (checkov)
 	uvx checkov==$(CHECKOV_VERSION) --directory infra/terraform --framework terraform --compact --quiet
 
-tf-check: tf-fmt tf-validate tf-lint tf-sec ## All four Terraform checks, the same as CI
+tf-check: tf-fmt tf-validate tf-test tf-lint tf-sec ## Every Terraform check, the same as CI

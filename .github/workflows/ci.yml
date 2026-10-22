@@ -124,7 +124,7 @@ jobs:
         run: docker logs api || true
 
   terraform:
-    name: Terraform (fmt, validate, tflint, checkov)
+    name: Terraform (fmt, validate, test, tflint, checkov)
     runs-on: ubuntu-latest
     # The AWS provider is a ~180 MB download. With the cache below a run takes two or three
     # minutes; the budget is for the run after a provider bump, which has to fetch it again.
@@ -188,6 +188,25 @@ jobs:
             terraform -chdir="$dir" validate
             echo "::endgroup::"
           done
+
+      # `terraform test` runs a real plan against a mocked AWS provider, so it needs no
+      # credentials -- and it catches the class of mistake `validate` structurally cannot see:
+      # a metric namespace that does not exist, an encryption setting that locks the intended
+      # reader out, an IAM policy whose rendered JSON says something other than its comment.
+      # The directories were already initialised by the step above.
+      - name: terraform test
+        run: |
+          set -euo pipefail
+          found=0
+          for dir in $(find infra/terraform -type d -name tests -printf '%h\n' | sort); do
+            echo "::group::$dir"
+            terraform -chdir="$dir" test
+            echo "::endgroup::"
+            found=$((found + 1))
+          done
+          # A suite nobody runs rots in silence, so finding none is a failure, not a pass.
+          test "$found" -gt 0 \
+            || { echo "::error::No .tftest.hcl suites found under infra/terraform."; exit 1; }
 
       - name: tflint
         env:
