@@ -124,7 +124,7 @@ jobs:
         run: docker logs api || true
 
   terraform:
-    name: Terraform (fmt, validate, tflint, checkov)
+    name: Terraform (fmt, validate, test, tflint, checkov)
     runs-on: ubuntu-latest
     # The AWS provider is a ~180 MB download. With the cache below a run takes two or three
     # minutes; the budget is for the run after a provider bump, which has to fetch it again.
@@ -186,6 +186,25 @@ jobs:
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      # The one check in this job that builds a plan, and the only thing here that could have
+      # caught the "Invalid count argument" class of bug: validate type-checks a configuration
+      # without ever producing a plan graph, so a `count` or a `dynamic` block derived from a
+      # value that is unknown until apply passes fmt, validate, tflint and checkov and then
+      # fails the first real plan of a new environment.
+      #
+      # `mock_provider "aws"` is what makes it runnable with no account: the provider is never
+      # contacted, so there are no credentials and no network, and the error lives in
+      # Terraform's own evaluation -- which still runs. See infra/terraform/README.md.
+      - name: terraform test
+        run: |
+          set -euo pipefail
+          for dir in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
+            [ -d "$dir/tests" ] || continue
+            echo "::group::$dir"
+            terraform -chdir="$dir" test
             echo "::endgroup::"
           done
 

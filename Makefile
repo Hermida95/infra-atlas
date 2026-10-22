@@ -84,7 +84,7 @@ CHECKOV_VERSION := 3.2.489
 # downloads the AWS provider again: about 180 MB, seven times.
 export TF_PLUGIN_CACHE_DIR := $(CURDIR)/.terraform-plugin-cache
 
-.PHONY: tf-fmt tf-validate tf-lint tf-sec tf-check
+.PHONY: tf-fmt tf-validate tf-test tf-lint tf-sec tf-check
 
 tf-fmt: ## Check Terraform formatting (terraform fmt -check -recursive)
 	terraform fmt -check -recursive infra/terraform
@@ -97,6 +97,19 @@ tf-validate: ## Type-check every Terraform module and environment, without crede
 		terraform -chdir=$$dir validate || exit 1; \
 	done
 
+# The only check here that builds a plan. validate type-checks the configuration without one,
+# so it cannot see a count or a dynamic block whose value is unknown until apply -- the error
+# that passes fmt, validate, tflint and checkov and then fails the first real plan.
+# mock_provider means no credentials, no account and no network.
+tf-test: ## Run terraform test (mock_provider, command = plan) in every directory that has tests
+	@mkdir -p $(TF_PLUGIN_CACHE_DIR)
+	@for dir in $(TF_DIRS); do \
+		[ -d "$$dir/tests" ] || continue; \
+		echo "==> $$dir"; \
+		terraform -chdir=$$dir init -backend=false -input=false >/dev/null || exit 1; \
+		terraform -chdir=$$dir test || exit 1; \
+	done
+
 tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
 	tflint --chdir=infra/terraform --init
 	@for dir in $(TF_DIRS); do \
@@ -107,4 +120,4 @@ tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
 tf-sec: ## Scan the Terraform for insecure and costly misconfiguration (checkov)
 	uvx checkov==$(CHECKOV_VERSION) --directory infra/terraform --framework terraform --compact --quiet
 
-tf-check: tf-fmt tf-validate tf-lint tf-sec ## All four Terraform checks, the same as CI
+tf-check: tf-fmt tf-validate tf-test tf-lint tf-sec ## All five Terraform checks, the same as CI
