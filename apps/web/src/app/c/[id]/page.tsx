@@ -9,10 +9,10 @@ import { domainById, graph, neighbours, nodeById } from "@/lib/graph";
 import { STAGE_LABEL } from "@/lib/planner";
 import { readableRule } from "@/lib/rule";
 
-// Every concept page is fully static: generateStaticParams prerenders every id at build time
-// and ensureStatic makes Next.js fail the build if anything request-time sneaks in later.
+// Every concept page is fully static: generateStaticParams prerenders every id at build time,
+// and `output: "export"` makes the build fail if anything request-time sneaks in later -- the
+// job `ensureStatic` did before the site became a directory of HTML files (next.config.ts).
 // That is also what makes navigating between concepts instant. Unknown ids hit notFound().
-export const ensureStatic = "navigation";
 
 export function generateStaticParams() {
   return graph.nodes.map((n) => ({ id: n.id }));
@@ -29,8 +29,8 @@ export async function generateMetadata({ params }: PageProps<"/c/[id]">): Promis
 }
 
 // The App Shell (header and page frame) is shared by every concept URL, so it must not read
-// `params`. The URL-specific part lives in <Concept>, inside Suspense; with ensureStatic it is
-// still prerendered, the boundary only keeps the shared shell independent of the id.
+// `params`. The URL-specific part lives in <Concept>, inside Suspense; it is prerendered all
+// the same, and the boundary only keeps the shared shell independent of the id.
 export default function ConceptPage({ params }: PageProps<"/c/[id]">) {
   return (
     <div className="concept-page">
