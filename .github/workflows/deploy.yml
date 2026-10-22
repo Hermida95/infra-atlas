@@ -1,0 +1,418 @@
+name: deploy
+
+# Decision 9, end to end:
+#
+#   pull request  ->  terraform plan for dev and prod, posted as one comment per environment
+#   push to main  ->  apply dev, then apply prod behind a GitHub environment that requires
+#                     a human to approve it
+#
+# Credentials come from GitHub's OIDC provider, exchanged for a short-lived AWS role session.
+# There is no AWS access key anywhere in this repository or its settings.
+#
+# What this workflow does NOT do, and what has to be done by hand once before it can work:
+# create the state bucket, the OIDC provider and these roles (infra/terraform/bootstrap), and
+# create the GitHub environments and repository variables it reads below. Terraform cannot
+# create a GitHub environment, and this workflow does not try. See
+# infra/terraform/bootstrap/README.md.
+#
+# It also does not publish the web app yet. The bucket and the distribution exist
+# (infra/terraform/modules/web-opennext), but `next build` does not currently emit a static
+# site: that needs either `output: "export"` or the OpenNext build of decision 2, both of
+# which are changes to apps/web rather than to the infrastructure. Uploading `.next` as if it
+# were a site would produce a 404 with a green pipeline, which is worse than not uploading.
+on:
+  pull_request:
+    paths:
+      - infra/terraform/**
+      - apps/api/**
+      - packages/brain/**
+      - content/**
+      - uv.lock
+      - .github/workflows/deploy.yml
+  push:
+    branches: [main]
+    paths:
+      - infra/terraform/**
+      - apps/api/**
+      - packages/brain/**
+      - content/**
+      - uv.lock
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# cancel-in-progress is false here, unlike ci.yml: cancelling an apply halfway through leaves
+# the state locked and the infrastructure in a shape nobody chose.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Downloaded and checksum-verified instead of installed by a third-party action, like the
+  # terraform job in ci.yml. Bump the version and the hash together.
+  TERRAFORM_VERSION: 1.14.4
+  TERRAFORM_SHA256: 4a24b18865d9419ba7882567cb7429dd1525b3e2029a9e38f612d476ba8c3dea
+  # Terraform drops the interactive prompts and the "run terraform init" advice.
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  # ------------------------------------------------------------------------------------------
+  # Plan, on every pull request
+  # ------------------------------------------------------------------------------------------
+  plan:
+    name: Plan ${{ matrix.environment }}
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # No `environment:` on this job, and that is deliberate. A job that declares one gets the
+    # OIDC subject repo:<owner>/<repo>:environment:<name>, which is exactly what the *apply*
+    # role trusts. Leaving it out keeps the subject at repo:<owner>/<repo>:pull_request, which
+    # is what the read-only plan role trusts -- so a plan can never assume an apply role.
+
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token exchanged for the plan role
+      pull-requests: write # post the plan as a comment
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: dev
+            suffix: DEV
+          - environment: prod
+            suffix: PROD
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the repository variables
+        env:
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION:-}" || { echo "::error::Repository variable AWS_REGION is not set."; exit 1; }
+          # A JSON array, e.g. ["you@example.com"]: it is passed straight into the
+          # alert_emails list variable, and the module refuses an empty one.
+          printf '%s' "$ALERT_EMAILS" | jq -e 'type == "array" and length > 0' >/dev/null \
+            || { echo "::error::Repository variable ALERT_EMAILS must be a non-empty JSON array, e.g. [\"you@example.com\"]."; exit 1; }
+          echo "Variables look usable. See infra/terraform/bootstrap/README.md for the full list."
+
+      - name: Install Terraform
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSLo "$tmp/terraform.zip" \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  $tmp/terraform.zip" | sha256sum -c -
+          unzip -o -q "$tmp/terraform.zip" -d /usr/local/bin
+          terraform version
+
+      # This is what OIDC actually is, with no action in the middle: ask GitHub for a signed
+      # token that says which repository, branch and environment this job belongs to, drop it
+      # in a file, and let the AWS SDK trade it for a role session. The AWS CLI and the
+      # Terraform provider both read AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN natively.
+      #
+      # aws-actions/configure-aws-credentials does the same thing; doing it here keeps one
+      # more third-party action out of a job that holds deploy credentials
+      # (docs/SEGURIDAD.md: "an action runs with your token and sees your code").
+      - name: Assume the plan role through OIDC
+        env:
+          ROLE_ARN: ${{ vars[format('AWS_PLAN_ROLE_ARN_{0}', matrix.suffix)] }}
+        run: |
+          set -euo pipefail
+          test -n "$ROLE_ARN" || { echo "::error::Repository variable AWS_PLAN_ROLE_ARN_${{ matrix.suffix }} is not set. See infra/terraform/bootstrap/README.md."; exit 1; }
+          curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -re .value > "$RUNNER_TEMP/aws-web-identity-token"
+          {
+            echo "AWS_WEB_IDENTITY_TOKEN_FILE=$RUNNER_TEMP/aws-web-identity-token"
+            echo "AWS_ROLE_ARN=$ROLE_ARN"
+            echo "AWS_ROLE_SESSION_NAME=gha-plan-${{ matrix.environment }}-${{ github.run_id }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Who am I
+        run: aws sts get-caller-identity
+
+      # The function runs an image by digest, so a plan needs one. On a pull request nothing
+      # has been built, so the plan uses the newest image already in the registry: that is the
+      # one currently deployed, which keeps the plan about the *infrastructure* change under
+      # review instead of an image change. Before the first push there is nothing, and the
+      # all-zero placeholder lets the plan render the function as a creation.
+      - name: Resolve the deployed image digest
+        id: image
+        env:
+          ECR_REPOSITORY: infra-atlas/api
+        run: |
+          set -euo pipefail
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          registry="${account}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          digest="$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+            --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageDigest' --output text 2>/dev/null || true)"
+          if [ -z "$digest" ] || [ "$digest" = "None" ]; then
+            echo "No image in ${ECR_REPOSITORY} yet; planning with a placeholder digest."
+            digest="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          fi
+          echo "uri=${registry}/${ECR_REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
+
+      # jq rather than a heredoc, so nothing from a repository variable is ever pasted into a
+      # shell command or a Terraform expression.
+      - name: Write the environment's variables
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        env:
+          WEB_BUCKET_NAME: ${{ vars[format('WEB_BUCKET_NAME_{0}', matrix.suffix)] }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          PERMISSIONS_BOUNDARY_ARN: ${{ vars.PERMISSIONS_BOUNDARY_ARN }}
+          IMAGE_URI: ${{ steps.image.outputs.uri }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg bucket "$WEB_BUCKET_NAME" \
+            --argjson emails "$ALERT_EMAILS" \
+            --arg image "$IMAGE_URI" \
+            --arg boundary "$PERMISSIONS_BOUNDARY_ARN" \
+            '{web_bucket_name: $bucket, alert_emails: $emails, api_image_uri: $image, permissions_boundary_arn: $boundary}' \
+            > ci.auto.tfvars.json
+          jq 'del(.alert_emails)' ci.auto.tfvars.json
+
+      # -lock=false because the plan role cannot write to the state bucket: taking an S3 lock
+      # means writing a .tflock object next to the state, and an explicit Deny in
+      # modules/github-oidc makes that impossible. A plan does not mutate state, so there is
+      # nothing to protect.
+      - name: terraform init
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          test -n "$TF_STATE_BUCKET" || { echo "::error::Repository variable TF_STATE_BUCKET is not set. See infra/terraform/bootstrap/README.md."; exit 1; }
+          terraform init -backend-config="bucket=$TF_STATE_BUCKET" -lock=false
+
+      - name: terraform plan
+        id: plan
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          set +e
+          terraform plan -lock=false -no-color -out=tfplan -detailed-exitcode
+          code=$?
+          set -e
+          # -detailed-exitcode: 0 = no change, 2 = changes, 1 = error.
+          case "$code" in
+            0) echo "changes=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "changes=true"  >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Comment the plan on the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENVIRONMENT: ${{ matrix.environment }}
+          HAS_CHANGES: ${{ steps.plan.outputs.changes }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          marker="<!-- terraform-plan:${ENVIRONMENT} -->"
+          summary="$(grep -E '^(Plan:|No changes\.|Changes to Outputs)' plan.txt | head -3 || true)"
+          : "${summary:=Plan produced no summary line.}"
+
+          # A GitHub comment caps at 65536 characters, and a first apply of this stack is
+          # longer than that. Keep the tail: that is where the summary lives.
+          body_file="$RUNNER_TEMP/comment.md"
+          {
+            printf '%s\n' "$marker"
+            printf '## terraform plan · `%s`\n\n' "$ENVIRONMENT"
+            printf '%s\n\n' "$([ "$HAS_CHANGES" = "true" ] && echo 'Changes to apply.' || echo 'No changes. Infrastructure matches the configuration.')"
+            printf '```\n%s\n```\n\n' "$summary"
+            printf '<details><summary>Full plan</summary>\n\n```terraform\n'
+            tail -c 50000 plan.txt
+            printf '\n```\n\n</details>\n\n'
+            printf '_[Run](%s) · planned with the read-only role, state never locked._\n' "$RUN_URL"
+          } > "$body_file"
+
+          # One comment per environment, edited in place, so a branch with ten pushes does not
+          # leave twenty stale plans behind.
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq "map(select(.body | startswith(\"$marker\"))) | .[0].id // empty" | head -1)"
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+              -F "body=@${body_file}" --silent
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -F "body=@${body_file}" --silent
+          fi
+
+  # ------------------------------------------------------------------------------------------
+  # Apply, on merge to main
+  # ------------------------------------------------------------------------------------------
+  apply:
+    name: Apply ${{ matrix.environment }}
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # This is the approval gate. The GitHub environment carries the required reviewers, and the
+    # apply role's trust policy only accepts the subject
+    # repo:<owner>/<repo>:environment:<name> -- so removing this line does not skip the
+    # approval, it makes the credentials unobtainable.
+    environment: ${{ matrix.environment }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    strategy:
+      # One at a time, in this order: dev is the rehearsal. fail-fast (the default) means a
+      # failed dev apply cancels prod before anyone is asked to approve it.
+      max-parallel: 1
+      matrix:
+        include:
+          - environment: dev
+            suffix: DEV
+          - environment: prod
+            suffix: PROD
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the repository variables
+        env:
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+        run: |
+          set -euo pipefail
+          test -n "${AWS_REGION:-}" || { echo "::error::Repository variable AWS_REGION is not set."; exit 1; }
+          # A JSON array, e.g. ["you@example.com"]: it is passed straight into the
+          # alert_emails list variable, and the module refuses an empty one.
+          printf '%s' "$ALERT_EMAILS" | jq -e 'type == "array" and length > 0' >/dev/null \
+            || { echo "::error::Repository variable ALERT_EMAILS must be a non-empty JSON array, e.g. [\"you@example.com\"]."; exit 1; }
+          echo "Variables look usable. See infra/terraform/bootstrap/README.md for the full list."
+
+      - name: Install Terraform
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSLo "$tmp/terraform.zip" \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  $tmp/terraform.zip" | sha256sum -c -
+          unzip -o -q "$tmp/terraform.zip" -d /usr/local/bin
+          terraform version
+
+      - name: Assume the apply role through OIDC
+        env:
+          ROLE_ARN: ${{ vars[format('AWS_APPLY_ROLE_ARN_{0}', matrix.suffix)] }}
+        run: |
+          set -euo pipefail
+          test -n "$ROLE_ARN" || { echo "::error::Repository variable AWS_APPLY_ROLE_ARN_${{ matrix.suffix }} is not set. See infra/terraform/bootstrap/README.md."; exit 1; }
+          curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -re .value > "$RUNNER_TEMP/aws-web-identity-token"
+          {
+            echo "AWS_WEB_IDENTITY_TOKEN_FILE=$RUNNER_TEMP/aws-web-identity-token"
+            echo "AWS_ROLE_ARN=$ROLE_ARN"
+            echo "AWS_ROLE_SESSION_NAME=gha-apply-${{ matrix.environment }}-${{ github.run_id }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Who am I
+        run: aws sts get-caller-identity
+
+      # The image carries the graph, the vector index and the embedding model, so they are
+      # built before it, exactly as ci.yml and k8s-smoke.yml do.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --all-packages
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/api/data/models
+          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
+          restore-keys: fastembed-bge-small-en-v1.5-
+      - run: uv run brain graph
+      - run: uv run brain embed
+
+      # The `lambda` target: the same image as Compose and kind, plus the Lambda Web Adapter
+      # (decision 5). The registry has to exist already -- the very first apply of an
+      # environment is two manual steps, see infra/terraform/README.md.
+      - name: Build and push the API image
+        id: image
+        env:
+          ECR_REPOSITORY: infra-atlas/api
+        run: |
+          set -euo pipefail
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          registry="${account}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          tag="${registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          docker build -f apps/api/Dockerfile --target lambda \
+            --build-arg "REVISION=${GITHUB_SHA}" -t "$tag" .
+          docker push "$tag"
+
+          # The digest the registry stored, not the tag: the function deploys exact bytes.
+          digest="$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+            --image-ids "imageTag=${GITHUB_SHA}" --query 'imageDetails[0].imageDigest' --output text)"
+          echo "uri=${registry}/${ECR_REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the environment's variables
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        env:
+          WEB_BUCKET_NAME: ${{ vars[format('WEB_BUCKET_NAME_{0}', matrix.suffix)] }}
+          ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          PERMISSIONS_BOUNDARY_ARN: ${{ vars.PERMISSIONS_BOUNDARY_ARN }}
+          IMAGE_URI: ${{ steps.image.outputs.uri }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg bucket "$WEB_BUCKET_NAME" \
+            --argjson emails "$ALERT_EMAILS" \
+            --arg image "$IMAGE_URI" \
+            --arg boundary "$PERMISSIONS_BOUNDARY_ARN" \
+            '{web_bucket_name: $bucket, alert_emails: $emails, api_image_uri: $image, permissions_boundary_arn: $boundary}' \
+            > ci.auto.tfvars.json
+
+      - name: terraform init
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          test -n "$TF_STATE_BUCKET" || { echo "::error::Repository variable TF_STATE_BUCKET is not set. See infra/terraform/bootstrap/README.md."; exit 1; }
+          terraform init -backend-config="bucket=$TF_STATE_BUCKET"
+
+      # Plan to a file and apply that file, never `apply -auto-approve` against a fresh plan:
+      # applying a saved plan is the only way to be sure the change applied is the change that
+      # was reviewed. The lock is real here (use_lockfile, decision 9), so two overlapping
+      # runs cannot both write.
+      - name: terraform plan
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: terraform plan -no-color -out=tfplan
+
+      - name: terraform apply
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: terraform apply -no-color tfplan
+
+      - name: Summary
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### Deployed `%s`\n\n' "$ENVIRONMENT"
+            printf '| | |\n|---|---|\n'
+            printf '| Site | %s |\n' "$(terraform output -raw site_url)"
+            printf '| API | %s |\n' "$(terraform output -raw api_endpoint)"
+            printf '| Image | `%s` |\n' "$DIGEST"
+            printf '\nPending alarm confirmations: `%s`\n' "$(terraform output -json pending_email_confirmations)"
+          } >> "$GITHUB_STEP_SUMMARY"
