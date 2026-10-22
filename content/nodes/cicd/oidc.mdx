@@ -10,6 +10,10 @@ access: free
 relations:
   related: [gha, signing, tfapply]
   part_of: [pipeline]
+evidence:
+  - path: infra/terraform/modules/github-oidc/main.tf
+    lines: [77, 143]
+    text: "The two trust policies that let this repo's pipeline into AWS: pull requests get a read-only role, and an apply is only possible from a named GitHub environment, which is what makes its manual approval unavoidable."
 planner:
   stage: ship
   when: "true"

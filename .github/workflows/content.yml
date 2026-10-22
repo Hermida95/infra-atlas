@@ -7,6 +7,10 @@ name: content
 #
 # What stays in ci.yml: `brain graph` and `brain embed`, because the web build and the API
 # image consume their output as an artifact, and those jobs run on every push.
+#
+# The filters are wider than `content/**` on purpose: `evidence` (decision 12) points fichas at
+# real files in this repo, so a change to one of those files can invalidate a ficha without
+# touching `content/` at all.
 on:
   push:
     branches: [main]
@@ -17,6 +21,14 @@ on:
       - apps/api/src/api/evaluation.py
       - uv.lock
       - .github/workflows/content.yml
+      # Whatever `evidence` points at belongs here too, or the guarantee decision 12 is after
+      # -- "deleting the code breaks the content CI" -- quietly stops holding: `brain validate`
+      # checks that every evidence path exists and that its line range still fits the file, so
+      # a refactor that shifts those lines has to run this workflow. Today the targets are the
+      # workflows and the Terraform; `grep -rhA1 '^evidence:' content/nodes | grep path:`
+      # lists them.
+      - .github/workflows/**
+      - infra/terraform/**
   pull_request:
     paths:
       - content/**
@@ -25,6 +37,14 @@ on:
       - apps/api/src/api/evaluation.py
       - uv.lock
       - .github/workflows/content.yml
+      # Whatever `evidence` points at belongs here too, or the guarantee decision 12 is after
+      # -- "deleting the code breaks the content CI" -- quietly stops holding: `brain validate`
+      # checks that every evidence path exists and that its line range still fits the file, so
+      # a refactor that shifts those lines has to run this workflow. Today the targets are the
+      # workflows and the Terraform; `grep -rhA1 '^evidence:' content/nodes | grep path:`
+      # lists them.
+      - .github/workflows/**
+      - infra/terraform/**
 
 permissions:
   contents: read

@@ -28,6 +28,10 @@ parts:
     kind: cylinder
     text: "The record of what already exists. Plan compares it with your code to compute the diff."
 layout: stack
+evidence:
+  - path: infra/terraform/envs/prod/main.tf
+    lines: [14, 93]
+    text: "This atlas describes its own production infrastructure here: the API on Lambda, the CDN in front of it and the cost alarms, each one a module call with its inputs."
 planner:
   stage: infra
   when: "true"

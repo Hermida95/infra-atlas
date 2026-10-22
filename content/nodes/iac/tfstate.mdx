@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [s3]
+evidence:
+  - path: infra/terraform/envs/prod/versions.tf
+    lines: [11, 25]
+    text: "This repo keeps its own state in S3 with use_lockfile: the lock is an object written next to the state with a conditional PUT, so there is no DynamoDB table to create or pay for."
 planner:
   stage: infra
   when: "true"
