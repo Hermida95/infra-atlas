@@ -6,7 +6,7 @@
     "logos": "node scripts/build-logos.mjs",
     "predev": "node scripts/build-logos.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/build-logos.mjs",
+    "prebuild": "node scripts/build-logos.mjs && node scripts/build-sitemap.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
