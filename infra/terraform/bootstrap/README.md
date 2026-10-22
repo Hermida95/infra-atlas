@@ -92,7 +92,31 @@ repository does not try. After applying:
   trust `repo:<owner>/<repo>:environment:<name>` and nothing else);
 - put at least one required reviewer on `prod` (decision 9: no unattended apply in production);
 - restrict both environments' deployment branches to `main`;
-- set the repository variables `AWS_REGION`, `AWS_PLAN_ROLE_ARN_DEV`, `AWS_APPLY_ROLE_ARN_DEV`,
-  `AWS_PLAN_ROLE_ARN_PROD`, `AWS_APPLY_ROLE_ARN_PROD`, `TF_STATE_BUCKET`.
+- set the repository variables below.
 
-`.github/workflows/deploy.yml` lists the same steps where it reads them.
+### Repository variables
+
+All of them are **variables**, not secrets: an account id, a role ARN, a bucket name and an
+email address are not credentials, and a variable is readable in the Actions log, which is
+what makes a failed run diagnosable. The only secret in the whole deployment path is the OIDC
+token GitHub mints per job, and that one nobody stores.
+
+| Variable | Where it comes from | Why it matters |
+| --- | --- | --- |
+| `AWS_REGION` | your choice, e.g. `eu-west-1` | Must match the `region` in `envs/*/versions.tf`; `deploy.yml` is skipped entirely while it is empty. |
+| `TF_STATE_BUCKET` | `terraform output -raw state_bucket` | The partial backend's missing half. `deploy.yml` is skipped while it is empty. |
+| `AWS_PLAN_ROLE_ARN_DEV` / `_PROD` | `terraform output -json plan_role_arns` | Read-only, assumed on pull requests. |
+| `AWS_APPLY_ROLE_ARN_DEV` / `_PROD` | `terraform output -json apply_role_arns` | Assumed on merge to `main`, only from the matching GitHub environment. |
+| `WEB_BUCKET_NAME_DEV` / `_PROD` | your choice | The assets bucket of each environment. S3 names are globally unique, so there is no default — and each **must** start with `infra-atlas-dev-` / `infra-atlas-prod-`, or the apply role's ARN scope does not match it and the apply fails on `CreateBucket`. |
+| `ALERT_EMAILS` | your choice | A **JSON array**, e.g. `["you@example.com"]`: it is passed straight into the `alert_emails` list variable, and `modules/observability` refuses an empty one ("an alarm nobody receives is not an alarm"). Each address has to confirm the subscription by email afterwards. |
+| `PERMISSIONS_BOUNDARY_ARN` | `terraform output -raw execution_boundary_arn` | The ceiling on every role the pipeline creates. Not optional in CI: the apply role's `iam:CreateRole` is conditioned on `iam:PermissionsBoundary` being exactly this ARN, so an **empty** value does not mean "no boundary", it means `AccessDenied` on the Lambda execution role. `deploy.yml` checks it is non-empty before it starts. |
+
+```bash
+terraform output -raw state_bucket            # -> TF_STATE_BUCKET
+terraform output -raw execution_boundary_arn  # -> PERMISSIONS_BOUNDARY_ARN
+terraform output -json plan_role_arns         # -> AWS_PLAN_ROLE_ARN_DEV / _PROD
+terraform output -json apply_role_arns        # -> AWS_APPLY_ROLE_ARN_DEV / _PROD
+```
+
+`.github/workflows/deploy.yml` lists the same steps where it reads them, and its first step
+fails loudly, naming the variable, for each one it cannot use.

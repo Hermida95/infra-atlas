@@ -25,9 +25,13 @@ locals {
 # State bucket
 # --------------------------------------------------------------------------------------------
 
-# Private, versioned, encrypted, TLS-only. Public access is blocked at the bucket level *and*
-# by the account-level setting; both are cheap and the bucket holds every resource id, name and
-# non-sensitive attribute of the whole deployment.
+# Private, versioned, encrypted, TLS-only. Public access is blocked on the bucket itself, by
+# the aws_s3_bucket_public_access_block below; there is no account-level block in this
+# configuration, because Terraform's aws_s3_account_public_access_block is an account-wide
+# resource and this stack is not the only thing that may ever live in the account. Turning it
+# on from the console is one click and is worth doing -- it is just not a thing this code can
+# claim. The bucket holds every resource id, name and non-sensitive attribute of the whole
+# deployment.
 # AWS-0089 is checkov's CKV_AWS_18: no server access logging. Reason inside the block.
 #trivy:ignore:AVD-AWS-0089
 resource "aws_s3_bucket" "state" {
@@ -38,6 +42,9 @@ resource "aws_s3_bucket" "state" {
   # is already versioned and reproducible from this repo. Not worth it on a 1-5 EUR/month budget.
   # checkov:skip=CKV2_AWS_62:Event notifications need an SNS topic or Lambda per bucket; nothing
   # consumes state-change events here.
+  # checkov:skip=CKV_AWS_145:AES256, which is what the S3 backend actually writes with
+  # `encrypt = true`. See the comment on
+  # aws_s3_bucket_server_side_encryption_configuration.state below.
   bucket = var.state_bucket_name
 
   # Losing the state is recoverable (every resource is importable); losing it *silently* is not.
@@ -54,21 +61,28 @@ resource "aws_s3_bucket_versioning" "state" {
   }
 }
 
-# aws:kms with no key id means the AWS-managed aws/s3 key: no monthly key charge, unlike a
-# customer-managed key (1 USD/month each). bucket_key_enabled uses one data key per bucket
-# instead of one per object, which cuts the KMS request bill to almost nothing.
-# Trivy's AWS-0132 asks for a customer-managed key here. Same answer as the comment above:
-# a CMK is 1 USD/month, a fifth of the whole budget, to encrypt a state file that holds no
-# secrets. Trivy reads this directive; checkov reads the ones inside the resource blocks.
+# AES256 (SSE-S3), because that is what actually ends up on the objects whatever is written
+# here: `encrypt = true` in the backend block of envs/*/versions.tf, with no kms_key_id beside
+# it, makes Terraform send `x-amz-server-side-encryption: AES256` on every state PUT, and a
+# request header wins over the bucket default. A default of `aws:kms` would therefore have
+# described something that never happened -- and if it ever did take effect, the plan and
+# apply roles would need kms:Decrypt and kms:GenerateDataKey on the key to read their own
+# state, which modules/github-oidc does not grant.
+#
+# A customer-managed key is the other coherent answer, at 1 USD/month plus `kms_key_id` in
+# every backend block and two more actions in both roles, to encrypt a state file that holds
+# no secrets (decision 10 puts those in SSM Parameter Store).
+#
+# Trivy's AWS-0132 asks for KMS here and checkov's CKV_AWS_145 asks for it on the bucket
+# above, which is where that skip lives. Reasons on both.
 #trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm = "AES256"
     }
-    bucket_key_enabled = true
   }
 }
 

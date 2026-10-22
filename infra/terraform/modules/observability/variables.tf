@@ -66,10 +66,25 @@ variable "budget_forecast_threshold_percent" {
   default     = 100
 }
 
+variable "enable_api_5xx_alarm" {
+  description = <<-EOT
+    Create the 5xx alarm on the HTTP API.
+
+    A separate flag rather than `api_id != null`, for the one reason `validate` cannot catch:
+    the alarm's `count` has to be resolvable during `plan`, and api_id is normally
+    `module.api.api_id` -- an attribute of an API Gateway that does not exist yet. Deriving
+    the count from it passes every linter and then fails the first `plan` of a new
+    environment with "Invalid count argument". The flag is written literally in
+    envs/*/main.tf; api_id itself may stay unknown, which an alarm dimension tolerates.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "api_id" {
   description = <<-EOT
-    HTTP API to watch for 5xx. Null skips the alarm, which is what an environment without an
-    API deployed yet wants.
+    HTTP API to watch for 5xx. Only read when enable_api_5xx_alarm is true, and it may be an
+    unknown value at plan time.
   EOT
   type        = string
   default     = null

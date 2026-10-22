@@ -57,6 +57,9 @@ module "web" {
   aliases             = var.web_aliases
   acm_certificate_arn = var.acm_certificate_arn
 
+  # Literal flag, computed hostname: see envs/dev/main.tf and
+  # modules/web-opennext/variables.tf for why these are two arguments and not one.
+  enable_api_origin = true
   api_origin_domain = replace(module.api.api_endpoint, "https://", "")
 
   default_cache_max_age_seconds = 300
@@ -77,7 +80,11 @@ module "observability" {
   environment = var.environment
 
   alert_emails = var.alert_emails
-  api_id       = module.api.api_id
+
+  # Same split as the web module's two arguments above, and for the same reason: the alarm's
+  # `count` comes from the literal flag, its dimension from the computed id.
+  enable_api_5xx_alarm = true
+  api_id               = module.api.api_id
 
   # Decision 10 and the cost table in docs/DECISIONES.md: 5 EUR is "this is no longer free",
   # 10 EUR is "stop and look". Two budgets is also exactly what AWS does not charge for.

@@ -15,8 +15,11 @@ locals {
   # environment's pipeline cannot touch another's, and neither can touch anything else in
   # the account.
   arn = {
-    lambda     = "arn:${var.aws_partition}:lambda:*:${var.aws_account_id}:function:${local.name_prefix}-*"
-    ecr        = "arn:${var.aws_partition}:ecr:*:${var.aws_account_id}:repository/${var.project}*"
+    lambda = "arn:${var.aws_partition}:lambda:*:${var.aws_account_id}:function:${local.name_prefix}-*"
+    # <project>-<env>*, not <project>*: the latter also matched the other environment's
+    # registry, so dev's pipeline could push to prod's (modules/api-lambda names the
+    # repository <project>-<env>/api).
+    ecr        = "arn:${var.aws_partition}:ecr:*:${var.aws_account_id}:repository/${local.name_prefix}*"
     logs       = "arn:${var.aws_partition}:logs:*:${var.aws_account_id}:log-group:*${local.name_prefix}*"
     iam_role   = "arn:${var.aws_partition}:iam::${var.aws_account_id}:role/${local.name_prefix}-*"
     sns        = "arn:${var.aws_partition}:sns:*:${var.aws_account_id}:${local.name_prefix}-*"
@@ -211,11 +214,12 @@ resource "aws_iam_role" "apply" {
 }
 
 data "aws_iam_policy_document" "apply" {
-  # checkov:skip=CKV_AWS_111:The unscoped statements are the read-only one, ecr:GetAuthorizationToken
-  # and CloudFront's Create*. The first grants no writes; the other two are AWS APIs with no
-  # resource-level permissions at all -- a docker login token and a distribution that does not
-  # exist yet have nothing to name. Every other write is ARN-scoped to <project>-<env>-*.
-  # checkov:skip=CKV_AWS_356:Same three statements, same reason.
+  # checkov:skip=CKV_AWS_111:The unscoped statements are the read-only one,
+  # ecr:GetAuthorizationToken, CloudFront's Create* and the log-delivery one. The first grants
+  # no writes; the rest are AWS APIs with no resource-level permissions at all -- a docker
+  # login token, a distribution that does not exist yet and a log delivery that does not exist
+  # yet have nothing to name. Every other write is ARN-scoped to <project>-<env>-*.
+  # checkov:skip=CKV_AWS_356:Same four statements, same reason.
   statement {
     sid       = "ReadEverythingThisProjectUses"
     effect    = "Allow"
@@ -239,6 +243,11 @@ data "aws_iam_policy_document" "apply" {
     resources = ["${var.state_bucket_arn}/${var.state_key_prefix}*"]
   }
 
+  # "env:/" is not a typo and not this project's choice: `terraform init` enumerates the
+  # workspaces of an S3 backend by listing the bucket with the prefix the backend's
+  # workspace_key_prefix sets, which defaults to `env:`. Without it in this list the apply
+  # job dies in `init`, before it reads a single line of configuration -- and a first apply
+  # run by hand with administrator credentials never sees it.
   statement {
     sid       = "ListOwnStatePrefix"
     effect    = "Allow"
@@ -248,7 +257,11 @@ data "aws_iam_policy_document" "apply" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.state_key_prefix}*"]
+
+      values = [
+        "${var.state_key_prefix}*",
+        "env:/*",
+      ]
     }
   }
 
@@ -369,6 +382,30 @@ data "aws_iam_policy_document" "apply" {
     ]
 
     resources = [local.arn.logs, "${local.arn.logs}:log-stream:*"]
+  }
+
+  # Turning on access logging for an API Gateway stage (modules/api-lambda) is not a write to
+  # the log group: CloudWatch Logs creates a *log delivery* and attaches a resource policy
+  # that lets API Gateway write into it. Those are separate actions, and none of them has a
+  # resource-level form -- a delivery does not exist yet when it is created, and a resource
+  # policy is an account-wide object. Without this statement the apply fails on
+  # aws_apigatewayv2_stage with AccessDeniedException on logs:CreateLogDelivery, after the
+  # function and the API have already been created.
+  statement {
+    sid    = "ManageAccessLogDelivery"
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogDelivery",
+      "logs:DeleteLogDelivery",
+      "logs:DescribeResourcePolicies",
+      "logs:GetLogDelivery",
+      "logs:ListLogDeliveries",
+      "logs:PutResourcePolicy",
+      "logs:UpdateLogDelivery",
+    ]
+
+    resources = ["*"]
   }
 
   # CloudFront has no resource-level permissions for Create*: a distribution id does not exist
