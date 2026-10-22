@@ -299,6 +299,16 @@ resource "aws_cloudfront_function" "strip_api_prefix" {
   code    = file("${path.module}/functions/strip-api-prefix.js")
 }
 
+# Maps a directory URI to the index.html inside it, which is what an exported Next.js site
+# needs from S3. See functions/append-index.js: without it every page but the home is a 404.
+resource "aws_cloudfront_function" "append_index" {
+  name    = "${local.name}-append-index"
+  runtime = "cloudfront-js-2.0"
+  comment = "Map directory URIs to index.html for the ${local.name} site"
+  publish = true
+  code    = file("${path.module}/functions/append-index.js")
+}
+
 # Trivy's AWS-0011 is checkov's CKV_AWS_68 (no WAF) and AWS-0010 is CKV_AWS_86 (no access
 # logging). See the reasons inside the block: both bill before the first visitor arrives.
 #trivy:ignore:AVD-AWS-0011
@@ -360,6 +370,11 @@ resource "aws_cloudfront_distribution" "web" {
 
     cache_policy_id            = aws_cloudfront_cache_policy.pages.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.append_index.arn
+    }
   }
 
   # /_next/static/* carries a content hash in the filename, so it is immutable: cache it for

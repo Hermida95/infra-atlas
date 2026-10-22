@@ -9,6 +9,10 @@
 # 2. The /api/* behaviour, its origin and its edge function must be driven by a flag that is
 #    known during plan, not by whether api_origin_domain happens to be null. The caller passes
 #    `replace(module.api.api_endpoint, ...)`, which is unknown until apply.
+#
+# 3. The pages behaviour must carry the viewer-request function that turns /c/pipeline/ into
+#    c/pipeline/index.html. The exported site is a tree of directories and S3 serves keys, not
+#    directories: without the function every page but the home answers 403.
 mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
     defaults = {
@@ -67,5 +71,22 @@ run "api_origin_counts_come_from_the_flag" {
   assert {
     condition     = length(aws_cloudfront_distribution.web.ordered_cache_behavior) == 2
     error_message = "enable_api_origin must add the /api/* behaviour beside /_next/static/*."
+  }
+}
+
+run "pages_behaviour_rewrites_directories_to_index_html" {
+  command = plan
+
+  # The ARN is unknown until apply, so the association is checked by its event type: one
+  # viewer-request function on the pages behaviour, which is the only one this module attaches
+  # there. That the code is the right one is covered by the second assert.
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.web.default_cache_behavior).function_association).event_type == "viewer-request"
+    error_message = "The default behaviour must run a viewer-request function, or /c/<id>/ reaches S3 as a key that does not exist."
+  }
+
+  assert {
+    condition     = strcontains(aws_cloudfront_function.append_index.code, "index.html")
+    error_message = "append-index.js must rewrite a directory URI to the index.html inside it."
   }
 }
