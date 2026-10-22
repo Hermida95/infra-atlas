@@ -18,12 +18,9 @@ __pycache__/
 *.tfstate.*
 *.tfplan
 .terraform.lock.hcl.bak
-# Dependency locks are normally committed. They are not here yet, because a lock file written
-# without access to registry.terraform.io records only one platform and no registry checksums,
-# and an incomplete lock breaks `terraform init` on every other platform. Generate and commit
-# them once (infra/terraform/README.md) and delete this line.
-.terraform.lock.hcl
-# Shared provider cache used by `make tf-validate` (one download instead of seven).
+# .terraform.lock.hcl is NOT ignored: it is committed, like every other dependency lock in
+# this repo (infra/terraform/README.md).
+# Shared provider cache used by `make tf-validate` and `make tf-test` (one download, not seven).
 .terraform-plugin-cache/
 # Account-specific, and not committed: the state bucket name and the ARNs usually carry the
 # account id. Copy the .example files beside them (infra/terraform/README.md).

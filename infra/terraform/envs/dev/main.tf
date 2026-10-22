@@ -59,7 +59,10 @@ module "web" {
   aliases             = var.web_aliases
   acm_certificate_arn = var.acm_certificate_arn
 
-  # Same origin for the pages and the API.
+  # Same origin for the pages and the API. The flag is literal, so the module's `count` and
+  # `dynamic` blocks are resolvable during `plan`; the hostname beside it is an attribute of
+  # an API Gateway that does not exist yet, and only has to be known by `apply`.
+  enable_api_origin = true
   api_origin_domain = replace(module.api.api_endpoint, "https://", "")
 
   # Pages expire in a minute here, so a deploy is visible without an invalidation.
@@ -78,7 +81,11 @@ module "observability" {
   environment = var.environment
 
   alert_emails = var.alert_emails
-  api_id       = module.api.api_id
+
+  # Same split as the web module's two arguments above, and for the same reason: the alarm's
+  # `count` comes from the literal flag, its dimension from the computed id.
+  enable_api_5xx_alarm = true
+  api_id               = module.api.api_id
 
   # No budget here: a budget with no cost filter measures the whole account, so prod's two
   # already cover this environment's spend, and AWS bills 0.02 USD/day from the third budget

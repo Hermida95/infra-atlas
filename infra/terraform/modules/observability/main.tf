@@ -20,17 +20,31 @@ data "aws_caller_identity" "current" {}
 # Alert channel
 # --------------------------------------------------------------------------------------------
 
-# alias/aws/sns is the AWS-managed key: encryption at rest with no monthly key charge. A
-# customer-managed key would cost 1 USD/month, a fifth of the budget, to protect "your bill
-# went over 5 euros".
-# Trivy's AWS-0136 wants a customer-managed key on the topic. The topic carries "your bill
-# went over 5 euros"; the key would cost 1 USD/month, which is a fifth of that budget.
-#trivy:ignore:AVD-AWS-0136
+# No encryption at rest on this topic, and it is the same shape of bug as the assets bucket
+# in modules/web-opennext: `alias/aws/sns` is the AWS-managed key, whose key policy AWS owns
+# and nobody can edit, so cloudwatch.amazonaws.com can never be granted the kms:GenerateDataKey
+# and kms:Decrypt an encrypted publish needs. The topic policy below would say yes and KMS
+# would say no -- and an alarm whose action fails is not retried and raises nothing. The
+# alarm would sit in ALARM state with no mail ever arriving, which is the worst possible
+# failure for the one thing that tells you the bill is running away.
+#
+# A customer-managed key fixes it and costs 1 USD/month, a fifth of the whole budget, to
+# protect two sentences ("your bill went over 5 euros", "the API is returning 5xx") that
+# contain nothing an attacker does not already learn by loading the site. SNS still encrypts
+# the message in transit over TLS; what is given up is encryption at rest in the queue.
+#
+# Trivy's AWS-0095 ("topic does not have encryption enabled") and checkov's CKV_AWS_26 both
+# ask for it. Reasons on the lines. AWS-0095 is HIGH, which security.yml fails on, so this is
+# one of the few ignores in the repo that is load-bearing rather than tidiness; AWS-0136
+# ("not a customer-managed key") is what would fire instead if encryption were put back.
+#trivy:ignore:AVD-AWS-0095
 resource "aws_sns_topic" "alerts" {
-  name              = "${local.name}-alerts"
-  display_name      = "Infra Atlas ${var.environment}"
-  kms_master_key_id = "alias/aws/sns"
-  tags              = local.tags
+  # checkov:skip=CKV_AWS_26:Not a cost trade-off. CloudWatch Alarms cannot publish to a topic
+  # encrypted with the AWS-managed aws/sns key -- the key policy cannot be edited to allow
+  # cloudwatch.amazonaws.com -- and the publish fails silently. See the comment above.
+  name         = "${local.name}-alerts"
+  display_name = "Infra Atlas ${var.environment}"
+  tags         = local.tags
 }
 
 # Without this, Budgets and CloudWatch cannot publish: an SNS topic's default policy only
@@ -146,13 +160,15 @@ resource "aws_budgets_budget" "cost" {
 # API health
 # --------------------------------------------------------------------------------------------
 
-# AWS/ApiGatewayV2 publishes `5xx` for HTTP APIs (the REST API metric is `5XXError`, a
-# different namespace and a different name -- an easy way to build an alarm that never fires).
+# HTTP APIs publish `5xx` in the `AWS/ApiGateway` namespace -- the same namespace as REST
+# APIs, under a different metric name (REST publishes `5XXError`). "AWS/ApiGatewayV2" looks
+# like it should exist, by analogy with the aws_apigatewayv2_* resources, and does not: an
+# alarm pointed at it is accepted by the API and never fires.
 #
 # Sum, not Average: Average over a period with two requests, one of them failing, is 0.5 and
 # would never cross a threshold expressed in responses.
 resource "aws_cloudwatch_metric_alarm" "api_5xx" {
-  count = var.api_id == null ? 0 : 1
+  count = var.enable_api_5xx_alarm ? 1 : 0
 
   alarm_name        = "${local.name}-api-5xx"
   alarm_description = "The ${var.environment} API returned ${var.api_5xx_threshold} or more 5xx in ${var.api_5xx_period_seconds / 60} minutes."

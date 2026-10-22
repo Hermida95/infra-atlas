@@ -54,13 +54,14 @@ Three properties the design is built around, all of them consequences of a 1–5
 ```bash
 make tf-fmt      # terraform fmt -check -recursive
 make tf-validate # init -backend=false + validate in every module and env
+make tf-test     # terraform test with mock_provider: a real plan, with no AWS account
 make tf-lint     # tflint (needs tflint --init once, which make does)
 make tf-sec      # checkov
-make tf-check    # all four, the same as CI
+make tf-check    # all five, the same as CI
 ```
 
-`make tf-validate` runs `terraform init -backend=false`, so it needs no credentials and never
-touches the state bucket.
+None of them needs credentials and none touches the state bucket: `tf-validate` and `tf-test`
+both run `terraform init -backend=false`, and the tests mock the provider away entirely.
 
 ## First deployment, in order
 
@@ -85,15 +86,26 @@ touches the state bucket.
 
    # push the lambda target of apps/api/Dockerfile into it
    make embed
-   docker build -f apps/api/Dockerfile --target lambda -t "$(terraform output -raw ecr_repository_url):bootstrap" .
    aws ecr get-login-password | docker login --username AWS --password-stdin "$(terraform output -raw ecr_repository_url)"
-   docker push "$(terraform output -raw ecr_repository_url):bootstrap"
+
+   # --platform linux/amd64 is not optional on an Apple Silicon machine. Without it docker
+   # builds for the host, so an arm64 image lands in a registry a function declared
+   # architectures = ["x86_64"] pulls from; the apply succeeds and the first invocation
+   # fails with `exec format error`.
+   #
+   # --provenance=false keeps buildx from wrapping the result in an OCI index with an
+   # attestation manifest beside the image. Lambda wants a plain single-platform manifest
+   # and refuses the index with "The image manifest, config or layer media type ... is not
+   # supported".
+   docker buildx build -f apps/api/Dockerfile --target lambda \
+     --platform linux/amd64 --provenance=false \
+     -t "$(terraform output -raw ecr_repository_url):bootstrap" --push .
 
    # step 2: everything, with api_image_uri set to the digest that push printed
    terraform apply
    ```
 
-   Every later apply is one step: `deploy.yml` builds, pushes and passes the new digest.
+   Every later apply is one step: `deploy.yml` promotes a digest and passes it in.
 4. **`envs/prod`** — the same, and then confirm the SNS subscription emails. An unconfirmed
    subscription is the usual reason an alarm "did not fire".
 
@@ -116,14 +128,48 @@ touches the state bucket.
 | --- | --- |
 | Formatting | `terraform fmt -check -recursive` |
 | Syntax, types, module wiring | `terraform init -backend=false` + `terraform validate` in all 7 directories |
+| **That `plan` resolves at all** | `terraform test` with `mock_provider "aws"` — see below |
+| Rendered IAM policies | `terraform test` in `modules/github-oidc`, asserting on the decoded JSON |
 | Terraform and AWS lint | `tflint` with the AWS ruleset |
 | Security and cost misconfiguration | `checkov`, 0 failures, every skip carrying a reason |
 | The same, by a second scanner | `trivy --scanners misconfig`, which `security.yml` already runs over the whole repo |
 | **Nothing else** | There is no AWS account. Nothing here has ever been applied. |
 
-`validate` type-checks a plan; it does not call AWS. It cannot tell you that an IAM condition
-key is spelled right, that a metric name exists, or that a quota allows what you asked for.
-The open questions are listed in the pull request that added this directory.
+`validate` type-checks a configuration; it does not build a plan graph and it does not call
+AWS. It cannot tell you that an IAM condition key is spelled right, that a metric name exists,
+that a quota allows what you asked for — or even that `plan` would succeed. The open questions
+are listed in the pull request that added this directory.
+
+## `terraform test`: the gap between `validate` and `apply`
+
+`fmt`, `validate`, `tflint` and `checkov` all read the configuration without ever building a
+plan. That leaves one whole class of mistake green on every check and fatal on the first real
+run: a `count` or a `dynamic` block whose value is not known until `apply`.
+
+```hcl
+# passes all four checks; dies on the first plan of a new environment
+count = var.api_id == null ? 0 : 1          # api_id = module.api.api_id
+```
+
+> Error: Invalid count argument
+> The "count" value depends on resource attributes that cannot be determined until apply.
+
+`mock_provider "aws"` is what makes this runnable here: the provider is never contacted, so
+there are no credentials, no account and no network — and the error lives in Terraform's own
+evaluation, which is exactly what still runs. The tests are:
+
+| Where | What it pins |
+| --- | --- |
+| `envs/dev/tests`, `envs/prod/tests` | `plan` resolves from an empty state, and again with a custom domain |
+| `modules/web-opennext/tests` | the assets bucket is `AES256`; the `/api/*` behaviour is driven by a plan-time flag |
+| `modules/api-lambda/tests` | the ECR repository name carries the environment |
+| `modules/observability/tests` | the alert topic has no KMS key; the alarm reads `AWS/ApiGateway` |
+| `modules/github-oidc/tests` | the apply role can list `env:/`, can create a log delivery, and cannot reach the other environment's registry |
+
+The `github-oidc` file deliberately uses a real `aws` provider with dummy credentials and the
+`skip_*` flags rather than `mock_provider`: `aws_iam_policy_document` is rendered client-side,
+so a mocked provider would hand back a generated string and there would be no policy left to
+assert on. It still calls nothing — `command = plan` creates no resources.
 
 ## Two scanners, two ignore files
 
@@ -155,22 +201,33 @@ line in every case.
 
 ## Provider lock files
 
-`.terraform.lock.hcl` is gitignored, which is **not** where this should end up: a lock file is
-how a provider version gets pinned to exact bytes, the same argument as SHA-pinned actions and
-digest-pinned images ([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)). The files are missing
-because they were written in an environment with no access to `registry.terraform.io`, and a
-lock recorded without it holds one platform and no registry checksums — which fails
-`terraform init` on any other platform instead of pinning anything.
+`.terraform.lock.hcl` is **committed**, in all seven directories, for the same reason actions
+are pinned by SHA and images are deployed by digest
+([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)): a version constraint picks a version, a lock
+picks exact bytes. `~> 6.0` in `versions.tf` would otherwise let any later 6.x in on the next
+`init`, and a repository that pins every action to a 40-character SHA cannot resolve its own
+providers without pinning anything.
 
-Generate them once, from a machine that can reach the registry, and drop the `.terraform.lock.hcl`
-line from `.gitignore`:
+All seven files are identical and hold three platforms — `linux_amd64` (what CI runs),
+`darwin_arm64` (Apple Silicon) and `darwin_amd64`. A lock with only one platform in it is
+worse than none: `terraform init` then refuses to run anywhere else.
+
+Regenerate them after a deliberate provider bump:
 
 ```bash
 for d in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
-  terraform -chdir="$d" init -backend=false
   terraform -chdir="$d" providers lock \
     -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64
 done
 ```
 
-`linux_amd64` is what CI runs; add whatever you develop on.
+Add `-platform=linux_arm64` if you ever develop on one; adding a platform is additive, and
+removing one breaks `init` for whoever uses it.
+
+> The committed files record `h1:` hashes (one per platform) and not the registry's `zh:`
+> hashes, because they were generated from a verified local mirror of the official release
+> zips — `registry.terraform.io` is not reachable from the environment they were made in,
+> while `releases.hashicorp.com` is, and each zip was checked against the published
+> `SHA256SUMS` before being locked. `terraform init` verifies against `h1:` after unpacking,
+> so the pin is real; re-running the loop above from a machine that can reach the registry
+> adds the `zh:` hashes and the signature check that comes with them.

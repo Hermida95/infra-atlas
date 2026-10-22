@@ -36,3 +36,40 @@ terraform plan
 gets a different claim and STS refuses it, so the required reviewer configured on the GitHub
 environment is enforced by IAM rather than by convention — the mitigation decision 9 asks for
 against "an automatic apply in production".
+
+## Before the very first apply: check one Service Quota
+
+`reserved_concurrency` is written literally in `main.tf` (5 here, 2 in `dev`) because it
+is this project's main cost guard — without it a loop hitting `/search` has no upper bound. It
+is also the one number in this directory that a brand-new AWS account can refuse.
+
+Lambda will only accept a reservation while **at least 100 of the account's concurrency stays
+unreserved**. A fresh account often has the *Concurrent executions* quota lowered to 10 or 50
+rather than the documented 1000, and then `reserved_concurrent_executions` fails the apply
+with:
+
+> InvalidParameterValueException: Specified ReservedConcurrentExecutions for function
+> decreases account's UnreservedConcurrentExecution below its minimum value of [100].
+
+Check it before the first apply, and remember `dev` and `prod` reserve from the same pool
+(2 + 5 = 7, so the account needs at least 107):
+
+```bash
+# Current quota (L-B99A9384 = Lambda concurrent executions)
+aws service-quotas get-service-quota --service-code lambda --quota-code L-B99A9384 \
+  --query 'Quota.Value' --output text
+
+# What is already reserved and what is left
+aws lambda get-account-settings --query 'AccountLimit.ConcurrentExecutions'
+```
+
+If it comes back below 107, raise it (`aws service-quotas request-service-quota-increase
+--service-code lambda --quota-code L-B99A9384 --desired-value 1000`, approved automatically
+in most regions) rather than lowering the number in `main.tf`. Dropping the reservation is
+what removes the ceiling on the bill, which is the opposite of what this project wants; if the
+increase is genuinely unavailable, note the lower value and why in the pull request that
+changes it.
+
+Nothing else here is quota-sensitive at this size: one CloudFront distribution (limit 200),
+two S3 buckets (limit 100), one HTTP API, one ECR repository, and two budgets — which is
+exactly the number AWS does not charge for.

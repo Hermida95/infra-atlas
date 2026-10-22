@@ -15,7 +15,12 @@ browser --HTTPS--> CloudFront --OAC--> S3 (private, no website endpoint)
   this distribution, through an **Origin Access Control** (SigV4) whose bucket policy is
   pinned with `AWS:SourceArn` — so another distribution, even in the same account, cannot read
   it by presenting the CloudFront service principal. OAC rather than the older Origin Access
-  Identity: it is the one that works with KMS-encrypted objects.
+  Identity: it is what AWS still develops, and the only one `AWS:SourceArn` works with.
+- **The bucket is encrypted with `AES256`, not KMS**, and here that is correctness rather than
+  cost. OAC fetches objects as the service principal `cloudfront.amazonaws.com`, which for a
+  KMS-encrypted object also needs `kms:Decrypt` in the **key** policy — and the AWS-managed
+  `aws/s3` key's policy cannot be edited. The failure mode is the nasty kind: `AccessDenied` on
+  every object, turned into `/404.html` by the error mapping below, with a green `apply`.
 - **CSP and HSTS live in a response headers policy**, as decision 10 asks. The pages are files
   on S3: there is no server left to add headers, so CloudFront is the only place they can come
   from. The CSP is a variable, because a CSP that does not match the app breaks the page
