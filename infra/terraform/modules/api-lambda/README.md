@@ -16,7 +16,13 @@ client -> API Gateway (HTTP API, $default stage, throttled) -> Lambda (image) ->
 
 - **Deployed by digest, not by tag.** `image_uri` must end in `@sha256:…`, validated by the
   variable. Same reason the Helm chart uses `image.digest`: the digest names the exact bytes
-  CI scanned and signed ([docs/SEGURIDAD.md](../../../../docs/SEGURIDAD.md)).
+  CI scanned and signed ([docs/SEGURIDAD.md](../../../../docs/SEGURIDAD.md)). `release.yml`
+  is the only place that image is built; `deploy.yml` promotes that one digest into each
+  environment's registry and never rebuilds, so `prod` runs the bytes `dev` ran.
+- **The registry name carries the environment** (`<project>-<env>/api`). `dev` and `prod` share
+  one account and one region, so a shared name would fail the second environment's first apply
+  with `RepositoryAlreadyExists` — and would let one environment's pipeline overwrite the
+  other's images. It is also what the apply role's ECR ARN scope matches on.
 - **≥ 1024 MB of memory**, enforced by a validation. Lambda's CPU share scales with memory and
   the ONNX embedding model needs ~300 MiB; the chart requests 320Mi for the same measurement.
   Halving the memory does not halve the bill, because billing is GB-seconds and the work takes

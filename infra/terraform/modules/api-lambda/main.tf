@@ -23,7 +23,12 @@ resource "aws_ecr_repository" "api" {
   # checkov:skip=CKV_AWS_136:AES256 with the S3-managed key, not KMS. A customer-managed key
   # costs 1 USD/month -- a fifth of the whole budget -- to encrypt layers whose contents are
   # this repository's own open-source code plus public base images.
-  name = "${var.project}/api"
+  # The environment is part of the name, not just of the tags: dev and prod are the same
+  # account and the same region, so a shared name means the second environment's first apply
+  # fails with RepositoryAlreadyExists -- and a shared registry would also let one
+  # environment's pipeline overwrite the other's images. It is also what the apply role's ARN
+  # scope matches on (modules/github-oidc: repository/<project>-<env>*).
+  name = "${var.project}-${var.environment}/api"
 
   # IMMUTABLE: a tag, once pushed, cannot be moved to different bytes. The function deploys by
   # digest anyway, but an immutable tag makes "which commit is in prod" answerable.

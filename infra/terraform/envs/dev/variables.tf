@@ -43,10 +43,15 @@ variable "alert_emails" {
 variable "api_image_uri" {
   description = <<-EOT
     Image the API Lambda runs, by digest:
-    <account>.dkr.ecr.<region>.amazonaws.com/infra-atlas/api@sha256:<digest>
+    <account>.dkr.ecr.<region>.amazonaws.com/infra-atlas-dev/api@sha256:<digest>
 
-    deploy.yml passes it with -var after pushing the image it just built. On the very first
-    apply the registry does not exist yet, so see README.md for the two-step bootstrap.
+    The registry name carries the environment, because dev and prod share one account and one
+    region (modules/api-lambda).
+
+    deploy.yml passes the digest release.yml built, scanned and signed, after promoting that
+    exact manifest into this environment's registry -- so prod runs the bytes dev ran. On the
+    very first apply the registry does not exist yet, so see README.md for the two-step
+    bootstrap.
   EOT
   type        = string
 }

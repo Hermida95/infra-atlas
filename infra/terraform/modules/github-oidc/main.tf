@@ -15,8 +15,11 @@ locals {
   # environment's pipeline cannot touch another's, and neither can touch anything else in
   # the account.
   arn = {
-    lambda     = "arn:${var.aws_partition}:lambda:*:${var.aws_account_id}:function:${local.name_prefix}-*"
-    ecr        = "arn:${var.aws_partition}:ecr:*:${var.aws_account_id}:repository/${var.project}*"
+    lambda = "arn:${var.aws_partition}:lambda:*:${var.aws_account_id}:function:${local.name_prefix}-*"
+    # <project>-<env>*, not <project>*: the latter also matched the other environment's
+    # registry, so dev's pipeline could push to prod's (modules/api-lambda names the
+    # repository <project>-<env>/api).
+    ecr        = "arn:${var.aws_partition}:ecr:*:${var.aws_account_id}:repository/${local.name_prefix}*"
     logs       = "arn:${var.aws_partition}:logs:*:${var.aws_account_id}:log-group:*${local.name_prefix}*"
     iam_role   = "arn:${var.aws_partition}:iam::${var.aws_account_id}:role/${local.name_prefix}-*"
     sns        = "arn:${var.aws_partition}:sns:*:${var.aws_account_id}:${local.name_prefix}-*"
