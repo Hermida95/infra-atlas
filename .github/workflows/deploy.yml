@@ -3,8 +3,16 @@ name: deploy
 # Decision 9, end to end:
 #
 #   pull request  ->  terraform plan for dev and prod, posted as one comment per environment
-#   push to main  ->  apply dev, then apply prod behind a GitHub environment that requires
+#   push to main  ->  build the image once (release.yml, called as a reusable workflow), then
+#                     apply dev, then apply prod behind a GitHub environment that requires
 #                     a human to approve it
+#
+# The image is built once per commit and promoted, never rebuilt per environment. That is
+# decision 5 and the `promotion` card taken literally: prod runs the same digest dev ran, and
+# it is the digest release.yml scanned with trivy and signed with cosign. Each environment has
+# its own ECR repository, and its apply role can only reach its own, so the same manifest is
+# copied into both by digest -- `crane copy` moves the bytes without recomputing them, which
+# is what keeps the digest identical on both sides.
 #
 # Credentials come from GitHub's OIDC provider, exchanged for a short-lived AWS role session.
 # There is no AWS access key anywhere in this repository or its settings.
@@ -30,17 +38,26 @@ on:
       - apps/api/**
       - packages/brain/**
       - content/**
+      - pyproject.toml
       - uv.lock
       - .github/workflows/deploy.yml
+      - .github/workflows/release.yml
   push:
     branches: [main]
+    # Written out twice rather than shared with a YAML anchor: the Actions workflow parser
+    # does not resolve anchors or aliases. The two lists have to stay in step by hand.
+    #
+    # release.yml has no push trigger any more -- this workflow calls it -- so every path that
+    # used to publish an image is here too, pyproject.toml and release.yml included.
     paths:
       - infra/terraform/**
       - apps/api/**
       - packages/brain/**
       - content/**
+      - pyproject.toml
       - uv.lock
       - .github/workflows/deploy.yml
+      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:
@@ -57,6 +74,12 @@ env:
   # terraform job in ci.yml. Bump the version and the hash together.
   TERRAFORM_VERSION: 1.14.4
   TERRAFORM_SHA256: 4a24b18865d9419ba7882567cb7429dd1525b3e2029a9e38f612d476ba8c3dea
+  # crane copies a manifest between registries without unpacking or re-pushing it, so the
+  # digest on the far side is the digest on this side. `docker pull && docker push` does not
+  # promise that: the daemon rebuilds the manifest, and a new manifest is a new digest.
+  # Hash from the publisher's own checksums.txt, like the two above.
+  CRANE_VERSION: 0.20.7
+  CRANE_SHA256: 8ef3564d264e6b5ca93f7b7f5652704c4dd29d33935aff6947dd5adefd05953e
   # Terraform drops the interactive prompts and the "run terraform init" advice.
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "0"
@@ -104,6 +127,8 @@ jobs:
       - name: Check the repository variables
         env:
           ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          PERMISSIONS_BOUNDARY_ARN: ${{ vars.PERMISSIONS_BOUNDARY_ARN }}
+          WEB_BUCKET_NAME: ${{ vars[format('WEB_BUCKET_NAME_{0}', matrix.suffix)] }}
         run: |
           set -euo pipefail
           test -n "${AWS_REGION:-}" || { echo "::error::Repository variable AWS_REGION is not set."; exit 1; }
@@ -111,6 +136,19 @@ jobs:
           # alert_emails list variable, and the module refuses an empty one.
           printf '%s' "$ALERT_EMAILS" | jq -e 'type == "array" and length > 0' >/dev/null \
             || { echo "::error::Repository variable ALERT_EMAILS must be a non-empty JSON array, e.g. [\"you@example.com\"]."; exit 1; }
+          # An empty boundary is not "no boundary": the apply role's iam:CreateRole is
+          # conditioned on iam:PermissionsBoundary being exactly this ARN, so an empty value
+          # means AccessDenied on the Lambda execution role, halfway through the apply, with
+          # the registry and the log group already created. Caught here instead.
+          test -n "$PERMISSIONS_BOUNDARY_ARN" \
+            || { echo "::error::Repository variable PERMISSIONS_BOUNDARY_ARN is empty. The apply role cannot create a role without the boundary (iam:PermissionsBoundary condition in modules/github-oidc), so an empty value fails the apply with AccessDenied. Set it from \`terraform output -raw execution_boundary_arn\` -- see infra/terraform/bootstrap/README.md."; exit 1; }
+          # The bucket name has to match the apply role's ARN scope, infra-atlas-<env>-*, or
+          # the apply fails on CreateBucket.
+          case "$WEB_BUCKET_NAME" in
+            "infra-atlas-${{ matrix.environment }}-"*) ;;
+            "") echo "::error::Repository variable WEB_BUCKET_NAME_${{ matrix.suffix }} is not set."; exit 1 ;;
+            *) echo "::error::WEB_BUCKET_NAME_${{ matrix.suffix }} must start with 'infra-atlas-${{ matrix.environment }}-': the apply role's S3 ARN scope matches nothing else."; exit 1 ;;
+          esac
           echo "Variables look usable. See infra/terraform/bootstrap/README.md for the full list."
 
       - name: Install Terraform
@@ -157,7 +195,10 @@ jobs:
       - name: Resolve the deployed image digest
         id: image
         env:
-          ECR_REPOSITORY: infra-atlas/api
+          # One registry per environment: dev and prod are the same account and the same
+          # region, so a shared name fails the second environment's first apply with
+          # RepositoryAlreadyExists (modules/api-lambda).
+          ECR_REPOSITORY: infra-atlas-${{ matrix.environment }}/api
         run: |
           set -euo pipefail
           account="$(aws sts get-caller-identity --query Account --output text)"
@@ -261,12 +302,34 @@ jobs:
           fi
 
   # ------------------------------------------------------------------------------------------
+  # Build the image. Once.
+  # ------------------------------------------------------------------------------------------
+  #
+  # release.yml, called as a reusable workflow rather than copied: build -> trivy (fails on
+  # HIGH/CRITICAL) -> push to GHCR with an SBOM and provenance -> cosign, keyless. One job for
+  # the whole run, so one digest reaches both environments.
+  #
+  # It runs even for a commit that only touches infra/terraform: the image is cheap to rebuild
+  # and expensive to reason about. "The image is whatever this commit builds" needs no state
+  # and no lookup; "reuse the digest already deployed" needs both, and reading it back out of
+  # an environment's registry is how the two environments drifted apart in the first place.
+  image:
+    name: Build, scan and sign the API image
+    if: github.event_name != 'pull_request' && vars.AWS_REGION != '' && vars.TF_STATE_BUCKET != ''
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io/<owner>/infra-atlas-api
+      id-token: write # keyless cosign signature
+    uses: ./.github/workflows/release.yml
+
+  # ------------------------------------------------------------------------------------------
   # Apply, on merge to main
   # ------------------------------------------------------------------------------------------
   apply:
     name: Apply ${{ matrix.environment }}
     # Same switch as the plan job above.
     if: github.event_name != 'pull_request' && vars.AWS_REGION != '' && vars.TF_STATE_BUCKET != ''
+    needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -279,10 +342,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read # pull the signed manifest out of GHCR to promote it
 
     strategy:
       # One at a time, in this order: dev is the rehearsal. fail-fast (the default) means a
-      # failed dev apply cancels prod before anyone is asked to approve it.
+      # failed dev apply cancels prod before anyone is asked to approve it, and -- since both
+      # legs deploy the same digest -- a green dev is a real rehearsal of prod's artifact.
       max-parallel: 1
       matrix:
         include:
@@ -299,6 +364,8 @@ jobs:
       - name: Check the repository variables
         env:
           ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+          PERMISSIONS_BOUNDARY_ARN: ${{ vars.PERMISSIONS_BOUNDARY_ARN }}
+          WEB_BUCKET_NAME: ${{ vars[format('WEB_BUCKET_NAME_{0}', matrix.suffix)] }}
         run: |
           set -euo pipefail
           test -n "${AWS_REGION:-}" || { echo "::error::Repository variable AWS_REGION is not set."; exit 1; }
@@ -306,6 +373,19 @@ jobs:
           # alert_emails list variable, and the module refuses an empty one.
           printf '%s' "$ALERT_EMAILS" | jq -e 'type == "array" and length > 0' >/dev/null \
             || { echo "::error::Repository variable ALERT_EMAILS must be a non-empty JSON array, e.g. [\"you@example.com\"]."; exit 1; }
+          # An empty boundary is not "no boundary": the apply role's iam:CreateRole is
+          # conditioned on iam:PermissionsBoundary being exactly this ARN, so an empty value
+          # means AccessDenied on the Lambda execution role, halfway through the apply, with
+          # the registry and the log group already created. Caught here instead.
+          test -n "$PERMISSIONS_BOUNDARY_ARN" \
+            || { echo "::error::Repository variable PERMISSIONS_BOUNDARY_ARN is empty. The apply role cannot create a role without the boundary (iam:PermissionsBoundary condition in modules/github-oidc), so an empty value fails the apply with AccessDenied. Set it from \`terraform output -raw execution_boundary_arn\` -- see infra/terraform/bootstrap/README.md."; exit 1; }
+          # The bucket name has to match the apply role's ARN scope, infra-atlas-<env>-*, or
+          # the apply fails on CreateBucket.
+          case "$WEB_BUCKET_NAME" in
+            "infra-atlas-${{ matrix.environment }}-"*) ;;
+            "") echo "::error::Repository variable WEB_BUCKET_NAME_${{ matrix.suffix }} is not set."; exit 1 ;;
+            *) echo "::error::WEB_BUCKET_NAME_${{ matrix.suffix }} must start with 'infra-atlas-${{ matrix.environment }}-': the apply role's S3 ARN scope matches nothing else."; exit 1 ;;
+          esac
           echo "Variables look usable. See infra/terraform/bootstrap/README.md for the full list."
 
       - name: Install Terraform
@@ -336,39 +416,84 @@ jobs:
       - name: Who am I
         run: aws sts get-caller-identity
 
-      # The image carries the graph, the vector index and the embedding model, so they are
-      # built before it, exactly as ci.yml and k8s-smoke.yml do.
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-      - run: uv sync --all-packages
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: apps/api/data/models
-          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
-          restore-keys: fastembed-bge-small-en-v1.5-
-      - run: uv run brain graph
-      - run: uv run brain embed
+      # Nothing is built here. The image came out of the `image` job above, once, and what
+      # follows moves that exact manifest into this environment's registry.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      # The `lambda` target: the same image as Compose and kind, plus the Lambda Web Adapter
-      # (decision 5). The registry has to exist already -- the very first apply of an
-      # environment is two manual steps, see infra/terraform/README.md.
-      - name: Build and push the API image
+      - name: Install crane
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSLo "$tmp/crane.tgz" \
+            "https://github.com/google/go-containerregistry/releases/download/v${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz"
+          echo "${CRANE_SHA256}  $tmp/crane.tgz" | sha256sum -c -
+          tar -xzf "$tmp/crane.tgz" -C /usr/local/bin crane
+          crane version
+
+      # The gate. If the signature does not verify, nothing is copied anywhere: the identity
+      # has to be release.yml in *this* repository, and the issuer has to be GitHub's OIDC
+      # provider, so an image somebody pushed to the same GHCR repository by hand does not
+      # pass. This is the step that makes `image_uri`'s promise -- "the digest CI scanned and
+      # signed" -- something the pipeline enforces rather than something a comment asserts.
+      - name: Verify the signature before promoting anything
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+      # The promotion itself: copy, do not rebuild. `crane copy` uploads the blobs and the
+      # manifest unchanged, and a manifest digest is the hash of the manifest bytes, so the
+      # digest in ECR is the digest in GHCR. That equality is asserted below rather than
+      # assumed -- it is the entire claim of the `promotion` card, and an assertion that
+      # cannot fail silently is worth three lines.
+      - name: Promote the signed image into this environment's registry
         id: image
         env:
-          ECR_REPOSITORY: infra-atlas/api
+          ECR_REPOSITORY: infra-atlas-${{ matrix.environment }}/api
+          IMAGE: ${{ needs.image.outputs.image }}
+          INDEX_DIGEST: ${{ needs.image.outputs.digest }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           account="$(aws sts get-caller-identity --query Account --output text)"
           registry="${account}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-          tag="${registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
 
-          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
-          docker build -f apps/api/Dockerfile --target lambda \
-            --build-arg "REVISION=${GITHUB_SHA}" -t "$tag" .
-          docker push "$tag"
+          crane auth login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin <<<"$GH_TOKEN"
+          aws ecr get-login-password | crane auth login "$registry" --username AWS --password-stdin
 
-          # The digest the registry stored, not the tag: the function deploys exact bytes.
-          digest="$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
-            --image-ids "imageTag=${GITHUB_SHA}" --query 'imageDetails[0].imageDigest' --output text)"
+          # buildx with `sbom: true` and `provenance: mode=max` publishes an OCI *index*: the
+          # linux/amd64 image plus an attestation manifest on the synthetic unknown/unknown
+          # platform. Lambda deploys a single-platform manifest and refuses the index with
+          # "The image manifest, config or layer media type for the source image is not
+          # supported", so what gets promoted is the child. It is read back out of the index
+          # that was just verified, not taken from a job output, so the signature covers it.
+          digest="$(crane manifest "${IMAGE}@${INDEX_DIGEST}" \
+            | jq -re 'if .manifests then
+                        (.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest)
+                      else
+                        empty
+                      end')" || digest=""
+          : "${digest:=$INDEX_DIGEST}"
+          echo "Promoting ${IMAGE}@${digest} (index ${INDEX_DIGEST})."
+
+          # Idempotent, because the tags are IMMUTABLE (modules/api-lambda): a re-run of this
+          # workflow must not try to move ${GITHUB_SHA} onto anything.
+          if crane digest "${registry}/${ECR_REPOSITORY}@${digest}" >/dev/null 2>&1; then
+            echo "Already in ${ECR_REPOSITORY}; nothing to copy."
+          else
+            crane copy "${IMAGE}@${digest}" "${registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          fi
+
+          arrived="$(crane digest "${registry}/${ECR_REPOSITORY}:${GITHUB_SHA}")"
+          if [ "$arrived" != "$digest" ]; then
+            echo "::error::The promoted digest changed in transit: $digest went in, $arrived came out. prod would not be running what dev ran."
+            exit 1
+          fi
+
           echo "uri=${registry}/${ECR_REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
@@ -415,6 +540,7 @@ jobs:
         env:
           ENVIRONMENT: ${{ matrix.environment }}
           DIGEST: ${{ steps.image.outputs.digest }}
+          SOURCE: ${{ needs.image.outputs.image }}
         run: |
           set -euo pipefail
           {
@@ -423,5 +549,11 @@ jobs:
             printf '| Site | %s |\n' "$(terraform output -raw site_url)"
             printf '| API | %s |\n' "$(terraform output -raw api_endpoint)"
             printf '| Image | `%s` |\n' "$DIGEST"
+            printf '| Promoted from | `%s` |\n' "$SOURCE"
             printf '\nPending alarm confirmations: `%s`\n' "$(terraform output -json pending_email_confirmations)"
+            printf '\nThe digest above is the one every environment in this run deployed, and the one'
+            printf ' release.yml scanned and signed. Verify it:\n\n'
+            printf '```bash\ncosign verify %s@%s \\\n' "$SOURCE" "$DIGEST"
+            printf "  --certificate-identity-regexp '^https://github.com/%s/.github/workflows/release.yml@' \\\n" "$GITHUB_REPOSITORY"
+            printf '  --certificate-oidc-issuer https://token.actions.githubusercontent.com\n```\n'
           } >> "$GITHUB_STEP_SUMMARY"

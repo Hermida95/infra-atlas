@@ -3,16 +3,26 @@ name: release
 # Publishes the API image that a cluster or Lambda deploys, only from main:
 #   build -> scan (fails on HIGH/CRITICAL) -> push to GHCR with SBOM and provenance -> sign.
 # Deploy by the digest this prints, never by a tag: the digest names exact, signed bytes.
+#
+# This is the *only* place the API image is built. There is deliberately no `push` trigger:
+# deploy.yml calls this workflow on a merge to main and promotes the digest it returns into
+# each environment, so one commit produces one image and "what is running in prod" has one
+# answer. A push trigger here as well would build the same commit twice -- the builds are not
+# reproducible, so that is two digests -- and the thing that got deployed would not be the
+# thing that got scanned and signed, which is the whole claim of decision 5 and of the
+# `promotion` card.
 on:
-  push:
-    branches: [main]
-    paths:
-      - apps/api/**
-      - packages/brain/**
-      - content/**
-      - pyproject.toml
-      - uv.lock
-      - .github/workflows/release.yml
+  workflow_call:
+    outputs:
+      image:
+        description: The GHCR repository, lowercased, without a tag or digest.
+        value: ${{ jobs.image.outputs.image }}
+      digest:
+        description: >-
+          Digest of what was pushed and signed. buildx with an SBOM and provenance publishes
+          an OCI index, so this names the index; the platform manifest inside it is what
+          deploy.yml promotes, read back out of this index after verifying its signature.
+        value: ${{ jobs.image.outputs.digest }}
   workflow_dispatch:
 
 permissions:
@@ -33,6 +43,9 @@ jobs:
       id-token: write # keyless cosign signature: GitHub's OIDC identity, no stored keys
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/infra-atlas-api
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
