@@ -77,7 +77,9 @@ entrega continua con el mismo nivel de detalle visual que tiene Docker hoy.
 `packages/brain/src/brain/models.py`:
 
 ```python
-Stage = Literal["build", "containerize", "infra", "run", "data", "secure", "ship", "deliver", "observe"]
+Stage = Literal[
+    "build", "containerize", "infra", "run", "data", "secure", "ship", "deliver", "observe"
+]
 ```
 
 - `ship` = integración continua: construir, probar, escanear, firmar, publicar el artefacto.
@@ -256,8 +258,8 @@ capacidades" en vez de mentir con un selector que lleva a un mapa medio vacío.
 ### 2.3 Campos nuevos en `NodeFrontmatter`
 
 ```python
-provider: Slug | None = None      # None = ficha neutra (concepto, patrón, herramienta)
-capability: Slug | None = None    # a qué capacidad pertenece o qué capacidad define
+provider: Slug | None = None  # None = ficha neutra (concepto, patrón, herramienta)
+capability: Slug | None = None  # a qué capacidad pertenece o qué capacidad define
 ```
 
 Combinaciones legales:
