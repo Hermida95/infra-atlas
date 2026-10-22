@@ -10,7 +10,7 @@ make api                   # builds the index, then http://localhost:8000 (docs 
 | --- | --- | --- |
 | GET | `/health` | `{"status": "ok"}`: liveness, the process answers. Checks nothing else |
 | GET | `/ready` | 200 when graph, index and model are loaded and compatible, else 503 with which one is not (readiness probe) |
-| GET | `/metrics` | Prometheus metrics: requests, latency and rejections by route template |
+| GET | `/metrics` | Prometheus metrics: requests, latency and rejections by route template. With `METRICS_PORT` they are served on that port only, not here |
 | GET | `/graph` | The whole `graph.json`, as stored |
 | GET | `/domains` | Domains in map order, with `node_count` |
 | GET | `/requirements` | What a user can ask the planner for, with the keywords it detects in free text |

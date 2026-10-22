@@ -17,7 +17,7 @@ labs/k8s/smoke.sh        port-forward + curl a /health, /ready, /graph y /search
 | `Ingress` (opcional) | Una regla HTTP (host y path → Service) que aplica un Ingress Controller (nginx, AWS Load Balancer Controller...). Viene desactivado (`ingress.enabled: false`) porque kind no trae controller. |
 | `ServiceAccount` | Una identidad propia para la API, nunca la `default` del namespace. Sin token montado. En EKS es donde se engancha un rol IAM (IRSA o Pod Identity) si la API necesita Bedrock o S3. |
 | `PodDisruptionBudget` | `minAvailable: 1`: un drenado de nodo o una actualización del cluster nunca tira todas las réplicas a la vez. Solo protege de interrupciones **voluntarias**; si un nodo se cae, no hay PDB que valga. |
-| `NetworkPolicy` | **Default deny.** Solo entra TCP al puerto de la API y **no sale nada**: el modelo y el índice van en la imagen, así que la API no necesita salir a internet. Si alguien compromete el proceso, no puede exfiltrar datos ni llegar al endpoint de metadatos de la nube. Solo la aplica una CNI que lo soporte (Calico, Cilium, VPC CNI con network policy); kindnet la ignora. |
+| `NetworkPolicy` | **Default deny.** Solo entra TCP al puerto de la API y **no sale nada**: el modelo y el índice van en la imagen, así que la API no necesita salir a internet. Si alguien compromete el proceso, no puede exfiltrar datos ni llegar al endpoint de metadatos de la nube. Solo la aplica una CNI que lo soporte (Calico, Cilium, VPC CNI con network policy); kindnet la ignora. `allowDNS: true` abre solo el puerto 53; cualquier otra salida (p. ej. HTTPS a Bedrock) se añade con `networkPolicy.extraEgress`, que se copia tal cual como reglas de egress. Por defecto está vacío: sin salida. |
 | `values.yaml` | La interfaz del chart: imagen, réplicas, recursos, configuración. Los templates no se tocan; se cambia con `--set` o con `-f otros-values.yaml`. |
 | `values.schema.json` | Valida los values antes de instalar: un tipo erróneo, una clave mal escrita o `allowPrivilegeEscalation: true` hacen fallar `helm install`. |
 | `NOTES.txt` | El texto que imprime `helm install`: cómo hacer el port-forward y qué endpoints probar. |
@@ -101,5 +101,15 @@ Ejercicios para el CKAD:
 | Sin permisos de AWS | Si la API necesita S3 o Bedrock: un ServiceAccount con **IRSA** o **EKS Pod Identity**, que da un rol IAM al Pod sin credenciales en la imagen. |
 | Nodos como contenedores | Managed node groups o **Fargate**. Los `requests` deciden cuántos Pods caben por nodo y, por tanto, el coste. |
 | `helm install` desde el CI | Igual, o GitOps (Argo CD / Flux) leyendo el chart del repo. |
+
+### Qué queda público con el Ingress
+
+Un Ingress con `path: /` publica todo lo que sirve la app. Por eso el chart viene con `config.docs: false` (sin `/docs`, `/redoc` ni `/openapi.json`) y con `/metrics` en **otro puerto** (`config.metricsPort: 9000`, variable `METRICS_PORT`): el Service y el Ingress solo enrutan el puerto `http`, así que solo llega a las métricas quien alcance la IP del Pod, normalmente Prometheus. La NetworkPolicy abre ese puerto a cualquier Pod del cluster; `networkPolicy.metricsFrom` lo limita (p. ej. al namespace `monitoring`). Con `metricsPort: 0` `/metrics` vuelve al puerto principal y el Ingress lo expondría. Para activar la documentación en un entorno de pruebas: `--set config.docs=true`.
+
+### Rate limit con Ingress
+
+El límite de la app (`config.rateLimitPerMinute`, 60/min por IP y por Pod, en memoria) es una **red de seguridad**, no el límite real: cada réplica cuenta por separado y no ve el tráfico de las demás. El límite efectivo se pone **en el borde**: anotaciones del Ingress (`nginx.ingress.kubernetes.io/limit-rpm`), reglas de rate en AWS WAF, o throttling de API Gateway si la API corre en Lambda.
+
+Para que el límite de la app cuente por usuario y no por controlador, uvicorn tiene que confiar en `X-Forwarded-For`: con `ingress.enabled=true` hay que poner `config.forwardedAllowIps` al CIDR de los Pods del controller (p. ej. `10.0.0.0/8`). Con el valor por defecto `127.0.0.1` el chart **se niega a renderizar**: uvicorn vería siempre la IP del controller y todos los usuarios de un Pod compartirían un solo cubo.
 
 El chart no cambia: solo cambia un `values-eks.yaml`. Esa es la gracia de separar templates y values.

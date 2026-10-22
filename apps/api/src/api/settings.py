@@ -41,6 +41,9 @@ class Settings:
     # "json" for log collectors (CloudWatch, Loki); "text" for a human at a terminal.
     log_format: str = "json"
     log_level: str = "INFO"
+    # Port for /metrics on its own listener. 0 serves /metrics on the main port (local dev);
+    # a port keeps it off the main app, so an Ingress in front of the API never exposes it.
+    metrics_port: int = 0
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -52,4 +55,5 @@ class Settings:
             warmup=_flag("WARMUP", True),
             log_format=os.environ.get("LOG_FORMAT", "json").strip().lower(),
             log_level=os.environ.get("LOG_LEVEL", "INFO").strip().upper(),
+            metrics_port=_int("METRICS_PORT", 0),
         )

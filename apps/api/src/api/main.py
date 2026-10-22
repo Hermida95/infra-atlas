@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -15,7 +15,7 @@ from anyio import to_thread
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest, start_http_server
 
 from api.atlas import Atlas, atlas_from_bytes
 from api.middleware import BodySizeLimitMiddleware, RateLimitMiddleware, RequestContextMiddleware
@@ -40,7 +40,12 @@ from api.semantic import EmbedderUnavailableError, get_embedder, get_index, sema
 from api.settings import Settings
 from brain.embeddings import Embedder
 from brain.planner import UnknownRequirementError
-from brain.vectors import IndexModelMismatchError, IndexUnavailableError, VectorIndex
+from brain.vectors import (
+    IndexModelMismatchError,
+    IndexUnavailableError,
+    SearchUnavailableError,
+    VectorIndex,
+)
 
 REPO_MARKER = "pnpm-workspace.yaml"
 DEFAULT_GRAPH_RELATIVE = Path("apps/web/src/data/graph.json")
@@ -122,9 +127,14 @@ def vector_index() -> VectorIndex:
         raise _unavailable(INDEX_UNAVAILABLE, exc) from exc
 
 
-def embedder() -> Embedder:
+def _default_resolver() -> Embedder:
+    return get_embedder()  # looked up per call, so it can be replaced in tests
+
+
+def embedder(request: Request) -> Embedder:
+    """The embedder of this app: the resolver given to `create_app`, else the configured one."""
     try:
-        return get_embedder()
+        return request.app.state.embedder_resolver()
     except EmbedderUnavailableError as exc:
         raise _unavailable(MODEL_UNAVAILABLE, exc) from exc
 
@@ -152,10 +162,8 @@ def readiness(request: Request) -> dict[str, str]:
         log.warning("readiness: index", extra={"cause": str(exc)})
         checks["index"] = checks["model"] = "unavailable"
         return checks
-    # Honour a test override of the `embedder` dependency, like the routes do.
-    resolve = request.app.dependency_overrides.get(embedder, get_embedder)
     try:
-        index.check(resolve())
+        index.check(request.app.state.embedder_resolver())
         checks["model"] = "ok"
     except IndexModelMismatchError as exc:
         log.warning("readiness: model", extra={"cause": str(exc)})
@@ -177,9 +185,13 @@ def ready(request: Request) -> JSONResponse:
     )
 
 
-@router.get("/metrics", include_in_schema=False)
+metrics_router = APIRouter()
+
+
+@metrics_router.get("/metrics", include_in_schema=False)
 def metrics() -> Response:
-    """Prometheus metrics. In a cluster, scrape it from inside; do not route it publicly."""
+    """Prometheus metrics on the main port, used when METRICS_PORT is not set (local dev).
+    With METRICS_PORT they are served by their own listener and this route does not exist."""
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
@@ -231,12 +243,12 @@ def node(node_id: str, atlas: AtlasDep) -> NodeDetail:
 def search(
     index: Annotated[VectorIndex, Depends(vector_index)],
     model: Annotated[Embedder, Depends(embedder)],
-    q: Annotated[str, Query(min_length=1, max_length=200)],
+    q: Annotated[str, Query(min_length=1, max_length=200, pattern=r"\S")],
     k: Annotated[int, Query(ge=1, le=20)] = 5,
 ) -> SemanticSearchOut:
     """Search by meaning: the best matching chunk of each concept, closest first."""
     try:
-        hits = semantic_search(index, model, q, k)
+        hits = semantic_search(index, model, q.strip(), k)
     except IndexModelMismatchError as exc:
         raise _unavailable(INDEX_MISMATCH, exc) from exc
     return SemanticSearchOut(
@@ -299,32 +311,58 @@ def plan(body: PlanIn, atlas: AtlasDep) -> PlanOut:
     )
 
 
-def _warm_up() -> None:
+def _warm_up(resolve: Callable[[], Embedder]) -> None:
     """Load everything /ready checks, and run one query so the ONNX session is initialised.
 
     Failures are logged, not raised: the process still starts, /health answers and /ready
-    reports what is missing, which is easier to debug than a crash loop.
+    reports what is missing, which is easier to debug than a crash loop. That includes the
+    ONNX session failing on its first query (a RuntimeError), not only a model that did not load.
     """
     try:
         load_graph(graph_path())
         index = get_index()
-        model = get_embedder()
+        model = resolve()
         index.check(model)
         model.embed_query("warm up")
         log.info("warm-up complete", extra={"chunks": len(index), "model": model.model})
-    except (GraphUnavailableError, IndexUnavailableError) as exc:
+    except (GraphUnavailableError, SearchUnavailableError) as exc:
         log.warning("warm-up incomplete", extra={"cause": str(exc)})
+    except RuntimeError as exc:
+        log.warning("warm-up failed", extra={"cause": f"{type(exc).__name__}: {exc}"})
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def _start_metrics_server(port: int) -> Any | None:
+    """Serve /metrics on its own port, on all interfaces so the scraper can reach the pod.
+    Not exposed by the Service or the Ingress unless the deployment adds it. A port that
+    cannot be bound is logged, not fatal: the API matters more than its metrics."""
+    if port <= 0:
+        return None
+    try:
+        server, _ = start_http_server(port, registry=REGISTRY)
+    except OSError as exc:
+        log.warning("metrics listener not started", extra={"cause": str(exc), "port": port})
+        return None
+    return server
+
+
+def create_app(
+    settings: Settings | None = None, embedder_resolver: Callable[[], Embedder] | None = None
+) -> FastAPI:
+    """`embedder_resolver` returns the embedder to query with (raising EmbedderUnavailableError
+    when it cannot). The default loads the configured provider; tests pass a stand-in."""
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         configure_logging(settings.log_format, settings.log_level)
+        metrics_server = _start_metrics_server(settings.metrics_port)
         if settings.warmup:
-            await to_thread.run_sync(_warm_up)
-        yield
+            await to_thread.run_sync(_warm_up, application.state.embedder_resolver)
+        try:
+            yield
+        finally:
+            if metrics_server is not None:
+                metrics_server.shutdown()
 
     docs: dict[str, Any] = (
         {}
@@ -336,7 +374,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
     )
     application = FastAPI(title="Infra Atlas API", version="0.1.0", lifespan=lifespan, **docs)
+    application.state.embedder_resolver = embedder_resolver or _default_resolver
     application.include_router(router)
+    if settings.metrics_port <= 0:
+        application.include_router(metrics_router)
     # Added inside out: the last one wraps all the others.
     application.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     application.add_middleware(RateLimitMiddleware, per_minute=settings.rate_limit_per_minute)

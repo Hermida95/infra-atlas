@@ -45,23 +45,24 @@ Un vector resume **todo** el texto que recibe. Si metes una ficha larga entera, 
 
 [LanceDB](https://lancedb.github.io/lancedb/) es una base de datos **embebida**, como SQLite: la tabla es una carpeta de archivos Lance (columnar, sobre Apache Arrow) que el proceso lee directamente. No hay que levantar nada, ni pagar una instancia encendida.
 
-- Para unos cientos de fragmentos, la búsqueda es exhaustiva y tarda milisegundos. Con muchos más, LanceDB crea un índice ANN (IVF-PQ) sin cambiar el código.
+- Para unos cientos de fragmentos, la búsqueda es exhaustiva y tarda milisegundos. Con muchos más haría falta un índice ANN (IVF-PQ), pero LanceDB **no lo crea por sí solo**: hay que llamar a `create_index` sobre la tabla. Si se crea, su `metric` tiene que ser `cosine`, igual que `.distance_type("cosine")` en `VectorIndex.search`; con otra métrica el índice ordenaría distinto de como se puntúa. Hoy no existe ningún índice: la búsqueda es exhaustiva.
 - La carpeta va dentro de la imagen. Cada despliegue lleva el índice que corresponde a su contenido, y si el contenido cambia, se regenera en CI.
 - `brain embed` es **idempotente**: guarda en los metadatos de la tabla el proveedor, el modelo, su versión, las dimensiones y una huella (SHA-256) de todos los fragmentos más el modelo. Si la huella coincide, no recalcula nada. Si cambia el texto o el modelo, regenera el índice entero en una carpeta temporal y la cambia de golpe.
 - Alternativas que no hacen falta aún: pgvector (base de datos encendida, unos 15 $/mes como mínimo en RDS) u OpenSearch (bastante más). DECISIONES.md fija cuándo revisarlo: más de unas 50k fichas o filtros complejos.
 
 ## Cómo se evalúa: recall@k y MRR
 
-Sin medir, "parece que funciona" no vale. [`content/search-eval.yaml`](../content/search-eval.yaml) tiene 27 preguntas en lenguaje natural con el concepto que debería salir. Están redactadas **por significado**, evitando las palabras del título y del resumen de su concepto.
+Sin medir, "parece que funciona" no vale. [`content/search-eval.yaml`](../content/search-eval.yaml) tiene 53 preguntas en lenguaje natural, repartidas en dos conjuntos: `tune` (27, con las que se eligieron `PART_WEIGHT`, la instrucción de consulta y el umbral) y `holdout` (26, escritas después y nunca usadas para decidir nada). Los umbrales de CI se aplican a `holdout`; si quedara vacío, usarían `tune`, una comprobación más débil porque los parámetros se ajustaron a ella. Entre los dos cubren casi todos los conceptos; la meta son unas 60. Cada pregunta lleva el concepto que debería salir. Están redactadas **por significado**, evitando las palabras del título y del resumen de su concepto.
 
 - **recall@k**: proporción de preguntas cuyo concepto esperado aparece entre los k primeros resultados. recall@3 = 0,8 quiere decir que 8 de cada 10 veces la respuesta está en el top 3.
 - **MRR** (*Mean Reciprocal Rank*): media de 1/posición del concepto esperado (1 si sale primero, 0,5 si sale segundo, 0 si no está en el top 10). Premia que salga **arriba**, no solo que salga.
 
-Resultados en CI sobre el set (27 preguntas, `uv run python -m api.evaluation`):
+Resultados en CI (`uv run python -m api.evaluation`). Salvo la fila de `holdout`, son sobre `tune` (27 preguntas):
 
 | Método | recall@1 | recall@3 | MRR |
 | --- | --- | --- | --- |
 | **Semántica** (bge-small-en-v1.5, lo que se despliega) | 0,56 | **0,93** | **0,73** |
+| Semántica sobre `holdout` (26 preguntas, la nota honesta) | 0,69 | **0,88** | **0,80** |
 | Palabra clave BM25 (cualquier palabra) | 0,41 | 0,59 | 0,51 |
 | Palabra clave `/search/keyword` (todas las palabras) | 0,00 | 0,00 | 0,00 |
 
@@ -96,10 +97,10 @@ La paleta combina dos búsquedas:
 Cómo se combinan (`mergeHits`):
 
 1. Primero, los aciertos locales que coinciden con un **nombre** (título o iniciales). Si escribes "docker", Docker va primero.
-2. Después, los aciertos por significado con similitud ≥ **0,58**, marcados con la etiqueta *meaning*. Si el fragmento ganador es una pieza del despiece, la segunda línea muestra esa pieza.
+2. Después, los aciertos por significado (la API ya descarta los que quedan bajo su umbral, **0,58** para bge-small), marcados con la etiqueta *meaning*. Si el fragmento ganador es una pieza del despiece, la segunda línea muestra esa pieza.
 3. Al final, el resto de aciertos locales más débiles.
 
-El umbral sale de medir: la API siempre devuelve *k* resultados, también para "asdf qwer", y esa basura llega como mucho a 0,57. Las preguntas reales sacan su concepto esperado entre 0,60 y 0,88.
+El umbral sale de medir: sin umbral la API devolvería *k* resultados también para "asdf qwer". El umbral vive en la API (`MIN_SCORE` en `semantic.py`, por modelo) y se aplica a la puntuación ya ponderada (coseno × 0,85 en las piezas del despiece). Medido con el modelo real: la basura (incluida una pregunta en español, que el modelo inglés no entiende) llega como mucho a 0,576; el concepto esperado de cada pregunta del eval saca como mínimo 0,581. El margen por ambos lados es de unas milésimas: es un umbral frágil, y `test_nonsense_queries_stay_under_the_noise_floor` avisa si un cambio de modelo, de fragmentos o de peso lo rompe.
 
 Detalles:
 

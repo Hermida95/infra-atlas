@@ -23,8 +23,12 @@ METADATA_KEY = b"infra_atlas"
 INDEX_FORMAT = 1
 
 
-class IndexUnavailableError(Exception):
-    pass
+class SearchUnavailableError(Exception):
+    """Semantic search cannot answer right now. Subclasses say which part is missing."""
+
+
+class IndexUnavailableError(SearchUnavailableError):
+    """There is no readable vector index (or it does not fit the model)."""
 
 
 class IndexModelMismatchError(IndexUnavailableError):
@@ -145,6 +149,9 @@ class VectorIndex:
         self.path = path
         self.metadata = metadata
         self._table = lancedb.connect(path).open_table(TABLE)
+        # Counted once: the index is immutable while open, and count_rows() scans per call.
+        recorded = metadata.get("chunks")
+        self._chunks = int(recorded) if recorded is not None else self._table.count_rows()
 
     @property
     def model(self) -> dict[str, Any]:
@@ -182,4 +189,4 @@ class VectorIndex:
         ]
 
     def __len__(self) -> int:
-        return self._table.count_rows()
+        return self._chunks

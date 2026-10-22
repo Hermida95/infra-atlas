@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { activeIndex, moveSelection } from "@/lib/palette";
 import { domainById, type GraphNode } from "@/lib/graph";
 import { search } from "@/lib/search";
 import { API_URL, MIN_SEMANTIC_QUERY, mergeHits, semanticSearch, type SemanticHit } from "@/lib/semantic";
@@ -54,14 +55,14 @@ function useSemanticSearch(query: string): SemanticState {
 
 export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const local = useMemo(() => search(query), [query]);
   const semantic = useSemanticSearch(query);
   const hits = useMemo(() => mergeHits(local, semantic.hits), [local, semantic.hits]);
-  // Meaning hits arrive after the keystroke that reset `active`, and can shorten the list.
-  const active = Math.min(selected, Math.max(hits.length - 1, 0));
+  // Meaning hits arrive after the keystroke and reorder the list: follow the concept, not the row.
+  const active = activeIndex(hits, selectedId);
 
   useEffect(() => {
     if (open) input.current?.focus();
@@ -72,7 +73,7 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
   const choose = (node: GraphNode, page: boolean) => {
     onClose();
     setQuery("");
-    setSelected(0);
+    setSelectedId(null);
     if (page) onOpenPage(node);
     else onPick(node);
   };
@@ -83,10 +84,10 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
       onClose();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelected(Math.min(active + 1, hits.length - 1));
+      setSelectedId(moveSelection(hits, selectedId, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelected(Math.max(active - 1, 0));
+      setSelectedId(moveSelection(hits, selectedId, -1));
     } else if (e.key === "Enter" && hits[active]) {
       e.preventDefault();
       choose(hits[active].node, e.metaKey || e.ctrlKey);
@@ -116,7 +117,7 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            setSelected(0);
+            setSelectedId(null);
           }}
         />
         <ul className="palette-list" id={listId} role="listbox" aria-label="Concepts">
@@ -127,7 +128,7 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
               role="option"
               aria-selected={i === active}
               className={i === active ? "act" : undefined}
-              onMouseEnter={() => setSelected(i)}
+              onMouseEnter={() => setSelectedId(node.id)}
               onClick={(e) => choose(node, e.metaKey || e.ctrlKey)}
             >
               <Mark node={node} size={22} />

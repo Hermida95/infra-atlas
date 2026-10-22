@@ -195,16 +195,22 @@ def identifiers(expr: Expr) -> set[str]:
 
 
 def _keyword_pattern(keyword: str) -> re.Pattern[str]:
-    words = r"\s+".join(re.escape(word) for word in keyword.split())
-    return re.compile(rf"(?<![a-z0-9]){words}(?![a-z0-9])", re.IGNORECASE)
+    """Whole-word pattern for a keyword, to run against lower-cased text.
+
+    Lower-casing the text (not re.IGNORECASE) keeps this identical to the web planner:
+    IGNORECASE folds characters like the long s ("ſ") into "s", `toLowerCase` does not.
+    """
+    words = r"\s+".join(re.escape(word) for word in keyword.lower().split())
+    return re.compile(rf"(?<![a-z0-9]){words}(?![a-z0-9])")
 
 
 def match_requirements(text: str, requirements: Iterable[Requirement]) -> set[str]:
     """Requirement ids whose keywords appear in `text` as whole words, case-insensitive."""
+    lowered = text.lower()
     return {
         requirement.id
         for requirement in requirements
-        if any(_keyword_pattern(keyword).search(text) for keyword in requirement.keywords)
+        if any(_keyword_pattern(keyword).search(lowered) for keyword in requirement.keywords)
     }
 
 

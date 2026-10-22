@@ -43,9 +43,17 @@ class Scores:
     misses: list[tuple[str, str, list[str]]]  # query, expected, top 3
 
 
-def load_cases(path: Path | None = None) -> list[Case]:
+SPLITS = ("tune", "holdout")
+
+
+def load_cases(path: Path | None = None, split: str = "all") -> list[Case]:
+    """The questions of one split ("tune" or "holdout"), or both ("all")."""
+    if split != "all" and split not in SPLITS:
+        raise ValueError(f"split must be 'all' or one of {SPLITS}, not {split!r}")
     path = path or find_repo_root() / "content/search-eval.yaml"
-    return [Case(**row) for row in yaml.safe_load(path.read_text(encoding="utf-8"))]
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    names = SPLITS if split == "all" else (split,)
+    return [Case(**row) for name in names for row in data.get(name) or []]
 
 
 def rank_of(expected: str, ranked: Sequence[str]) -> int | None:
@@ -119,7 +127,8 @@ def main() -> None:  # pragma: no cover - exercised in CI
     from brain.vectors import VectorIndex
 
     root = find_repo_root()
-    cases = load_cases()
+    cases = load_cases(split="tune")
+    holdout = load_cases(split="holdout")
     loaded = load_content(root / "content")
     atlas = Atlas.from_graph(json.loads(graph_path().read_bytes()))
     index, embedder = VectorIndex(index_path()), embedder_from_env()
@@ -134,7 +143,18 @@ def main() -> None:  # pragma: no cover - exercised in CI
             cases, lambda q: [h.node["id"] for h in atlas.search(q, DEPTH)]
         ),
     }
-    print(f"{len(cases)} queries\n\n{report(results)}\n")
+    print(f"{len(cases)} tune queries\n\n{report(results)}\n")
+    if holdout:
+        held = evaluate(
+            holdout, lambda q: [h.node_id for h in semantic_search(index, embedder, q, DEPTH)]
+        )
+        print(f"{len(holdout)} holdout queries (the numbers CI gates on)\n")
+        print(f"{report({f'semantic ({embedder.model})': held})}\n")
+        for query, expected, top in held.misses:
+            print(f"  holdout miss {query!r}: expected {expected}, got {top}")
+        print()
+    else:
+        print("No holdout queries yet: CI falls back to the tune set.\n")
     shipped = next(iter(results))
     print(f"{shipped}: rank of the expected concept per query")
     for case in cases:

@@ -258,3 +258,26 @@ def test_parity_with_prototype(case: dict[str, Any], real_content) -> None:
 
     assert sorted(route.node_ids) == case["nodes"]
     assert len(route.notes) == case["notes"]
+    stages: list[dict[str, Any]] = []
+    for stage, node in route.steps:
+        if not stages or stages[-1]["stage"] != stage:
+            stages.append({"stage": stage, "nodes": []})
+        stages[-1]["nodes"].append(node.id)
+    assert stages == case["stages"]
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in CASES if "text" in c], ids=[c["id"] for c in CASES if "text" in c]
+)
+def test_free_text_detection_on_planner_cases(case: dict[str, Any], real_content) -> None:
+    _, requirements = real_content
+
+    assert sorted(match_requirements(case["text"], requirements)) == case["requirements"]
+
+
+def test_keyword_with_irregular_spacing_still_matches_text() -> None:
+    requirement = Requirement(id="scale", label="Scale", keywords=["high  traffic"])
+
+    assert match_requirements("a HIGH \t traffic site", [requirement]) == {"scale"}
+    assert match_requirements("high traffic", [requirement]) == {"scale"}
+    assert match_requirements("high-traffic", [requirement]) == set()

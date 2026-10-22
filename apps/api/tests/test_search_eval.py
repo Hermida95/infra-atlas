@@ -4,18 +4,23 @@ Thresholds sit under the values measured in CI with bge-small-en-v1.5 (27 querie
 0.93, MRR 0.73; see docs/BUSQUEDA.md), leaving room for two more misses, so a change to
 chunking, the query instruction, part_weight or the model that loses quality fails here.
 
+They are applied to the `holdout` split, which was not used to choose those parameters. While
+it is empty the `tune` set stands in, which is a weaker check: the parameters were fitted to it.
+
 Without the model (no network and no cache) the quality test is skipped, unless
 REQUIRE_EMBEDDINGS=1, as in CI, where a skip would hide a regression.
 """
 
 import os
+import warnings
 from pathlib import Path
 
 import pytest
 
 from api.evaluation import BM25, Case, evaluate, load_cases, rank_of, report
-from api.semantic import semantic_search
+from api.semantic import MIN_SCORE, semantic_search
 from brain.chunks import chunk_nodes
+from brain.embeddings import LOCAL_MODEL
 from brain.loader import find_repo_root, load_content
 from brain.vectors import VectorIndex, build_index
 
@@ -44,7 +49,21 @@ def test_eval_set_targets_published_concepts() -> None:
 
     assert len(cases) >= 25
     assert {c.expected for c in cases} <= published
-    assert len({c.query for c in cases}) == len(cases)
+    assert len({c.query for c in cases}) == len(cases)  # also across tune and holdout
+
+
+def test_eval_splits() -> None:
+    tune, holdout = load_cases(split="tune"), load_cases(split="holdout")
+
+    assert len(tune) + len(holdout) == len(load_cases())
+    assert not {c.query for c in tune} & {c.query for c in holdout}
+    with pytest.raises(ValueError):
+        load_cases(split="test")
+
+
+def gated_cases() -> list[Case]:
+    """The questions the CI thresholds apply to: holdout, or tune until holdout has some."""
+    return load_cases(split="holdout") or load_cases(split="tune")
 
 
 @pytest.fixture(scope="module")
@@ -65,17 +84,38 @@ def test_semantic_search_quality(local_embedder, tmp_path_factory, capsys) -> No
     path = tmp_path_factory.mktemp("eval") / "vectors.lance"
     build_index(chunks, local_embedder, path)
     index = VectorIndex(path)
-    cases = load_cases()
+    cases = gated_cases()
 
     semantic = evaluate(
         cases, lambda q: [h.node_id for h in semantic_search(index, local_embedder, q, 10)]
     )
     keyword = evaluate(cases, BM25(chunks).rank)
+    if not load_cases(split="holdout"):
+        warnings.warn(
+            "search-eval.yaml has no holdout questions: gating on the tune set", stacklevel=1
+        )
 
     with capsys.disabled():
         print("\n" + report({"semantic": semantic, "keyword BM25": keyword}))
     assert semantic.recall_at_3 >= RECALL_AT_3_MIN, semantic.misses
     assert semantic.mrr >= MRR_MIN, semantic.misses
+
+
+# Queries with no answer in the content. The model is English-only, so the Spanish one is
+# also here as a known limit: it must not surface an unrelated concept as if it were a match.
+NO_ANSWER = ["asdf qwer", "zzzz", "qwertyuiop", "¿cómo despliego una base de datos en la nube?"]
+
+
+def test_nonsense_queries_stay_under_the_noise_floor(local_embedder, tmp_path_factory) -> None:
+    path = tmp_path_factory.mktemp("noise") / "vectors.lance"
+    build_index(chunk_nodes(load_content(CONTENT).nodes), local_embedder, path)
+    index = VectorIndex(path)
+    floor = MIN_SCORE[LOCAL_MODEL]
+
+    for query in NO_ANSWER:
+        unfiltered = semantic_search(index, local_embedder, query, 3, min_score=0.0)
+        assert unfiltered[0].score < floor, (query, unfiltered[0])
+        assert semantic_search(index, local_embedder, query, 3) == [], query
 
 
 def test_reciprocal_rank_fusion() -> None:

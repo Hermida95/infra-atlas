@@ -13,6 +13,7 @@ import logging
 import re
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
@@ -25,6 +26,7 @@ Send = Callable[[Message], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 access_log = logging.getLogger("api.access")
+log = logging.getLogger("api")
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
@@ -78,9 +80,12 @@ class RequestContextMiddleware:
         started = time.perf_counter()
         is_docs = scope["path"].startswith(DOCS_PATHS)
 
+        started = False
+
         async def send_with_headers(message: Message) -> None:
-            nonlocal status
+            nonlocal status, started
             if message["type"] == "http.response.start":
+                started = True
                 status = message["status"]
                 headers = [*message.get("headers", []), (b"x-request-id", rid.encode())]
                 headers += SECURITY_HEADERS if is_docs else [*SECURITY_HEADERS, API_CSP]
@@ -88,7 +93,16 @@ class RequestContextMiddleware:
             await send(message)
 
         try:
-            await self.app(scope, receive, send_with_headers)
+            try:
+                await self.app(scope, receive, send_with_headers)
+            except Exception:
+                # Answered here, inside the headers wrapper, so the 500 carries x-request-id
+                # and the security headers; the body says nothing about the cause (it is logged).
+                log.exception("unhandled error")
+                if not started:
+                    await send_json(send_with_headers, 500, {"detail": "internal error"})
+                else:
+                    raise
         finally:
             elapsed = time.perf_counter() - started
             route = getattr(scope.get("route"), "path", "unmatched")
@@ -179,7 +193,8 @@ class RateLimitMiddleware:
         self.per_minute = per_minute
         self.paths = tuple(paths)
         self.clock = clock
-        self.windows: dict[str, tuple[int, int]] = {}  # client -> (window, count)
+        # client -> (window, count), least recently seen first
+        self.windows: OrderedDict[str, tuple[int, int]] = OrderedDict()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         limited = (
@@ -197,9 +212,10 @@ class RateLimitMiddleware:
         client = (scope.get("client") or ("unknown",))[0]
         start, count = self.windows.get(client, (window, 0))
         count = count + 1 if start == window else 1
-        if len(self.windows) >= self.MAX_TRACKED:
-            self.windows = {k: v for k, v in self.windows.items() if v[0] == window}
         self.windows[client] = (window, count)
+        self.windows.move_to_end(client)
+        while len(self.windows) > self.MAX_TRACKED:
+            self.windows.popitem(last=False)
 
         if count > self.per_minute:
             REJECTED.labels("rate_limited").inc()

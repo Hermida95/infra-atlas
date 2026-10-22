@@ -33,11 +33,21 @@ containerPort: 8000
 # Runtime configuration (apps/api/src/api/settings.py).
 config:
   corsOrigins: "http://localhost:3000"
-  docs: true
+  # /docs, /redoc and /openapi.json. Off by default: an Ingress at path / would publish them.
+  docs: false
+  # Port of the separate /metrics listener inside the pod. The Service and the Ingress do not
+  # route it, so only something that reaches the pod IP (a Prometheus scraper) can read it.
+  # 0 puts /metrics back on the main port, which the Ingress would then expose.
+  metricsPort: 9000
+  # Safety net per pod and per client IP, in memory. The effective limit belongs at the edge
+  # (Ingress limit-rpm / limit-rps, or API Gateway throttling and WAF rate rules on Lambda),
+  # which sees the traffic of every replica.
   rateLimitPerMinute: 60
   logLevel: INFO
   # Proxies whose X-Forwarded-For uvicorn trusts. Set it to the Ingress controller's pod
-  # CIDR when there is one; the default trusts nobody but localhost.
+  # CIDR when there is one; the default trusts nobody but localhost. With ingress.enabled
+  # the chart refuses to render while this is 127.0.0.1: otherwise every user of a pod
+  # would share the Ingress controller's IP, and so one rate-limit bucket.
   forwardedAllowIps: "127.0.0.1"
 
 # Measured in CI: ~300 MiB after the first search (ONNX model, LanceDB, pyarrow). The request
@@ -111,8 +121,20 @@ networkPolicy:
   # Who may connect to the API port. Empty: any pod or source. Example for ingress-nginx:
   #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
   ingressFrom: []
+  # Who may scrape the metrics port. Empty: any pod in the cluster. Example for a Prometheus
+  # in the monitoring namespace:
+  #   - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+  metricsFrom: []
   # Opt in to DNS egress if a future provider (Bedrock) needs it; add its endpoints too.
   allowDNS: false
+  # Extra egress rules, appended as they are written (NetworkPolicyEgressRule). allowDNS opens
+  # only port 53; whatever else a provider needs, e.g. HTTPS to Bedrock, goes here. Empty by
+  # default: no outbound traffic. Example, HTTPS to a VPC endpoint range:
+  #   - to:
+  #       - ipBlock: {cidr: 10.0.0.0/16}
+  #     ports:
+  #       - {port: 443, protocol: TCP}
+  extraEgress: []
 
 podAnnotations: {}
 

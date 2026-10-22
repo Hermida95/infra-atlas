@@ -5,8 +5,8 @@ import pytest
 from api_fakes import HashEmbedder
 from fastapi.testclient import TestClient
 
-from api import semantic
-from api.main import app, embedder
+from api import main, semantic
+from api.main import app
 from brain.chunks import chunk_nodes
 from brain.loader import find_repo_root, load_content
 from brain.vectors import build_index
@@ -27,9 +27,9 @@ def real_index(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def client(real_index: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("VECTORS_PATH", str(real_index))
     semantic.clear_caches()
-    app.dependency_overrides[embedder] = HashEmbedder
+    app.state.embedder_resolver = HashEmbedder
     yield TestClient(app)
-    app.dependency_overrides.clear()
+    app.state.embedder_resolver = main._default_resolver
     semantic.clear_caches()
 
 
@@ -60,11 +60,11 @@ def test_search_k_bounds(client: TestClient) -> None:
 def test_search_without_index_is_503(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VECTORS_PATH", str(tmp_path / "missing.lance"))
     semantic.clear_caches()
-    app.dependency_overrides[embedder] = HashEmbedder
+    app.state.embedder_resolver = HashEmbedder
     try:
         response = TestClient(app).get("/search", params={"q": "docker"})
     finally:
-        app.dependency_overrides.clear()
+        app.state.embedder_resolver = main._default_resolver
 
     assert response.status_code == 503
     assert response.json()["detail"] == "search index not available; run `brain embed`"
@@ -75,7 +75,7 @@ def test_search_with_another_model_is_503(client: TestClient) -> None:
     class Other(HashEmbedder):
         model = "other"
 
-    app.dependency_overrides[embedder] = Other
+    app.state.embedder_resolver = Other
 
     response = client.get("/search", params={"q": "docker"})
 
@@ -123,3 +123,88 @@ def test_part_weight_lets_overview_win() -> None:
     weighted = semantic.best_per_concept(hits, 2, part_weight=0.9)
     assert [h.node_id for h in weighted] == ["b", "a"]
     assert weighted[1].chunk.id == "a:part:0" and weighted[1].score == 0.72
+
+
+def test_min_score_comes_from_the_model_and_can_be_overridden(
+    real_index: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from brain.vectors import VectorIndex
+
+    index, model = VectorIndex(real_index), HashEmbedder()
+    everything = semantic.semantic_search(index, model, "containers", 5)
+    assert len(everything) == 5  # the test model has no entry: nothing is filtered
+
+    best = everything[0].score
+    monkeypatch.setitem(semantic.MIN_SCORE, model.model, best)
+    assert [h.node_id for h in semantic.semantic_search(index, model, "containers", 5)] == [
+        everything[0].node_id
+    ]
+    assert len(semantic.semantic_search(index, model, "containers", 5, min_score=0.0)) == 5
+    assert semantic.semantic_search(index, model, "containers", 5, min_score=1.1) == []
+
+
+def test_search_endpoint_returns_no_hits_under_the_floor(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(semantic.MIN_SCORE, HashEmbedder.model, 1.1)
+
+    body = client.get("/search", params={"q": "containers"}).json()
+
+    assert body["hits"] == []
+
+
+def test_whitespace_only_query_is_422(client: TestClient) -> None:
+    for blank in ["   ", "\t", " \n "]:
+        assert client.get("/search", params={"q": blank}).status_code == 422
+
+
+def test_query_is_trimmed_before_embedding(client: TestClient) -> None:
+    padded = client.get("/search", params={"q": "  containers  "}).json()
+    plain = client.get("/search", params={"q": "containers"}).json()
+
+    assert padded["hits"] == plain["hits"]
+
+
+def test_an_empty_index_answers_with_no_hits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """LanceDB raises ValueError on limit(0): without a guard this was a 500."""
+    path = tmp_path / "empty.lance"
+    build_index([], HashEmbedder(), path)
+    monkeypatch.setenv("VECTORS_PATH", str(path))
+    semantic.clear_caches()
+    app.state.embedder_resolver = HashEmbedder
+    try:
+        response = TestClient(app).get("/search", params={"q": "containers"})
+    finally:
+        app.state.embedder_resolver = main._default_resolver
+        semantic.clear_caches()
+
+    assert response.status_code == 200
+    assert response.json()["hits"] == []
+
+
+def test_index_length_is_read_once(real_index: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from brain.vectors import VectorIndex
+
+    index = VectorIndex(real_index)
+    expected = len(index)
+    assert expected > 0
+
+    def forbidden() -> int:
+        raise AssertionError("count_rows() called per request")
+
+    monkeypatch.setattr(index._table, "count_rows", forbidden, raising=False)
+    assert len(index) == expected
+    assert semantic.semantic_search(index, HashEmbedder(), "containers", 3)
+
+
+def test_index_and_model_failures_are_siblings_under_search_unavailable() -> None:
+    from brain.vectors import IndexModelMismatchError, IndexUnavailableError, SearchUnavailableError
+
+    assert issubclass(IndexUnavailableError, SearchUnavailableError)
+    assert issubclass(semantic.EmbedderUnavailableError, SearchUnavailableError)
+    assert issubclass(IndexModelMismatchError, IndexUnavailableError)
+    # A model failure is not an index failure, and the other way round.
+    assert not issubclass(semantic.EmbedderUnavailableError, IndexUnavailableError)
+    assert not issubclass(IndexUnavailableError, semantic.EmbedderUnavailableError)

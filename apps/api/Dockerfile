@@ -71,8 +71,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", \
      "--proxy-headers", "--no-server-header", "--no-access-log", "--timeout-graceful-shutdown", "20"]
 
-# Lambda: the same image plus the adapter extension, which starts uvicorn, waits for /ready
-# and translates Lambda events to HTTP.
+# Lambda: the same image plus the adapter extension. Lambda runs the CMD above (that starts
+# uvicorn); the adapter waits for /ready and proxies Lambda events to it as HTTP.
 FROM ${LAMBDA_ADAPTER_IMAGE} AS lambda-adapter
 FROM runtime AS lambda
 COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
