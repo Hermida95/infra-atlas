@@ -146,8 +146,10 @@ resource "aws_budgets_budget" "cost" {
 # API health
 # --------------------------------------------------------------------------------------------
 
-# AWS/ApiGatewayV2 publishes `5xx` for HTTP APIs (the REST API metric is `5XXError`, a
-# different namespace and a different name -- an easy way to build an alarm that never fires).
+# HTTP APIs publish `5xx` in the `AWS/ApiGateway` namespace -- the same namespace as REST
+# APIs, under a different metric name (REST publishes `5XXError`). "AWS/ApiGatewayV2" looks
+# like it should exist, by analogy with the aws_apigatewayv2_* resources, and does not: an
+# alarm pointed at it is accepted by the API and never fires.
 #
 # Sum, not Average: Average over a period with two requests, one of them failing, is 0.5 and
 # would never cross a threshold expressed in responses.
