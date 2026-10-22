@@ -1,0 +1,25 @@
+---
+id: smoketest
+title: "Smoke test"
+type: pattern
+domain: cicd
+summary: "A handful of requests right after the deploy that decide whether it stays."
+level: core
+access: free
+relations:
+  related: [tests, rollback]
+  part_of: [delivery]
+evidence:
+  - path: .github/workflows/k8s-smoke.yml
+    lines: [82, 90]
+    text: "Every pull request that touches the chart or the API installs it on a throwaway kind cluster and smoke-tests the running service."
+planner:
+  stage: deliver
+  when: "true"
+  why: "Proves the new version actually serves before the release is called done."
+reviewed: 2026-10-21
+---
+
+A smoke test is not the test suite. It is the two or three checks that prove this deployment, in this environment, is really serving: the health endpoint, one read path, one authenticated call.
+
+It runs as part of the deploy, before traffic shifts or before the job reports success, and its failure is wired to the rollback. A deploy that reports success because the pipeline ended without errors is reporting on the pipeline, not on the service.

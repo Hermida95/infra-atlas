@@ -1,0 +1,25 @@
+---
+id: runner
+title: "CI runner"
+type: concept
+domain: cicd
+summary: "The throwaway sandbox a pipeline job executes in, fresh for every run."
+level: core
+access: free
+relations:
+  related: [gha]
+  part_of: [pipeline]
+evidence:
+  - path: .github/workflows/ci.yml
+    lines: [17, 25]
+    text: "Every job in this repo starts on a GitHub-hosted runner with a clean checkout."
+planner:
+  stage: ship
+  when: "true"
+  why: "Every job needs a machine, and a fresh one is what keeps builds reproducible."
+reviewed: 2026-10-21
+---
+
+A runner exists for the length of one job and is thrown away with it. GitHub hosts them by default; you host your own when a job has to reach a private network, or needs hardware the hosted ones do not offer.
+
+Making it disposable is what buys reproducibility: a build that only works on a long-lived machine is a build nobody else can reproduce. The cost is that caches and credentials have to be handed over explicitly, which is also why a self-hosted runner on a public repository is a security decision rather than a performance one.

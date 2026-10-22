@@ -221,6 +221,42 @@ export function buildShape(kind: PartKind | null, index: number): Shape {
       return b.done(154, 10, 26);
     }
 
+    // ---- Delivery ----
+    case "gate": {
+      // The approval gate: two posts, an arch, and a dashed barrier a human lifts.
+      for (const x of [-60, 60]) b.solid(box(14, 70, 14), [x, -30, 0]);
+      const arc: number[] = [];
+      for (let i = 0; i < 24; i++) {
+        const a = Math.PI - (i / 24) * Math.PI, c = Math.PI - ((i + 1) / 24) * Math.PI;
+        arc.push(Math.cos(a) * 60, 5 + Math.sin(a) * 60, 0, Math.cos(c) * 60, 5 + Math.sin(c) * 60, 0);
+      }
+      b.lines(arc, "edge", 0.8);
+      b.edges(box(106, 4, 10), [0, -10, 0], { role: "detail", dashed: true, base: 0.6 });
+      return b.done(134, 130, 14);
+    }
+    case "lanes": {
+      // Environments side by side: the same artifact moves left to right, dev then prod.
+      for (const z of [-44, 0, 44]) {
+        b.solid(box(230, 6, 28), [0, 0, z], { fill: 0.04 });
+        b.lines([96, 4, z, 112, 4, z, 112, 4, z, 104, 4, z - 6, 112, 4, z, 104, 4, z + 6], "detail", 0.5);
+      }
+      return b.done(230, 6, 116);
+    }
+    case "split": {
+      // Traffic that forks: one trunk, two versions, the new one still dashed.
+      b.lines([-110, 0, 0, -20, 0, 0, -20, 0, 0, 44, 0, -40, -20, 0, 0, 44, 0, 40], "edge", 0.8);
+      b.solid(box(56, 26, 36), [78, 0, -40]);
+      b.solid(box(56, 26, 36), [78, 0, 40], { dashed: true });
+      return b.done(220, 26, 116);
+    }
+    case "loop": {
+      // Reconciliation: desired state on one side, the cluster on the other, compared forever.
+      b.circle(70, 0, "edge", 0.75);
+      b.lines([-8, 0, -78, 6, 0, -70, -8, 0, -62, 6, 0, -70, 8, 0, 62, -6, 0, 70, 8, 0, 78, -6, 0, 70], "detail", 0.6);
+      for (const x of [-70, 70]) b.solid(box(34, 18, 34), [x, 0, 0]);
+      return b.done(174, 18, 156);
+    }
+
     // ---- Cloud and network ----
     case "disc": {
       // Region: a wide flat platform.

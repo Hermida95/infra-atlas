@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
 
@@ -41,6 +41,11 @@ PartKind = Literal[
     "trigger",
     "jobs",
     "chips",
+    # delivery
+    "gate",
+    "lanes",
+    "split",
+    "loop",
     # cloud and network
     "disc",
     "zones",
@@ -61,7 +66,17 @@ Layout = Literal["stack", "row", "cluster"]
 Level = Literal["core", "intermediate", "advanced"]
 Access = Literal["free", "pro"]
 
-Stage = Literal["build", "containerize", "infra", "run", "data", "secure", "ship", "observe"]
+Stage = Literal[
+    "build",
+    "containerize",
+    "infra",
+    "run",
+    "data",
+    "secure",
+    "ship",
+    "deliver",
+    "observe",
+]
 
 SUMMARY_MAX_LENGTH = 200
 WHY_MAX_LENGTH = 160
@@ -95,6 +110,20 @@ class Relations(_Strict):
     def targets(self) -> list[tuple[str, str]]:
         """Every (relation_kind, target_id) pair, in declaration order."""
         return [(kind, target) for kind in Relations.model_fields for target in getattr(self, kind)]
+
+
+class Evidence(_Strict):
+    """Real code in this repo that proves the concept. `lines` is 1-based and inclusive."""
+
+    path: NonEmptyStr
+    lines: tuple[Annotated[int, Field(ge=1)], Annotated[int, Field(ge=1)]]
+    text: NonEmptyStr
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Evidence:
+        if self.lines[0] > self.lines[1]:
+            raise ValueError("lines must be [from, to] with from <= to")
+        return self
 
 
 class Requirement(_Strict):
@@ -134,6 +163,8 @@ class NodeFrontmatter(_Strict):
     parts: list[Part] = []
     layout: Layout = "stack"
     lab: Slug | None = None
+    # Lines of this repo that back the card. `brain validate` checks they still exist.
+    evidence: list[Evidence] = []
     reviewed: date
     planner: Planner | None = None
 

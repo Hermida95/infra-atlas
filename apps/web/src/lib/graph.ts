@@ -5,17 +5,20 @@ export type PartKind =
   | "node" | "pod" | "bus" | "orbit" | "core" | "machine"
   | "cylinder" | "discs" | "sheet" | "plugin" | "modules" | "graph"
   | "trigger" | "jobs" | "chips"
+  | "gate" | "lanes" | "split" | "loop"
   | "disc" | "zones" | "vpc" | "services" | "shell" | "ring"
   | "bars" | "bell" | "panel" | "sphere" | "satellites";
 export type Layout = "stack" | "row" | "cluster";
 export type Part = { name: string; kind: PartKind | null; text: string };
 export type Vec3 = [number, number, number];
 
-export const STAGES = ["build", "containerize", "infra", "run", "data", "secure", "ship", "observe"] as const;
+export const STAGES = ["build", "containerize", "infra", "run", "data", "secure", "ship", "deliver", "observe"] as const;
 export type Stage = (typeof STAGES)[number];
 export type PlannerNote = { when: string; text: string };
 export type PlannerRule = { stage: Stage; when: string; why: string; notes: PlannerNote[] };
 export type Requirement = { id: string; label: string; keywords: string[] };
+/** Lines of this repo that back the card, checked by `brain validate`. */
+export type Evidence = { path: string; lines: [number, number]; text: string };
 
 export type GraphNode = {
   id: string;
@@ -32,6 +35,7 @@ export type GraphNode = {
   parts: Part[];
   layout: Layout;
   lab: string | null;
+  evidence: Evidence[];
   planner: PlannerRule | null;
   position: Vec3;
 };

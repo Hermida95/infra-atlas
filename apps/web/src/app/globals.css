@@ -1110,6 +1110,44 @@ a.btn {
   color: var(--muted);
   font-size: 12px;
 }
+.evidence {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+.evidence li {
+  border-left: 1px solid var(--holo-line);
+  padding-left: 16px;
+}
+.evidence p {
+  color: var(--muted);
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.evidence pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--holo-line);
+  border-radius: 4px;
+  background: var(--holo-faint);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b5d3e0;
+}
+.evidence a,
+.section-lead code {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+}
+.evidence a {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--holo-2);
+}
 .concept-foot {
   margin-top: 56px;
   padding-top: 20px;

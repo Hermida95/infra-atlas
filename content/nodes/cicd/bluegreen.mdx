@@ -1,0 +1,21 @@
+---
+id: bluegreen
+title: "Blue/green"
+type: pattern
+domain: cicd
+summary: "Two complete versions side by side, and one switch between them."
+level: intermediate
+access: free
+relations:
+  related: [canary, alb]
+  part_of: [delivery]
+planner:
+  stage: deliver
+  when: "not cheap and not k8s"
+  why: "Two versions, one switch: the rollback is instant."
+reviewed: 2026-10-21
+---
+
+Blue is what is serving. Green is the new version, fully deployed and warmed up, taking no traffic yet. The release is one change at the router: the load balancer target group, the DNS record, the weight.
+
+Rollback is the same switch in reverse, in seconds, with the old version still running and still warm. The price is paying for two full environments during the switch, and a database that both versions have to understand at the same time.

@@ -6,6 +6,9 @@ domain: cicd
 summary: "Unit, integration and smoke tests that gate every deploy."
 level: core
 access: free
+relations:
+  related: [smoketest]
+  part_of: [pipeline]
 planner:
   stage: ship
   when: "true"
