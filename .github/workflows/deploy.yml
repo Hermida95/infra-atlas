@@ -15,6 +15,9 @@ name: deploy
 # create a GitHub environment, and this workflow does not try. See
 # infra/terraform/bootstrap/README.md.
 #
+# Until those variables exist, both jobs below are skipped rather than failed: this workflow
+# is dormant in a clone of the repository that has no AWS account behind it.
+#
 # It also does not publish the web app yet. The bucket and the distribution exist
 # (infra/terraform/modules/web-opennext), but `next build` does not currently emit a static
 # site: that needs either `output: "export"` or the OpenNext build of decision 2, both of
@@ -65,7 +68,12 @@ jobs:
   # ------------------------------------------------------------------------------------------
   plan:
     name: Plan ${{ matrix.environment }}
-    if: github.event_name == 'pull_request'
+    # Inert until the account exists. Nothing in this workflow can work before
+    # infra/terraform/bootstrap has been applied by hand and the repository variables are
+    # set, and a check that nobody can turn green is a check everybody learns to ignore --
+    # worse than not having one. Setting AWS_REGION and TF_STATE_BUCKET switches it on; the
+    # step below then checks the rest and fails loudly, naming what is missing.
+    if: github.event_name == 'pull_request' && vars.AWS_REGION != '' && vars.TF_STATE_BUCKET != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -257,7 +265,8 @@ jobs:
   # ------------------------------------------------------------------------------------------
   apply:
     name: Apply ${{ matrix.environment }}
-    if: github.event_name != 'pull_request'
+    # Same switch as the plan job above.
+    if: github.event_name != 'pull_request' && vars.AWS_REGION != '' && vars.TF_STATE_BUCKET != ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
