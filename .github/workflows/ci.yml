@@ -136,6 +136,10 @@ jobs:
       TFLINT_VERSION: 0.60.0
       TFLINT_SHA256: 3476ceedcf0c4f9f2bed35e92988e1411bec2caa543c9387bffaa720df9efaf7
       CHECKOV_VERSION: 3.2.489
+      # One shared plugin cache for all seven `terraform init` runs below. Without it each
+      # directory downloads the AWS provider again -- about 180 MB, seven times, which turned
+      # this job from three minutes into fifteen.
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,6 +169,8 @@ jobs:
       - name: terraform validate
         run: |
           set -euo pipefail
+          # Terraform refuses to use the plugin cache if the directory does not exist.
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
           for dir in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false -input=false

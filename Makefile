@@ -80,6 +80,9 @@ k8s-down: ## Delete the local kind cluster
 TF_DIRS := infra/terraform/bootstrap $(wildcard infra/terraform/modules/*) $(wildcard infra/terraform/envs/*)
 TFLINT_CONFIG := $(CURDIR)/infra/terraform/.tflint.hcl
 CHECKOV_VERSION := 3.2.489
+# One shared plugin cache for all seven `terraform init` runs. Without it each directory
+# downloads the AWS provider again: about 180 MB, seven times.
+export TF_PLUGIN_CACHE_DIR := $(CURDIR)/.terraform-plugin-cache
 
 .PHONY: tf-fmt tf-validate tf-lint tf-sec tf-check
 
@@ -87,6 +90,7 @@ tf-fmt: ## Check Terraform formatting (terraform fmt -check -recursive)
 	terraform fmt -check -recursive infra/terraform
 
 tf-validate: ## Type-check every Terraform module and environment, without credentials
+	@mkdir -p $(TF_PLUGIN_CACHE_DIR)
 	@for dir in $(TF_DIRS); do \
 		echo "==> $$dir"; \
 		terraform -chdir=$$dir init -backend=false -input=false >/dev/null || exit 1; \

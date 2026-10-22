@@ -23,6 +23,8 @@ __pycache__/
 # and an incomplete lock breaks `terraform init` on every other platform. Generate and commit
 # them once (infra/terraform/README.md) and delete this line.
 .terraform.lock.hcl
+# Shared provider cache used by `make tf-validate` (one download instead of seven).
+.terraform-plugin-cache/
 # Account-specific, and not committed: the state bucket name and the ARNs usually carry the
 # account id. Copy the .example files beside them (infra/terraform/README.md).
 infra/terraform/**/terraform.tfvars
