@@ -166,22 +166,33 @@ line in every case.
 
 ## Provider lock files
 
-`.terraform.lock.hcl` is gitignored, which is **not** where this should end up: a lock file is
-how a provider version gets pinned to exact bytes, the same argument as SHA-pinned actions and
-digest-pinned images ([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)). The files are missing
-because they were written in an environment with no access to `registry.terraform.io`, and a
-lock recorded without it holds one platform and no registry checksums — which fails
-`terraform init` on any other platform instead of pinning anything.
+`.terraform.lock.hcl` is **committed**, in all seven directories, for the same reason actions
+are pinned by SHA and images are deployed by digest
+([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)): a version constraint picks a version, a lock
+picks exact bytes. `~> 6.0` in `versions.tf` would otherwise let any later 6.x in on the next
+`init`, and a repository that pins every action to a 40-character SHA cannot resolve its own
+providers without pinning anything.
 
-Generate them once, from a machine that can reach the registry, and drop the `.terraform.lock.hcl`
-line from `.gitignore`:
+All seven files are identical and hold three platforms — `linux_amd64` (what CI runs),
+`darwin_arm64` (Apple Silicon) and `darwin_amd64`. A lock with only one platform in it is
+worse than none: `terraform init` then refuses to run anywhere else.
+
+Regenerate them after a deliberate provider bump:
 
 ```bash
 for d in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
-  terraform -chdir="$d" init -backend=false
   terraform -chdir="$d" providers lock \
     -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64
 done
 ```
 
-`linux_amd64` is what CI runs; add whatever you develop on.
+Add `-platform=linux_arm64` if you ever develop on one; adding a platform is additive, and
+removing one breaks `init` for whoever uses it.
+
+> The committed files record `h1:` hashes (one per platform) and not the registry's `zh:`
+> hashes, because they were generated from a verified local mirror of the official release
+> zips — `registry.terraform.io` is not reachable from the environment they were made in,
+> while `releases.hashicorp.com` is, and each zip was checked against the published
+> `SHA256SUMS` before being locked. `terraform init` verifies against `h1:` after unpacking,
+> so the pin is real; re-running the loop above from a machine that can reach the registry
+> adds the `zh:` hashes and the signature check that comes with them.
