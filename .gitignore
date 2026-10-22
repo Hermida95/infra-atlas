@@ -20,7 +20,8 @@ __pycache__/
 .terraform.lock.hcl.bak
 # .terraform.lock.hcl is NOT ignored: it is committed, like every other dependency lock in
 # this repo (infra/terraform/README.md).
-# Shared provider cache used by `make tf-validate` and `make tf-test` (one download, not seven).
+# Shared provider cache used by `make tf-validate`, `make tf-test` and the CI job (one
+# download, not seven).
 .terraform-plugin-cache/
 # Account-specific, and not committed: the state bucket name and the ARNs usually carry the
 # account id. Copy the .example files beside them (infra/terraform/README.md).

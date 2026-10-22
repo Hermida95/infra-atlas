@@ -99,16 +99,18 @@ tf-validate: ## Type-check every Terraform module and environment, without crede
 
 # The only check here that builds a plan. validate type-checks the configuration without one,
 # so it cannot see a count or a dynamic block whose value is unknown until apply -- the error
-# that passes fmt, validate, tflint and checkov and then fails the first real plan.
+# that passes fmt, validate, tflint and checkov and then fails the first real plan -- nor a
+# rendered IAM policy that says something other than its comment.
 # mock_provider means no credentials, no account and no network.
-tf-test: ## Run terraform test (mock_provider, command = plan) in every directory that has tests
+tf-test: ## Run the terraform test suites (mocked provider, no credentials)
 	@mkdir -p $(TF_PLUGIN_CACHE_DIR)
-	@for dir in $(TF_DIRS); do \
-		[ -d "$$dir/tests" ] || continue; \
+	@found=0; for dir in $$(find infra/terraform -type d -name tests -printf '%h\n' | sort); do \
 		echo "==> $$dir"; \
 		terraform -chdir=$$dir init -backend=false -input=false >/dev/null || exit 1; \
 		terraform -chdir=$$dir test || exit 1; \
-	done
+		found=$$((found + 1)); \
+	done; \
+	test $$found -gt 0 || { echo "No .tftest.hcl suites found"; exit 1; }
 
 tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
 	tflint --chdir=infra/terraform --init
@@ -120,4 +122,4 @@ tf-lint: ## Lint the Terraform with tflint and its AWS ruleset
 tf-sec: ## Scan the Terraform for insecure and costly misconfiguration (checkov)
 	uvx checkov==$(CHECKOV_VERSION) --directory infra/terraform --framework terraform --compact --quiet
 
-tf-check: tf-fmt tf-validate tf-test tf-lint tf-sec ## All five Terraform checks, the same as CI
+tf-check: tf-fmt tf-validate tf-test tf-lint tf-sec ## Every Terraform check, the same as CI
