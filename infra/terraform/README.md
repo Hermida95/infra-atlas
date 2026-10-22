@@ -1,0 +1,233 @@
+# infra/terraform
+
+The infrastructure the atlas runs on, and the last empty directory of the repo
+([docs/DECISIONES.md](../../docs/DECISIONES.md), decision 9). The guiding principle of the
+project is that *it deploys by following the journey it teaches*, so this is content as much
+as it is plumbing: the `terraform`, `tfstate`, `oidc` and `tfplan` cards link straight into
+these files.
+
+```
+bootstrap/              state bucket + GitHub OIDC provider + deploy roles. Applied once, by hand.
+modules/
+  github-oidc/          one read-only plan role and one apply role per environment
+  api-lambda/           ECR + Lambda (container image) + HTTP API + logs + IAM
+  web-opennext/         private S3 + CloudFront with OAC, CSP and HSTS
+  observability/        AWS Budgets at 5 and 10 EUR + a 5xx alarm on the API
+envs/
+  dev/                  same modules, smaller numbers, shorter retention
+  prod/                 same modules, and the two account-wide budgets
+```
+
+Nothing in here has been applied. There is no AWS account behind this repository yet, so
+every account-specific value is a variable with a `terraform.tfvars.example` beside it, and
+what is verified is `terraform fmt`, `terraform validate`, `tflint` and `checkov` — see
+[What is not verified](#what-is-not-verified).
+
+## Shape of the design
+
+```
+                         ┌──────────────── AWS ───────────────────────────────┐
+ reader ──HTTPS──▶ CloudFront (OAC, CSP, HSTS, PriceClass_100)                │
+                     ├── /_next/static/* ─▶ S3 (private, 1 year at the edge)  │
+                     ├── pages ──────────▶ S3 (private, 60 s dev / 300 s prod)│
+                     └── /api/* ─────────▶ API Gateway (HTTP API, throttled)  │
+                                              └─▶ Lambda (image from ECR)     │
+                                                     └─▶ CloudWatch Logs      │
+                         └────────────────────────────────────────────────────┘
+
+ git push ─▶ GitHub Actions ─(OIDC, no stored keys)─▶ plan role (PR) / apply role (main)
+```
+
+Three properties the design is built around, all of them consequences of a 1–5 €/month budget:
+
+- **Nothing is billed while idle.** No NAT gateway, no load balancer, no cluster, no DynamoDB
+  table for state locking (`use_lockfile` instead), no WAF, no customer-managed KMS key.
+- **Spend has a ceiling, not just an alarm.** Reserved concurrency on the function and
+  throttling on the stage put an upper bound on what a loop hitting `/search` can cost. The
+  budgets tell you afterwards; these two stop it.
+- **The pipeline cannot become an administrator.** Read-only on pull requests, ARN-scoped
+  writes on apply, no `iam:AttachRolePolicy` at all, and a permissions boundary every role the
+  pipeline creates has to carry.
+
+## Running it locally
+
+```bash
+make tf-fmt      # terraform fmt -check -recursive
+make tf-validate # init -backend=false + validate in every module and env
+make tf-test     # terraform test with mock_provider: a real plan, with no AWS account
+make tf-lint     # tflint (needs tflint --init once, which make does)
+make tf-sec      # checkov
+make tf-check    # all five, the same as CI
+```
+
+None of them needs credentials and none touches the state bucket: `tf-validate` and `tf-test`
+both run `terraform init -backend=false`, and the tests mock the provider away entirely.
+
+## First deployment, in order
+
+1. **`bootstrap/`** — see [bootstrap/README.md](bootstrap/README.md). Creates the state
+   bucket, the OIDC provider and the deploy roles.
+2. **GitHub settings** — environments `dev` and `prod`, required reviewers on `prod`, and the
+   repository variables. Terraform cannot do this and does not try; the list is in
+   [bootstrap/README.md](bootstrap/README.md).
+3. **`envs/dev`, the two-step first apply.** `modules/api-lambda` creates the registry *and*
+   the function that runs an image from it, so on the very first apply there is no image to
+   deploy yet:
+
+   ```bash
+   cd infra/terraform/envs/dev
+   cp backend.hcl.example backend.hcl && $EDITOR backend.hcl
+   cp terraform.tfvars.example terraform.tfvars && $EDITOR terraform.tfvars
+
+   terraform init -backend-config=backend.hcl
+
+   # step 1: the registry on its own
+   terraform apply -target=module.api.aws_ecr_repository.api
+
+   # push the lambda target of apps/api/Dockerfile into it
+   make embed
+   aws ecr get-login-password | docker login --username AWS --password-stdin "$(terraform output -raw ecr_repository_url)"
+
+   # --platform linux/amd64 is not optional on an Apple Silicon machine. Without it docker
+   # builds for the host, so an arm64 image lands in a registry a function declared
+   # architectures = ["x86_64"] pulls from; the apply succeeds and the first invocation
+   # fails with `exec format error`.
+   #
+   # --provenance=false keeps buildx from wrapping the result in an OCI index with an
+   # attestation manifest beside the image. Lambda wants a plain single-platform manifest
+   # and refuses the index with "The image manifest, config or layer media type ... is not
+   # supported".
+   docker buildx build -f apps/api/Dockerfile --target lambda \
+     --platform linux/amd64 --provenance=false \
+     -t "$(terraform output -raw ecr_repository_url):bootstrap" --push .
+
+   # step 2: everything, with api_image_uri set to the digest that push printed
+   terraform apply
+   ```
+
+   Every later apply is one step: `deploy.yml` promotes a digest and passes it in.
+4. **`envs/prod`** — the same, and then confirm the SNS subscription emails. An unconfirmed
+   subscription is the usual reason an alarm "did not fire".
+
+## Why the state looks like this
+
+- **S3 with `use_lockfile = true`.** The lock is an object next to the state, written with a
+  conditional PUT, so two applies cannot both win. It replaces the DynamoDB table every older
+  guide tells you to create — one less resource, and one less thing billed.
+- **One key per environment** (`envs/dev/terraform.tfstate`, `envs/prod/...`), and the apply
+  role of each environment can only write under its own prefix. A dev pipeline cannot corrupt
+  prod's state even if it wanted to.
+- **Partial backend configuration.** The bucket name is globally unique, so it cannot be
+  committed as a default; it comes from `backend.hcl` locally and from a repository variable
+  in CI. Everything else (key, region, encryption, locking) is in the committed
+  `backend "s3"` block, where a reviewer can see it.
+
+## What is not verified
+
+| Checked | How |
+| --- | --- |
+| Formatting | `terraform fmt -check -recursive` |
+| Syntax, types, module wiring | `terraform init -backend=false` + `terraform validate` in all 7 directories |
+| **That `plan` resolves at all** | `terraform test` with `mock_provider "aws"` — see below |
+| Rendered IAM policies | `terraform test` in `modules/github-oidc`, asserting on the decoded JSON |
+| Terraform and AWS lint | `tflint` with the AWS ruleset |
+| Security and cost misconfiguration | `checkov`, 0 failures, every skip carrying a reason |
+| The same, by a second scanner | `trivy --scanners misconfig`, which `security.yml` already runs over the whole repo |
+| **Nothing else** | There is no AWS account. Nothing here has ever been applied. |
+
+`validate` type-checks a configuration; it does not build a plan graph and it does not call
+AWS. It cannot tell you that an IAM condition key is spelled right, that a metric name exists,
+that a quota allows what you asked for — or even that `plan` would succeed. The open questions
+are listed in the pull request that added this directory.
+
+## `terraform test`: the gap between `validate` and `apply`
+
+`fmt`, `validate`, `tflint` and `checkov` all read the configuration without ever building a
+plan. That leaves one whole class of mistake green on every check and fatal on the first real
+run: a `count` or a `dynamic` block whose value is not known until `apply`.
+
+```hcl
+# passes all four checks; dies on the first plan of a new environment
+count = var.api_id == null ? 0 : 1          # api_id = module.api.api_id
+```
+
+> Error: Invalid count argument
+> The "count" value depends on resource attributes that cannot be determined until apply.
+
+`mock_provider "aws"` is what makes this runnable here: the provider is never contacted, so
+there are no credentials, no account and no network — and the error lives in Terraform's own
+evaluation, which is exactly what still runs. The tests are:
+
+| Where | What it pins |
+| --- | --- |
+| `envs/dev/tests`, `envs/prod/tests` | `plan` resolves from an empty state, and again with a custom domain |
+| `modules/web-opennext/tests` | the assets bucket is `AES256`; the `/api/*` behaviour is driven by a plan-time flag |
+| `modules/api-lambda/tests` | the ECR repository name carries the environment |
+| `modules/observability/tests` | the alert topic has no KMS key; the alarm reads `AWS/ApiGateway` |
+| `modules/github-oidc/tests` | the apply role can list `env:/`, can create a log delivery, and cannot reach the other environment's registry |
+
+The `github-oidc` file deliberately uses a real `aws` provider with dummy credentials and the
+`skip_*` flags rather than `mock_provider`: `aws_iam_policy_document` is rendered client-side,
+so a mocked provider would hand back a generated string and there would be no policy left to
+assert on. It still calls nothing — `command = plan` creates no resources.
+
+## Two scanners, two ignore files
+
+`checkov` and `trivy` both read this Terraform, and they disagree about what counts as a
+finding -- which is the point of running both. They also accept an exception in different
+places, so an accepted trade-off is written twice:
+
+| Scanner | Where the exception goes | Scope |
+| --- | --- | --- |
+| checkov | `# checkov:skip=CKV_AWS_68:reason`, **inside** the resource block | that resource |
+| trivy | `#trivy:ignore:AVD-AWS-0011`, on the line **above** `resource` | that resource |
+
+Both are per-resource on purpose. Trivy would also accept an id in the repo's `.trivyignore`,
+and that is where accepted **image CVEs** go ([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)),
+but an id there silences the rule for every future resource as well -- including the one
+somebody adds next year without the same reason to be sure.
+
+Trivy's exceptions are written for **every** severity it reports, not just the ones that fail
+the build. `security.yml` fails on HIGH and CRITICAL but uploads all of them to the Security
+tab, and an alert nobody can close is an alert everybody learns to scroll past -- the same
+reason `deploy.yml` skips instead of failing before the account exists.
+
+The exceptions that exist today are all the same decision seen from several angles: no
+customer-managed KMS key (1 USD/month per key, on buckets, a registry, log groups and a topic
+that hold no secrets), no WAF and no access logging (both bill before the first visitor
+arrives), and two things that are opt-in rather than absent -- bucket versioning, which
+`envs/prod` turns on, and X-Ray tracing, which `enable_xray` turns on. The reason is on the
+line in every case.
+
+## Provider lock files
+
+`.terraform.lock.hcl` is **committed**, in all seven directories, for the same reason actions
+are pinned by SHA and images are deployed by digest
+([docs/SEGURIDAD.md](../../docs/SEGURIDAD.md)): a version constraint picks a version, a lock
+picks exact bytes. `~> 6.0` in `versions.tf` would otherwise let any later 6.x in on the next
+`init`, and a repository that pins every action to a 40-character SHA cannot resolve its own
+providers without pinning anything.
+
+All seven files are identical and hold three platforms — `linux_amd64` (what CI runs),
+`darwin_arm64` (Apple Silicon) and `darwin_amd64`. A lock with only one platform in it is
+worse than none: `terraform init` then refuses to run anywhere else.
+
+Regenerate them after a deliberate provider bump:
+
+```bash
+for d in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
+  terraform -chdir="$d" providers lock \
+    -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64
+done
+```
+
+Add `-platform=linux_arm64` if you ever develop on one; adding a platform is additive, and
+removing one breaks `init` for whoever uses it.
+
+> The committed files record `h1:` hashes (one per platform) and not the registry's `zh:`
+> hashes, because they were generated from a verified local mirror of the official release
+> zips — `registry.terraform.io` is not reachable from the environment they were made in,
+> while `releases.hashicorp.com` is, and each zip was checked against the published
+> `SHA256SUMS` before being locked. `terraform init` verifies against `h1:` after unpacking,
+> so the pin is real; re-running the loop above from a machine that can reach the registry
+> adds the `zh:` hashes and the signature check that comes with them.

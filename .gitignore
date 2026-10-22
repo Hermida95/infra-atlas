@@ -18,6 +18,12 @@ __pycache__/
 *.tfstate.*
 *.tfplan
 .terraform.lock.hcl.bak
+# .terraform.lock.hcl is NOT ignored: it is committed, like every other dependency lock in
+# this repo (infra/terraform/README.md).
+# Account-specific, and not committed: the state bucket name and the ARNs usually carry the
+# account id. Copy the .example files beside them (infra/terraform/README.md).
+infra/terraform/**/terraform.tfvars
+infra/terraform/**/backend.hcl
 
 # Env and OS
 .env

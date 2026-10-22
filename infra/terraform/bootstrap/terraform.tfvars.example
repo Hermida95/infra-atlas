@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars and fill in. Nothing here is secret, but terraform.tfvars is not
+# committed: the bucket name gives away the account id most people encode in it.
+
+# S3 bucket names are globally unique. Appending the account id is the usual way to get one
+# that is both unique and obvious; any unused name works.
+state_bucket_name = "infra-atlas-tfstate-000000000000"
+
+# Ireland: cheapest EU region with every service this project uses. Must match the `region`
+# in each env's backend block (infra/terraform/envs/*/versions.tf).
+aws_region = "eu-west-1"
+
+# Only this repository can assume the deploy roles.
+github_owner = "Hermida95"
+github_repo  = "infra-atlas"
+
+# The GitHub OIDC provider is one per account. Already have one (another project, or you
+# created it from the console)? Set create_oidc_provider = false and point at it:
+# create_oidc_provider       = false
+# existing_oidc_provider_arn = "arn:aws:iam::000000000000:oidc-provider/token.actions.githubusercontent.com"
+
+# One entry per env directory under envs/. The key is also the GitHub environment name the
+# apply role trusts, so `dev` needs a GitHub environment called `dev`, and `prod` one called
+# `prod` with required reviewers (decision 9: no unattended apply in prod).
+environments = {
+  dev  = {}
+  prod = {}
+}

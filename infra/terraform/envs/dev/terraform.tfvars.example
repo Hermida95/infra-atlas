@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars. Nothing here is a secret, but it is all account-specific, so
+# terraform.tfvars is not committed. In CI these come from -var flags and repository
+# variables instead (see .github/workflows/deploy.yml).
+
+# S3 bucket names are globally unique. Must start with "<project>-<environment>-" or the
+# pipeline's apply role is not allowed to manage it.
+web_bucket_name = "infra-atlas-dev-web-000000000000"
+
+# Each address gets a confirmation email from AWS; the subscription does nothing until it is
+# clicked.
+alert_emails = ["you@example.com"]
+
+# By digest, never by tag. On the very first apply the registry does not exist yet -- see
+# README.md for the two-step bootstrap.
+api_image_uri = "000000000000.dkr.ecr.eu-west-1.amazonaws.com/infra-atlas-dev/api@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+# From the bootstrap stack: terraform -chdir=../../bootstrap output -raw execution_boundary_arn
+permissions_boundary_arn = "arn:aws:iam::000000000000:policy/infra-atlas-execution-boundary"
+
+# No custom domain in dev: the *.cloudfront.net name is enough.
+# web_aliases         = []
+# acm_certificate_arn = null
