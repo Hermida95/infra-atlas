@@ -141,10 +141,17 @@ and that is where accepted **image CVEs** go ([docs/SEGURIDAD.md](../../docs/SEG
 but an id there silences the rule for every future resource as well -- including the one
 somebody adds next year without the same reason to be sure.
 
-The exceptions that exist today, and all of them are the same decision seen from four angles:
-no customer-managed KMS key (1 USD/month per key, on buckets and a topic that hold no
-secrets), and no WAF (~5 USD/month before the first visitor). The reason is on the line in
-every case.
+Trivy's exceptions are written for **every** severity it reports, not just the ones that fail
+the build. `security.yml` fails on HIGH and CRITICAL but uploads all of them to the Security
+tab, and an alert nobody can close is an alert everybody learns to scroll past -- the same
+reason `deploy.yml` skips instead of failing before the account exists.
+
+The exceptions that exist today are all the same decision seen from several angles: no
+customer-managed KMS key (1 USD/month per key, on buckets, a registry, log groups and a topic
+that hold no secrets), no WAF and no access logging (both bill before the first visitor
+arrives), and two things that are opt-in rather than absent -- bucket versioning, which
+`envs/prod` turns on, and X-Ray tracing, which `enable_xray` turns on. The reason is on the
+line in every case.
 
 ## Provider lock files
 

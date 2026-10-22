@@ -17,6 +17,8 @@ locals {
 # Registry
 # --------------------------------------------------------------------------------------------
 
+# AWS-0033 is checkov's CKV_AWS_136: AES256 instead of a customer-managed KMS key.
+#trivy:ignore:AVD-AWS-0033
 resource "aws_ecr_repository" "api" {
   # checkov:skip=CKV_AWS_136:AES256 with the S3-managed key, not KMS. A customer-managed key
   # costs 1 USD/month -- a fifth of the whole budget -- to encrypt layers whose contents are
@@ -153,6 +155,8 @@ resource "aws_iam_role_policy" "api" {
 
 # Created by Terraform rather than left to Lambda: a group Lambda creates on first invocation
 # has no retention and no tags, so it keeps logs forever.
+# AWS-0017 is checkov's CKV_AWS_158: no customer-managed key on the log group.
+#trivy:ignore:AVD-AWS-0017
 resource "aws_cloudwatch_log_group" "api" {
   # checkov:skip=CKV_AWS_338:A year of retention is the opposite of what this project needs:
   # log storage is the one CloudWatch charge that grows on its own, and the budget is
@@ -165,6 +169,10 @@ resource "aws_cloudwatch_log_group" "api" {
   tags              = local.tags
 }
 
+# AWS-0066 wants X-Ray always on. It is opt-in here (enable_xray, default false): traces are
+# only worth their ingestion once there is traffic to trace, and the execution role grows two
+# permissions when it is turned on.
+#trivy:ignore:AVD-AWS-0066
 resource "aws_lambda_function" "api" {
   # checkov:skip=CKV_AWS_173:The environment variables below are configuration, not secrets:
   # CORS origins, a log level, a rate limit. Encrypting them needs a customer-managed KMS key
@@ -289,6 +297,8 @@ resource "aws_apigatewayv2_route" "root" {
   target    = "integrations/${aws_apigatewayv2_integration.api.id}"
 }
 
+# AWS-0017, same as the function's log group above.
+#trivy:ignore:AVD-AWS-0017
 resource "aws_cloudwatch_log_group" "access" {
   # checkov:skip=CKV_AWS_338:Same as the function's log group: short retention is a budget
   # decision, not an oversight.

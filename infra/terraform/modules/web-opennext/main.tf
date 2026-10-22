@@ -26,6 +26,11 @@ locals {
 # Assets bucket
 # --------------------------------------------------------------------------------------------
 
+# AWS-0089 (no access logging) and AWS-0090 (versioning off by default) are checkov's
+# CKV_AWS_18 and CKV_AWS_21. Reasons inside the block; note that envs/prod does turn
+# versioning on, so the finding is about the module default, not about production.
+#trivy:ignore:AVD-AWS-0089
+#trivy:ignore:AVD-AWS-0090
 resource "aws_s3_bucket" "assets" {
   # checkov:skip=CKV_AWS_18:Access logging needs a second bucket billed forever. The access
   # log that matters for a CDN is CloudFront's own, and that is also off for cost (see the
@@ -273,8 +278,10 @@ resource "aws_cloudfront_function" "strip_api_prefix" {
   code    = file("${path.module}/functions/strip-api-prefix.js")
 }
 
-# Trivy's AWS-0011 is checkov's CKV_AWS_68: no WAF. See the reason inside the block.
+# Trivy's AWS-0011 is checkov's CKV_AWS_68 (no WAF) and AWS-0010 is CKV_AWS_86 (no access
+# logging). See the reasons inside the block: both bill before the first visitor arrives.
 #trivy:ignore:AVD-AWS-0011
+#trivy:ignore:AVD-AWS-0010
 resource "aws_cloudfront_distribution" "web" {
   # checkov:skip=CKV_AWS_374:No geo restriction. The atlas is public technical writing in
   # English for a European job market; blocking countries would hide it from its readers.
