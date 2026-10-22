@@ -168,7 +168,7 @@ resource "aws_budgets_budget" "cost" {
 # Sum, not Average: Average over a period with two requests, one of them failing, is 0.5 and
 # would never cross a threshold expressed in responses.
 resource "aws_cloudwatch_metric_alarm" "api_5xx" {
-  count = var.api_id == null ? 0 : 1
+  count = var.enable_api_5xx_alarm ? 1 : 0
 
   alarm_name        = "${local.name}-api-5xx"
   alarm_description = "The ${var.environment} API returned ${var.api_5xx_threshold} or more 5xx in ${var.api_5xx_period_seconds / 60} minutes."

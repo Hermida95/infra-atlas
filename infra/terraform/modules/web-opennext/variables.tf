@@ -17,11 +17,32 @@ variable "bucket_name" {
   type        = string
 }
 
+variable "enable_api_origin" {
+  description = <<-EOT
+    Add the /api/* behaviour, its origin and the edge function that strips the prefix.
+
+    This is a separate flag rather than `api_origin_domain != null`, and the reason is the one
+    Terraform rule that `validate` cannot catch: `count` and `dynamic` have to be resolvable
+    during `plan`, and api_origin_domain is normally
+    `replace(module.api.api_endpoint, "https://", "")` -- an attribute of an API Gateway that
+    does not exist yet, so it is unknown until `apply`. Deriving the three conditionals below
+    from it gives a configuration that passes `fmt`, `validate`, `tflint` and `checkov` and
+    then fails the first `plan` of a new environment with "Invalid count argument".
+
+    The flag is set literally in envs/*/main.tf, so it is known at plan time; the *value* of
+    api_origin_domain may stay unknown, which is fine -- an argument can be unknown, the
+    number of blocks cannot.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "api_origin_domain" {
   description = <<-EOT
     Hostname of the API Gateway endpoint, without the scheme, so /api/* is served from the
     same origin as the pages and the browser never makes a cross-origin request.
-    Null leaves the /api/* behaviour out entirely.
+
+    Only read when enable_api_origin is true, and it may be an unknown value at plan time.
   EOT
   type        = string
   default     = null

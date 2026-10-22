@@ -15,8 +15,12 @@ locals {
     Component   = "web"
   })
 
+  # Both of these are derived only from variables the caller writes literally, never from
+  # another module's attributes: everything below that uses them drives a `count` or a
+  # `dynamic` block, and those have to be resolvable during `plan`. See the comment on
+  # variable "enable_api_origin".
   has_custom_domain = var.acm_certificate_arn != null && length(var.aliases) > 0
-  has_api_origin    = var.api_origin_domain != null
+  has_api_origin    = var.enable_api_origin
 
   s3_origin_id  = "s3-assets"
   api_origin_id = "api-gateway"
@@ -330,11 +334,11 @@ resource "aws_cloudfront_distribution" "web" {
   }
 
   dynamic "origin" {
-    for_each = local.has_api_origin ? [var.api_origin_domain] : []
+    for_each = local.has_api_origin ? [1] : []
 
     content {
       origin_id   = local.api_origin_id
-      domain_name = origin.value
+      domain_name = var.api_origin_domain
 
       custom_origin_config {
         http_port              = 80
@@ -425,6 +429,14 @@ resource "aws_cloudfront_distribution" "web" {
     precondition {
       condition     = length(var.aliases) == 0 || var.acm_certificate_arn != null
       error_message = "aliases needs acm_certificate_arn: CloudFront cannot serve a custom domain with its default certificate."
+    }
+
+    # A precondition rather than a variable validation, because the value may legitimately be
+    # unknown at plan time: Terraform defers an unknown precondition to apply instead of
+    # failing, which a validation block would not.
+    precondition {
+      condition     = !var.enable_api_origin || var.api_origin_domain != null
+      error_message = "enable_api_origin needs api_origin_domain: there is no hostname to send /api/* to."
     }
   }
 
