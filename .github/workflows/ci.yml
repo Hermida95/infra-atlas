@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   python:
-    name: Content, brain and API
+    name: Brain and API
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,11 +36,11 @@ jobs:
       - run: uv run pytest -q
         env:
           REQUIRE_EMBEDDINGS: "1"
-      - run: uv run brain validate
+      # `brain validate`, the schema drift check and the retrieval-quality report live in
+      # content.yml, which only runs when the content or the pipeline changes. What stays here
+      # is what the two jobs below consume: the graph and the vector index.
       - run: uv run brain graph
       - run: uv run brain embed
-      - name: Search evaluation report
-        run: uv run python -m api.evaluation | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: graph
@@ -122,3 +122,112 @@ jobs:
       - name: Container logs
         if: failure()
         run: docker logs api || true
+
+  terraform:
+    name: Terraform (fmt, validate, test, tflint, checkov)
+    runs-on: ubuntu-latest
+    # The AWS provider is a ~180 MB download. With the cache below a run takes two or three
+    # minutes; the budget is for the run after a provider bump, which has to fetch it again.
+    timeout-minutes: 25
+    env:
+      # Downloaded and checksum-verified rather than installed by a third-party action: the
+      # same reasoning as pinning every action by SHA (docs/SEGURIDAD.md). Bump the version
+      # and the hash together; the hashes come from the publishers' own SHA256SUMS files.
+      TERRAFORM_VERSION: 1.14.4
+      TERRAFORM_SHA256: 4a24b18865d9419ba7882567cb7429dd1525b3e2029a9e38f612d476ba8c3dea
+      TFLINT_VERSION: 0.60.0
+      TFLINT_SHA256: 3476ceedcf0c4f9f2bed35e92988e1411bec2caa543c9387bffaa720df9efaf7
+      CHECKOV_VERSION: 3.2.489
+      # One shared plugin cache for all seven `terraform init` runs below. Without it each
+      # directory downloads the AWS provider again -- about 180 MB, seven times, which turned
+      # this job from three minutes into fifteen.
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keyed on the provider constraints, so a version bump in any versions.tf fetches the
+      # provider again and nothing else does. This job publishes nothing, so a stale or
+      # poisoned entry here could only make a lint result wrong, not ship anything.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.terraform-plugin-cache
+          key: terraform-providers-${{ hashFiles('infra/terraform/**/versions.tf') }}
+          restore-keys: terraform-providers-
+
+      - name: Install Terraform and tflint
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          curl -sSLo "$tmp/terraform.zip" \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "${TERRAFORM_SHA256}  $tmp/terraform.zip" | sha256sum -c -
+          curl -sSLo "$tmp/tflint.zip" \
+            "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_amd64.zip"
+          echo "${TFLINT_SHA256}  $tmp/tflint.zip" | sha256sum -c -
+          unzip -o -q "$tmp/terraform.zip" -d /usr/local/bin
+          unzip -o -q "$tmp/tflint.zip" -d /usr/local/bin
+          terraform version
+          tflint --version
+
+      # Formatting first: it is the cheapest failure and the one that makes every diff noisy.
+      - name: terraform fmt
+        run: terraform fmt -check -recursive infra/terraform
+
+      # -backend=false: no credentials, no state bucket, nothing to lock. validate type-checks
+      # the configuration and the wiring between modules; it never calls AWS.
+      - name: terraform validate
+        run: |
+          set -euo pipefail
+          # Terraform refuses to use the plugin cache if the directory does not exist.
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          for dir in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      # The one check in this job that builds a plan, against a mocked AWS provider, so it
+      # needs no credentials -- and it catches what `validate` structurally cannot see,
+      # because `validate` type-checks a configuration without ever producing a plan graph:
+      # a `count` or a `dynamic` block derived from a value that is unknown until apply, a
+      # metric namespace that does not exist, an encryption setting that locks the intended
+      # reader out, an IAM policy whose rendered JSON says something other than its comment.
+      # The directories were already initialised by the step above.
+      # See infra/terraform/README.md.
+      - name: terraform test
+        run: |
+          set -euo pipefail
+          found=0
+          for dir in $(find infra/terraform -type d -name tests -printf '%h\n' | sort); do
+            echo "::group::$dir"
+            terraform -chdir="$dir" test
+            echo "::endgroup::"
+            found=$((found + 1))
+          done
+          # A suite nobody runs rots in silence, so finding none is a failure, not a pass.
+          test "$found" -gt 0 \
+            || { echo "::error::No .tftest.hcl suites found under infra/terraform."; exit 1; }
+
+      - name: tflint
+        env:
+          # tflint downloads its AWS ruleset from GitHub releases; without a token the
+          # anonymous API rate limit is what fails the job, not the code.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tflint --chdir=infra/terraform --init
+          for dir in infra/terraform/bootstrap infra/terraform/modules/* infra/terraform/envs/*; do
+            echo "::group::$dir"
+            tflint --chdir="$dir" --config="$PWD/infra/terraform/.tflint.hcl"
+            echo "::endgroup::"
+          done
+
+      # Decision 10: "escaneo del código Terraform (checkov)". Every accepted finding is a
+      # `checkov:skip` next to the resource with the reason on the line, so this job failing
+      # means something new and undocumented.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: checkov
+        run: uvx "checkov==${CHECKOV_VERSION}" --directory infra/terraform --framework terraform --compact --quiet

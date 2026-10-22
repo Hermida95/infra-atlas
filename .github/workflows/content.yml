@@ -1,0 +1,97 @@
+name: content
+
+# The content pipeline on its own, out of ci.yml: /content is what changes most often in this
+# repo, and a typo in a ficha does not need a web build, a Docker image or a Trivy scan to be
+# caught. Decision 4's "CI has to filter by path so it does not rebuild everything on every
+# push", applied to the piece that benefits most.
+#
+# What stays in ci.yml: `brain graph` and `brain embed`, because the web build and the API
+# image consume their output as an artifact, and those jobs run on every push.
+#
+# The filters are wider than `content/**` on purpose: `evidence` (decision 12) points fichas at
+# real files in this repo, so a change to one of those files can invalidate a ficha without
+# touching `content/` at all.
+on:
+  push:
+    branches: [main]
+    paths:
+      - content/**
+      - packages/brain/**
+      - apps/api/src/api/semantic.py
+      - apps/api/src/api/evaluation.py
+      - uv.lock
+      - .github/workflows/content.yml
+      # Whatever `evidence` points at belongs here too, or the guarantee decision 12 is after
+      # -- "deleting the code breaks the content CI" -- quietly stops holding: `brain validate`
+      # checks that every evidence path exists and that its line range still fits the file, so
+      # a refactor that shifts those lines has to run this workflow. Today the targets are the
+      # workflows and the Terraform; `grep -rhA1 '^evidence:' content/nodes | grep path:`
+      # lists them.
+      - .github/workflows/**
+      - infra/terraform/**
+  pull_request:
+    paths:
+      - content/**
+      - packages/brain/**
+      - apps/api/src/api/semantic.py
+      - apps/api/src/api/evaluation.py
+      - uv.lock
+      - .github/workflows/content.yml
+      # Whatever `evidence` points at belongs here too, or the guarantee decision 12 is after
+      # -- "deleting the code breaks the content CI" -- quietly stops holding: `brain validate`
+      # checks that every evidence path exists and that its line range still fits the file, so
+      # a refactor that shifts those lines has to run this workflow. Today the targets are the
+      # workflows and the Terraform; `grep -rhA1 '^evidence:' content/nodes | grep path:`
+      # lists them.
+      - .github/workflows/**
+      - infra/terraform/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    name: Fichas, graph and retrieval quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --all-packages
+
+      # Frontmatter, relations, planner rules and review dates. A ficha with a broken
+      # relation does not get published (decision 3).
+      - name: Validate every node and domain
+        run: uv run brain validate
+
+      # The Pydantic model is the single source of truth, and node.schema.json is generated
+      # from it. If they drift, the TypeScript and Zod types generated downstream describe a
+      # schema that no longer exists.
+      - name: node.schema.json matches the Pydantic model
+        run: |
+          uv run brain schema
+          git diff --exit-code -- packages/brain/schema/node.schema.json \
+            || { echo "::error::packages/brain/schema/node.schema.json is stale. Run 'uv run brain schema' and commit it."; exit 1; }
+
+      - name: Build the graph the web app renders
+        run: uv run brain graph
+
+      # bge-small-en-v1.5 (~67 MB) downloads once from Hugging Face, then comes from the cache.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/api/data/models
+          key: fastembed-bge-small-en-v1.5-${{ hashFiles('uv.lock') }}
+          restore-keys: fastembed-bge-small-en-v1.5-
+      - run: uv run brain embed
+
+      # Does the semantic search still find the right ficha? New content can make an existing
+      # query ambiguous, and this is where that shows up as a number instead of a surprise.
+      # The thresholds live in the report itself (docs/BUSQUEDA.md).
+      - name: Search evaluation report
+        run: uv run python -m api.evaluation | tee -a "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,10 @@ level: core
 access: free
 relations:
   related: [tfapply]
+evidence:
+  - path: .github/workflows/deploy.yml
+    lines: [247, 302]
+    text: "Every pull request here gets its plan posted as a comment before anything is applied, and the apply runs that saved plan file rather than computing a fresh one."
 reviewed: 2026-10-20
 ---
 

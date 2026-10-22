@@ -20,7 +20,7 @@ conocimiento buscable que crece con el tiempo.
   - El pago pasa a ser secundario.
 
 ## Estado actual
-Comprobado contra el repo el 2026-10-21. Las decisiones de abajo son el **diseño objetivo**; esta tabla dice qué existe hoy.
+Comprobado contra el repo el 2026-10-22. Las decisiones de abajo son el **diseño objetivo**; esta tabla dice qué existe hoy.
 **Hecho** = está en `main` y se prueba · **Parcial** = existe una parte · **Pendiente** = no existe todavía · **Distinto** = se hizo de otra forma que la decidida.
 
 | Pieza | Estado | Hoy |
@@ -38,16 +38,16 @@ Comprobado contra el repo el 2026-10-21. Las decisiones de abajo son el **diseñ
 | Vectores: LanceDB | **Distinto** | El índice va **dentro de la imagen** (`apps/api/Dockerfile`, `COPY apps/api/data/vectors.lance`), no en S3. Ver [BUSQUEDA.md](BUSQUEDA.md). |
 | Embeddings en Bedrock | Parcial | `BedrockEmbedder` existe como extra opcional (`brain[bedrock]`); el proveedor por defecto es local (bge-small). |
 | Claude en Bedrock (RAG) | Pendiente | Fase 3. |
-| Imagen Docker de la API, target Lambda | Hecho | El target `lambda` añade el Lambda Web Adapter. **No hay** función Lambda desplegada. |
+| Imagen Docker de la API, target Lambda | Hecho | El target `lambda` añade el Lambda Web Adapter. `modules/api-lambda` ya declara la función que lo corre, pero **no hay** ninguna desplegada. |
 | Chart de Helm + kind en CI | Hecho | `infra/helm/api`, `k8s-smoke.yml`. El módulo de EKS: pendiente. |
-| Terraform (`infra/terraform`) | Pendiente | Solo hay directorios vacíos (`bootstrap/`, `envs/dev`, `envs/prod`, `modules/`) que git no sigue. Sin módulos. |
-| Hosting web (OpenNext + CloudFront) | Pendiente | Depende de Terraform. |
+| Terraform (`infra/terraform`) | Parcial | `bootstrap/` y los módulos `github-oidc`, `api-lambda`, `web-opennext` y `observability`, cableados en `envs/dev` y `envs/prod`. Estado en S3 con `use_lockfile`. CI comprueba fmt, validate, tflint y checkov; **nunca se ha aplicado** (no hay cuenta de AWS). Faltan `brain-store`, `auth` y `eks-demo`. |
+| Hosting web (OpenNext + CloudFront) | Parcial | `modules/web-opennext`: S3 privado, CloudFront con OAC, CSP y HSTS, y caché propia. Falta el build de OpenNext y publicar: hoy `next build` no genera un sitio estático. El Lambda de SSR está descrito en `ssr.tf`, no construido (fase 3). |
 | CI | Hecho | `ci.yml`, `k8s-smoke.yml`, `release.yml` (imagen firmada, SBOM) y `security.yml`. |
-| `deploy.yml` | Pendiente | No existe (necesita Terraform y OIDC hacia AWS). |
-| `content.yml` | Pendiente | No existe; la validación del contenido corre dentro de `ci.yml`. |
-| Docker Compose | Parcial | `compose.yaml` levanta solo la API. Faltan `web` y `localstack`. |
-| Calidad | Parcial | ruff, pytest, eslint, vitest y trivy sí. pyright, Playwright, tflint y checkov: no están configurados. |
-| Observabilidad | Parcial | Logs JSON, métricas Prometheus y `x-request-id`. Powertools, X-Ray y alarmas de Budgets: pendientes. |
+| `deploy.yml` | Parcial | Existe: OIDC sin claves, `plan` comentado en el PR, imagen construida una vez (llama a `release.yml`) y `apply` promocionando ese digest a dev y luego a prod tras aprobación. El `apply` está **dormido** hasta que existan el `bootstrap`, los environments y las variables del repositorio; la publicación de la imagen no, porque no necesita AWS. No publica la web todavía. |
+| `content.yml` | Hecho | Workflow propio con filtros por ruta: `brain validate`, deriva de `node.schema.json`, grafo e informe de calidad de la búsqueda. |
+| Docker Compose | Parcial | `compose.yaml` declara `web` (servidor de desarrollo con recarga, `apps/web/Dockerfile`), `api` y `localstack`. `docker compose config` se comprueba; nada en CI arranca la pila. |
+| Calidad | Parcial | ruff, pytest, eslint, vitest, trivy, tflint y checkov sí (`make tf-check` corre los cuatro de Terraform en local). pyright y Playwright: no están configurados. |
+| Observabilidad | Parcial | Logs JSON, métricas Prometheus y `x-request-id`. Alarmas de Budgets (5 € y 10 €) y de 5xx escritas en `modules/observability`, sin aplicar. X-Ray se activa con `enable_xray`. Powertools: pendiente. |
 | Auth, pagos y datos de usuario (F3) | Pendiente | Cognito, Stripe y DynamoDB no se han empezado. |
 
 ## Resumen del stack

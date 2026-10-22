@@ -11,7 +11,7 @@ relations:
   part_of: [pipeline]
 evidence:
   - path: .github/workflows/release.yml
-    lines: [100, 105]
+    lines: [113, 118]
     text: "This repo signs its own API image with cosign, keyless: the identity is the OIDC token GitHub gives the job, so there is no private key to leak."
 planner:
   stage: ship
