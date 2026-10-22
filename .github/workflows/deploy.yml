@@ -469,16 +469,23 @@ jobs:
           # linux/amd64 image plus an attestation manifest on the synthetic unknown/unknown
           # platform. Lambda deploys a single-platform manifest and refuses the index with
           # "The image manifest, config or layer media type for the source image is not
-          # supported", so what gets promoted is the child. It is read back out of the index
-          # that was just verified, not taken from a job output, so the signature covers it.
-          digest="$(crane manifest "${IMAGE}@${INDEX_DIGEST}" \
-            | jq -re 'if .manifests then
-                        (.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest)
-                      else
-                        empty
-                      end')" || digest=""
-          : "${digest:=$INDEX_DIGEST}"
-          echo "Promoting ${IMAGE}@${digest} (index ${INDEX_DIGEST})."
+          # supported", so what gets promoted is the child. It is read out of the index that
+          # was just verified, not taken from a job output, so the signature covers it.
+          #
+          # The two cases are told apart rather than handled with a fallback: a crane that
+          # cannot read the manifest at all, or an index with no linux/amd64 child in it,
+          # has to stop the deploy, not quietly promote the index and let Lambda reject it
+          # later with a message about media types.
+          manifest="$(crane manifest "${IMAGE}@${INDEX_DIGEST}")"
+          if jq -e 'has("manifests")' <<<"$manifest" >/dev/null; then
+            digest="$(jq -re '.manifests[]
+              | select(.platform.os == "linux" and .platform.architecture == "amd64")
+              | .digest' <<<"$manifest")"
+          else
+            # Not an index: buildx pushed a plain manifest, so the signed digest is the image.
+            digest="$INDEX_DIGEST"
+          fi
+          echo "Promoting ${IMAGE}@${digest} (signed index: ${INDEX_DIGEST})."
 
           # Idempotent, because the tags are IMMUTABLE (modules/api-lambda): a re-run of this
           # workflow must not try to move ${GITHUB_SHA} onto anything.
@@ -488,7 +495,10 @@ jobs:
             crane copy "${IMAGE}@${digest}" "${registry}/${ECR_REPOSITORY}:${GITHUB_SHA}"
           fi
 
-          arrived="$(crane digest "${registry}/${ECR_REPOSITORY}:${GITHUB_SHA}")"
+          # Asking the registry for a manifest *by digest* is the assertion: it answers only
+          # if those exact bytes are there. If crane had rebuilt anything on the way, this
+          # reference would not resolve.
+          arrived="$(crane digest "${registry}/${ECR_REPOSITORY}@${digest}")"
           if [ "$arrived" != "$digest" ]; then
             echo "::error::The promoted digest changed in transit: $digest went in, $arrived came out. prod would not be running what dev ran."
             exit 1
