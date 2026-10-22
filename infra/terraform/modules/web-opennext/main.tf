@@ -40,6 +40,10 @@ resource "aws_s3_bucket" "assets" {
   # checkov:skip=CKV2_AWS_62:Nothing consumes S3 events here.
   # checkov:skip=CKV_AWS_21:Versioning is opt-in (enable_bucket_versioning). The content is
   # built from git, so a previous version is a rebuild away.
+  # checkov:skip=CKV_AWS_145:AES256, and not a cost trade-off: CloudFront's OAC cannot read a
+  # KMS-encrypted object without a kms:Decrypt statement for cloudfront.amazonaws.com in the
+  # key policy, and the AWS-managed aws/s3 key's policy cannot be edited. See the comment on
+  # aws_s3_bucket_server_side_encryption_configuration.assets below.
   bucket = var.bucket_name
   tags   = local.tags
 }
@@ -61,17 +65,27 @@ resource "aws_s3_bucket_ownership_controls" "assets" {
   }
 }
 
-# Trivy's AWS-0132: a customer-managed key would be 1 USD/month to encrypt files that are
-# served to the public internet by the next resource down.
+# AES256 (SSE-S3), and not KMS of any kind -- this is the one bucket in the project where that
+# is a correctness requirement rather than a cost decision.
+#
+# CloudFront with an Origin Access Control fetches objects as the service principal
+# cloudfront.amazonaws.com. For a KMS-encrypted object that principal also needs kms:Decrypt
+# on the key, granted in the *key* policy. The AWS-managed aws/s3 key -- which is what
+# `sse_algorithm = "aws:kms"` with no kms_master_key_id means -- has a key policy AWS owns and
+# nobody can edit, so the statement can never be added. The result is AccessDenied on every
+# object, and because 403 is mapped to /404.html below, the whole site answers 404 with a
+# perfectly green apply. A customer-managed key would work, and costs 1 USD/month.
+#
+# Trivy's AWS-0132 asks for KMS here and checkov's CKV_AWS_145 asks for it on the bucket
+# above, which is where that skip lives. Reasons on both.
 #trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   bucket = aws_s3_bucket.assets.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm = "AES256"
     }
-    bucket_key_enabled = true
   }
 }
 
@@ -183,8 +197,11 @@ resource "aws_cloudfront_response_headers_policy" "security" {
 # Distribution
 # --------------------------------------------------------------------------------------------
 
-# OAC (SigV4), not the older Origin Access Identity: it is the only one that works with
-# KMS-encrypted objects, and it is what AWS still develops.
+# OAC (SigV4), not the older Origin Access Identity: it is what AWS still develops, and the
+# only one that can be pinned to a single distribution with AWS:SourceArn.
+#
+# OAC is also the only one that *can* read KMS-encrypted objects, but only when the key policy
+# grants kms:Decrypt to cloudfront.amazonaws.com -- which is why the bucket above is AES256.
 resource "aws_cloudfront_origin_access_control" "assets" {
   name                              = "${local.name}-oac"
   description                       = "Only ${local.name} may read the assets bucket"
