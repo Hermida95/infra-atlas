@@ -242,6 +242,11 @@ data "aws_iam_policy_document" "apply" {
     resources = ["${var.state_bucket_arn}/${var.state_key_prefix}*"]
   }
 
+  # "env:/" is not a typo and not this project's choice: `terraform init` enumerates the
+  # workspaces of an S3 backend by listing the bucket with the prefix the backend's
+  # workspace_key_prefix sets, which defaults to `env:`. Without it in this list the apply
+  # job dies in `init`, before it reads a single line of configuration -- and a first apply
+  # run by hand with administrator credentials never sees it.
   statement {
     sid       = "ListOwnStatePrefix"
     effect    = "Allow"
@@ -251,7 +256,11 @@ data "aws_iam_policy_document" "apply" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.state_key_prefix}*"]
+
+      values = [
+        "${var.state_key_prefix}*",
+        "env:/*",
+      ]
     }
   }
 
