@@ -54,13 +54,14 @@ Three properties the design is built around, all of them consequences of a 1–5
 ```bash
 make tf-fmt      # terraform fmt -check -recursive
 make tf-validate # init -backend=false + validate in every module and env
+make tf-test     # terraform test with mock_provider: a real plan, with no AWS account
 make tf-lint     # tflint (needs tflint --init once, which make does)
 make tf-sec      # checkov
-make tf-check    # all four, the same as CI
+make tf-check    # all five, the same as CI
 ```
 
-`make tf-validate` runs `terraform init -backend=false`, so it needs no credentials and never
-touches the state bucket.
+None of them needs credentials and none touches the state bucket: `tf-validate` and `tf-test`
+both run `terraform init -backend=false`, and the tests mock the provider away entirely.
 
 ## First deployment, in order
 
@@ -127,14 +128,48 @@ touches the state bucket.
 | --- | --- |
 | Formatting | `terraform fmt -check -recursive` |
 | Syntax, types, module wiring | `terraform init -backend=false` + `terraform validate` in all 7 directories |
+| **That `plan` resolves at all** | `terraform test` with `mock_provider "aws"` — see below |
+| Rendered IAM policies | `terraform test` in `modules/github-oidc`, asserting on the decoded JSON |
 | Terraform and AWS lint | `tflint` with the AWS ruleset |
 | Security and cost misconfiguration | `checkov`, 0 failures, every skip carrying a reason |
 | The same, by a second scanner | `trivy --scanners misconfig`, which `security.yml` already runs over the whole repo |
 | **Nothing else** | There is no AWS account. Nothing here has ever been applied. |
 
-`validate` type-checks a plan; it does not call AWS. It cannot tell you that an IAM condition
-key is spelled right, that a metric name exists, or that a quota allows what you asked for.
-The open questions are listed in the pull request that added this directory.
+`validate` type-checks a configuration; it does not build a plan graph and it does not call
+AWS. It cannot tell you that an IAM condition key is spelled right, that a metric name exists,
+that a quota allows what you asked for — or even that `plan` would succeed. The open questions
+are listed in the pull request that added this directory.
+
+## `terraform test`: the gap between `validate` and `apply`
+
+`fmt`, `validate`, `tflint` and `checkov` all read the configuration without ever building a
+plan. That leaves one whole class of mistake green on every check and fatal on the first real
+run: a `count` or a `dynamic` block whose value is not known until `apply`.
+
+```hcl
+# passes all four checks; dies on the first plan of a new environment
+count = var.api_id == null ? 0 : 1          # api_id = module.api.api_id
+```
+
+> Error: Invalid count argument
+> The "count" value depends on resource attributes that cannot be determined until apply.
+
+`mock_provider "aws"` is what makes this runnable here: the provider is never contacted, so
+there are no credentials, no account and no network — and the error lives in Terraform's own
+evaluation, which is exactly what still runs. The tests are:
+
+| Where | What it pins |
+| --- | --- |
+| `envs/dev/tests`, `envs/prod/tests` | `plan` resolves from an empty state, and again with a custom domain |
+| `modules/web-opennext/tests` | the assets bucket is `AES256`; the `/api/*` behaviour is driven by a plan-time flag |
+| `modules/api-lambda/tests` | the ECR repository name carries the environment |
+| `modules/observability/tests` | the alert topic has no KMS key; the alarm reads `AWS/ApiGateway` |
+| `modules/github-oidc/tests` | the apply role can list `env:/`, can create a log delivery, and cannot reach the other environment's registry |
+
+The `github-oidc` file deliberately uses a real `aws` provider with dummy credentials and the
+`skip_*` flags rather than `mock_provider`: `aws_iam_policy_document` is rendered client-side,
+so a mocked provider would hand back a generated string and there would be no policy left to
+assert on. It still calls nothing — `command = plan` creates no resources.
 
 ## Two scanners, two ignore files
 
