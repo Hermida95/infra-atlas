@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Container, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -47,6 +47,10 @@ def build_graph(
     published = [node for node in nodes if include_pro or node.meta.access != "pro"]
     published = sort_nodes(published, domains)
     links = related_links(published)
+    # The ids that actually got published. `related_links` already drops edges that leave
+    # this set; `alternatives` has to drop the same ones, or a `pro` node is named in a
+    # graph.json that does not contain it.
+    present = {node.id for node in published}
     positions = compute_layout(published, {d.id: d for d in domains}, links)
     timestamp = (generated_at or datetime.now(UTC)).astimezone(UTC)
 
@@ -55,7 +59,7 @@ def build_graph(
         "generatedAt": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "domains": [_domain_json(d) for d in sorted(domains, key=lambda d: (d.order, d.id))],
         "requirements": [_requirement_json(r) for r in requirements],
-        "nodes": [_node_json(node, positions[node.id]) for node in published],
+        "nodes": [_node_json(node, positions[node.id], present) for node in published],
         "links": [{"source": s, "target": t, "type": "related"} for s, t in links],
     }
 
@@ -81,7 +85,9 @@ def _domain_json(domain: Domain) -> dict[str, Any]:
     }
 
 
-def _node_json(node: Node, position: tuple[float, float, float]) -> dict[str, Any]:
+def _node_json(
+    node: Node, position: tuple[float, float, float], present: Container[str]
+) -> dict[str, Any]:
     meta = node.meta
     return {
         "id": meta.id,
@@ -100,7 +106,7 @@ def _node_json(node: Node, position: tuple[float, float, float]) -> dict[str, An
         "lab": meta.lab,
         # Alternatives travel with the node, not as links: the planner needs them to say
         # which option it picked and which it left out, and a left-out one is never drawn.
-        "alternatives": list(meta.relations.alternative_to),
+        "alternatives": [alt for alt in meta.relations.alternative_to if alt in present],
         "evidence": [
             {"path": e.path, "lines": list(e.lines), "text": e.text} for e in meta.evidence
         ],

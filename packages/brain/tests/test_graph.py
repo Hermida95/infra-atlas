@@ -24,6 +24,17 @@ def test_excludes_pro_nodes_and_their_links(content_dir: Path, write_node) -> No
     assert graph["links"] == [{"source": "docker", "target": "image", "type": "related"}]
 
 
+def test_pro_nodes_are_not_named_as_alternatives(content_dir: Path, write_node) -> None:
+    """A `pro` node is excluded from the graph, so its id cannot travel inside a free one."""
+    write_node("free", relations={"alternative_to": ["secret"]})
+    write_node("secret", access="pro")
+
+    graph = make_graph(content_dir)
+
+    assert [n["id"] for n in graph["nodes"]] == ["free"]
+    assert graph["nodes"][0]["alternatives"] == []
+
+
 def test_include_pro_keeps_them(content_dir: Path, write_node) -> None:
     write_node("docker", relations={"related": ["secret"]})
     write_node("secret", access="pro")
