@@ -26,11 +26,10 @@ name: deploy
 # Until those variables exist, both jobs below are skipped rather than failed: this workflow
 # is dormant in a clone of the repository that has no AWS account behind it.
 #
-# It also does not publish the web app yet. The bucket and the distribution exist
-# (infra/terraform/modules/web-opennext), but `next build` does not currently emit a static
-# site: that needs either `output: "export"` or the OpenNext build of decision 2, both of
-# which are changes to apps/web rather than to the infrastructure. Uploading `.next` as if it
-# were a site would produce a 404 with a green pipeline, which is worse than not uploading.
+# It publishes the web app too, since apps/web builds to a tree of HTML (`output: "export"`).
+# What it still does not do is the SSR half of decision 2: OpenNext puts the Next.js server on
+# Lambda behind the same distribution, and that is phase 3, when there are pages that cannot be
+# rendered at build time.
 on:
   pull_request:
     paths:
@@ -551,6 +550,66 @@ jobs:
       - name: terraform apply
         working-directory: infra/terraform/envs/${{ matrix.environment }}
         run: terraform apply -no-color tfplan
+
+      # ----------------------------------------------------------------------------------
+      # The site
+      # ----------------------------------------------------------------------------------
+      #
+      # Everything above this point deploys the API. This is the other half: without it the
+      # bucket the distribution serves is empty, so every URL is a 404 behind a green
+      # pipeline -- which is exactly the failure this workflow refused to ship before
+      # apps/web could export.
+      #
+      # Built here, per environment, rather than once for both: NEXT_PUBLIC_SITE_URL ends up
+      # inside the output (sitemap.xml) and it is this environment's own distribution, whose
+      # domain only exists once the apply above has run.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - run: uv sync --all-packages
+      # graph.json is what the pages are generated from; the vector index is not needed here,
+      # so this is `brain graph` and not the `brain embed` the image build runs.
+      - run: uv run brain graph
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Point the build at this environment's own URL
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          echo "NEXT_PUBLIC_SITE_URL=$(terraform output -raw site_url)" >> "$GITHUB_ENV"
+
+      - run: pnpm --filter web build
+
+      - name: Upload the site and invalidate the edge
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: |
+          set -euo pipefail
+          bucket="$(terraform output -raw web_bucket_name)"
+          distribution="$(terraform output -raw cloudfront_distribution_id)"
+          out="$GITHUB_WORKSPACE/apps/web/out"
+
+          test -f "$out/index.html" || { echo "::error::$out has no index.html: the export produced nothing to upload."; exit 1; }
+
+          # Two passes, because this is where the *browser* cache is set -- the distribution
+          # only decides what the edge keeps. Everything under /_next/static carries a content
+          # hash in its filename, so it can never go stale and is immutable for a year. The
+          # HTML cannot: a deploy has to be visible to someone who visited yesterday.
+          #
+          # Assets first, pages second. In that order a page is never live at the edge before
+          # the bundle it asks for has arrived.
+          aws s3 sync "$out/_next/static" "s3://$bucket/_next/static" \
+            --delete --cache-control "public,max-age=31536000,immutable"
+          aws s3 sync "$out" "s3://$bucket" --delete \
+            --exclude "_next/static/*" --cache-control "public,max-age=60,must-revalidate"
+
+          # "/*" is one invalidation path, and the first 1000 a month are free. Only the HTML
+          # needs it; a hashed asset never changes under the same name.
+          id="$(aws cloudfront create-invalidation --distribution-id "$distribution" \
+            --paths '/*' --query 'Invalidation.Id' --output text)"
+          echo "Invalidation $id requested on $distribution."
 
       - name: Summary
         working-directory: infra/terraform/envs/${{ matrix.environment }}
