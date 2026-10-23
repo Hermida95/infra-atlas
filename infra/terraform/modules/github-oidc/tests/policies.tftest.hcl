@@ -136,3 +136,43 @@ run "plan_role_is_read_only" {
     error_message = "The plan role must keep its explicit Deny on writing state: the plan job runs with -lock=false precisely because it cannot write a .tflock object."
   }
 }
+
+# The fourth invisible mistake, caught by a background security review after the three above:
+# both roles carried "s3:Get*" and "s3:List*" inside the "*"-scoped read statement. Nothing
+# fails because of it -- not a linter, not an apply, not CI -- and it meant any pull request
+# of this public repository could read every object in the account through the plan role.
+run "neither_role_reads_s3_across_the_account" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for s in concat(
+        jsondecode(data.aws_iam_policy_document.plan.json).Statement,
+        jsondecode(data.aws_iam_policy_document.apply.json).Statement,
+      ) :
+      !anytrue([for a in try(tolist(s.Action), [tostring(s.Action)]) : startswith(a, "s3:")])
+      if s.Effect == "Allow" && contains(try(tolist(s.Resource), [tostring(s.Resource)]), "*")
+    ])
+    error_message = "No statement may grant an s3: action on \"*\": S3 reads can be scoped to a bucket, so they are, and a wildcard here reaches every bucket the account will ever hold."
+  }
+
+  # The other half of the same change: scoping must not break the backend. Without this
+  # listing the plan job dies in `init`, the same way the apply job did.
+  assert {
+    condition = anytrue([
+      for s in jsondecode(data.aws_iam_policy_document.plan.json).Statement :
+      contains(try(tolist(s.Condition.StringLike["s3:prefix"]), [tostring(s.Condition.StringLike["s3:prefix"])]), "env:/*")
+      if try(s.Sid, "") == "ListOwnStatePrefix"
+    ])
+    error_message = "The plan role must list the \"env:/\" prefix too: the S3 backend enumerates workspaces during `terraform init`, in the plan job as much as in the apply job."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(data.aws_iam_policy_document.plan.json).Statement :
+      contains(try(tolist(s.Resource), [tostring(s.Resource)]), "arn:aws:s3:::infra-atlas-tfstate-000000000000/envs/dev/*")
+      if try(s.Sid, "") == "ReadOwnState"
+    ])
+    error_message = "The plan role must still read its own state object, or there is nothing to compute a plan against."
+  }
+}

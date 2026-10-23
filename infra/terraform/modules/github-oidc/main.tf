@@ -64,8 +64,10 @@ locals {
     "lambda:List*",
     "logs:Describe*",
     "logs:ListTagsForResource",
-    "s3:Get*",
-    "s3:List*",
+    # S3 is deliberately absent. It is the one service in this list whose reads can be scoped
+    # to a resource, and "s3:Get*" on "*" let either role read every object in the account --
+    # from a pull request of a public repository, in the plan role's case. Each role gets its
+    # own narrow statements below instead.
     "sns:Get*",
     "sns:List*",
     "sts:GetCallerIdentity",
@@ -173,6 +175,46 @@ data "aws_iam_policy_document" "plan" {
     resources = ["*"]
   }
 
+  # The buckets this environment owns (<project>-<env>-*, which does not match the state
+  # bucket). Refreshing an aws_s3_bucket reads a dozen sub-resources -- encryption,
+  # versioning, public access block, policy, lifecycle -- so the verbs stay broad while the
+  # resources do not.
+  statement {
+    sid       = "ReadOwnBuckets"
+    effect    = "Allow"
+    actions   = ["s3:Get*", "s3:List*"]
+    resources = [local.arn.bucket, local.arn.bucket_obj]
+  }
+
+  # The state this plan is computed against: read the object, never write it (the Deny below
+  # says so twice).
+  statement {
+    sid       = "ReadOwnState"
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
+    resources = ["${var.state_bucket_arn}/${var.state_key_prefix}*"]
+  }
+
+  # `terraform init` enumerates workspaces by listing the bucket under the backend's
+  # workspace_key_prefix, which defaults to `env:` -- the same reason the apply role has this
+  # statement. Without it the plan job dies in `init`.
+  statement {
+    sid       = "ListOwnStatePrefix"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.state_bucket_arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+
+      values = [
+        "${var.state_key_prefix}*",
+        "env:/*",
+      ]
+    }
+  }
+
   # Belt and braces: even if the read list above ever grows a write action by accident, the
   # plan role still cannot change the state. This is also why the plan job runs with
   # -lock=false: taking an S3 lock means writing a .tflock object.
@@ -225,6 +267,15 @@ data "aws_iam_policy_document" "apply" {
     effect    = "Allow"
     actions   = local.read_actions
     resources = ["*"]
+  }
+
+  # Same scoping as the plan role: the verbs a refresh of this environment's buckets needs,
+  # on this environment's buckets only.
+  statement {
+    sid       = "ReadOwnBuckets"
+    effect    = "Allow"
+    actions   = ["s3:Get*", "s3:List*"]
+    resources = [local.arn.bucket, local.arn.bucket_obj]
   }
 
   # State. The prefix is what keeps dev out of prod's state, and it covers the .tflock object
