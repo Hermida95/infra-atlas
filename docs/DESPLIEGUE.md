@@ -97,25 +97,33 @@ suscripción sin confirmar es la razón habitual de que una alarma «no saltara�
 ## 5 · Qué tienes al terminar, y qué no
 
 **Sí:** la API en Lambda detrás de API Gateway, CloudFront con sus cabeceras de seguridad, el
-bucket de assets, las alarmas de presupuesto a 5 y 10 € y la de 5xx, y el pipeline encendido:
-a partir de aquí, un merge a `main` construye la imagen, la firma, la promociona por digest y
-aplica `dev` y luego `prod` con tu aprobación.
+bucket de assets, las alarmas de presupuesto a 5 y 10 € y la de 5xx, y el pipeline encendido.
+A partir de aquí, un merge a `main` construye la imagen, la firma, la promociona por digest,
+aplica `dev` y luego `prod` con tu aprobación, y en cada entorno construye el sitio con su
+propia URL, lo sube al bucket e invalida la distribución.
 
-**No: la web no se sube.** `deploy.yml` despliega la infraestructura y la API, pero nada copia
-`apps/web/out/` al bucket ni invalida CloudFront. El sitio existe y se genera (`pnpm --filter
-web build` escribe 80 ficheros HTML), pero el bucket se queda vacío y la raíz dará 404 hasta
-que exista ese paso. Son unas veinte líneas en `deploy.yml` —`aws s3 sync` y una invalidación,
-con los permisos ya concedidos— y es el único trozo que falta para que el viaje esté entero.
+**Pero el sitio no está en línea al acabar el paso 4**, y no es un fallo: los apply de los
+pasos 3 y 4 los haces tú a mano, y quien sube la web es el pipeline. Hasta el primer merge a
+`main` el bucket está vacío y la raíz da 404. Dos salidas, y la primera es mejor: **haz el
+primer merge** —vale cualquier cambio que toque una de las rutas que disparan `deploy.yml`— y
+mira el despliegue entero funcionar de punta a punta, que es justo lo que quieres comprobar el
+primer día.
 
-Mientras tanto, subirlo a mano:
+Si prefieres verlo antes, súbelo a mano una vez:
 
 ```bash
-NEXT_PUBLIC_SITE_URL="https://tu-dominio" pnpm --filter web build
+NEXT_PUBLIC_SITE_URL="$(terraform output -raw site_url)" pnpm --filter web build
 aws s3 sync apps/web/out "s3://$(terraform output -raw web_bucket_name)" --delete
 aws cloudfront create-invalidation --distribution-id "$(terraform output -raw cloudfront_distribution_id)" --paths '/*'
 ```
 
-`NEXT_PUBLIC_SITE_URL` importa: sin ella el `sitemap.xml` sale con `localhost`.
+`NEXT_PUBLIC_SITE_URL` importa: sin ella el `sitemap.xml` sale con `localhost`. Y un `sync` a
+mano no separa las cachés como hace el pipeline, que sube `/_next/static` con un año de
+caché inmutable y el HTML con sesenta segundos; el edge lo corrige en el siguiente despliegue.
+
+**Lo que sigue sin existir** es la mitad SSR de la decisión 2: el servidor de Next.js en
+Lambda con OpenNext, que es de la fase 3 y hoy no hace falta, porque todas las páginas se
+generan en el build.
 
 ## 6 · Cuando algo falle
 
