@@ -486,7 +486,10 @@ body::after {
 .step h3 {
   font-size: 11px;
   font-weight: 500;
-  color: var(--gold);
+  color: var(--lit, var(--gold));
+  display: flex;
+  align-items: center;
+  gap: 7px;
   margin: 0 0 6px;
   font-family: var(--font-geist-mono), monospace;
   letter-spacing: 0.12em;
@@ -509,9 +512,49 @@ body::after {
 }
 .item:hover,
 .item:focus-visible {
-  background: rgba(255, 196, 107, 0.12);
-  border-left-color: var(--gold);
+  background: color-mix(in srgb, var(--lit, var(--gold)) 12%, transparent);
+  border-left-color: var(--lit, var(--gold));
   outline: none;
+}
+
+/* The key: the same colour as the nodes of that stage out on the map. */
+.step h3 .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lit, var(--gold));
+  box-shadow: 0 0 8px var(--lit, var(--gold));
+  flex: none;
+}
+
+.verdict {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--holo-line);
+}
+.verdict h3 {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 8px;
+  font-family: var(--font-geist-mono), monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.verdict p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.verdict .instead {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.verdict .req {
+  color: var(--text);
+  border-bottom: 1px dotted var(--holo-line);
 }
 .item b {
   font-weight: 500;
@@ -533,7 +576,7 @@ body::after {
   margin: 8px 0 0;
 }
 .lb.on {
-  color: var(--gold);
+  color: var(--lit, var(--gold));
 }
 .hud .gold {
   color: var(--gold);
