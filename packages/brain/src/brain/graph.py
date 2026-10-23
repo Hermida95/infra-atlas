@@ -98,6 +98,9 @@ def _node_json(node: Node, position: tuple[float, float, float]) -> dict[str, An
         "parts": [{"name": p.name, "kind": p.kind, "text": p.text} for p in meta.parts],
         "layout": meta.layout,
         "lab": meta.lab,
+        # Alternatives travel with the node, not as links: the planner needs them to say
+        # which option it picked and which it left out, and a left-out one is never drawn.
+        "alternatives": list(meta.relations.alternative_to),
         "evidence": [
             {"path": e.path, "lines": list(e.lines), "text": e.text} for e in meta.evidence
         ],

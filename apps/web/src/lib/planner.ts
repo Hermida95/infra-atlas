@@ -1,4 +1,4 @@
-import { graph, type GraphNode, type Requirement, type Stage, STAGES } from "@/lib/graph";
+import { graph, type GraphNode, nodeById, type Requirement, type Stage, STAGES } from "@/lib/graph";
 
 /*
  * Deployment planner. Each node declares in its frontmatter when it belongs in a route:
@@ -95,6 +95,28 @@ export const STAGE_LABEL: Record<Stage, string> = {
   deliver: "Release",
   observe: "Observe",
 };
+
+/*
+ * The choices a route made. A node that declares alternatives and is in the route means the
+ * others were weighed and left out, and the reason is their own rule: `lambda` is absent
+ * because its rule asks for a small budget and this app did not. Rendering the rejected
+ * option beside its rule answers "why this and not that" from the content, with nothing
+ * written twice.
+ */
+export type Decision = { chosen: GraphNode; rejected: { node: GraphNode; when: string }[] };
+
+export function decisions(route: Route): Decision[] {
+  const out: Decision[] = [];
+  for (const { steps } of route.stages)
+    for (const { node } of steps) {
+      const rejected = node.alternatives
+        .map((id) => nodeById.get(id))
+        .filter((n): n is GraphNode => n !== undefined && !route.order.has(n.id) && n.planner !== null)
+        .map((n) => ({ node: n, when: n.planner!.when }));
+      if (rejected.length) out.push({ chosen: node, rejected });
+    }
+  return out;
+}
 
 export type RouteStep = { node: GraphNode; why: string };
 export type Route = {
