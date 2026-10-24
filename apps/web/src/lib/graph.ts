@@ -35,6 +35,8 @@ export type GraphNode = {
   parts: Part[];
   layout: Layout;
   lab: string | null;
+  /** Nodes that do the same job: the planner shows the ones it did not pick. */
+  alternatives: string[];
   evidence: Evidence[];
   planner: PlannerRule | null;
   position: Vec3;

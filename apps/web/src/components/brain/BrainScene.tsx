@@ -12,6 +12,7 @@ import { domainById, graph, type GraphNode, neighbours } from "@/lib/graph";
 import { hasMark } from "@/lib/logos";
 import type { Route } from "@/lib/planner";
 import { glowTexture, markCanvas } from "@/lib/textures";
+import { STAGE_COLORS } from "@/lib/stages";
 
 export type MapStore = {
   hover: GraphNode | null;
@@ -39,6 +40,9 @@ const RAD = 240;
 const CYAN = new THREE.Color(0x7fe3ff);
 const WHITE = new THREE.Color(1, 1, 1);
 const GOLD = new THREE.Color(0xffc46b);
+// One THREE.Color per stage, built once: the route is repainted every frame and a route of
+// forty nodes would otherwise parse the same nine hex strings sixty times a second.
+const STAGE_LIT = STAGE_COLORS.map((hex) => new THREE.Color(hex));
 
 export default function BrainScene({ paused = false, ...props }: Props) {
   return (
@@ -300,6 +304,9 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
     const dt = Math.min(50, delta * 1000);
     const { hover, selected, route, routeAt, shiftX } = store.current;
     const lit = (id: string) => route?.order.has(id) ?? false;
+    // Which colour a lit node takes: its stage. GOLD stays as the fallback for a node in the
+    // route whose stage index is somehow missing -- better one wrong hue than a black sprite.
+    const litColor = (id: string) => STAGE_LIT[route?.stageIndex.get(id) ?? -1] ?? GOLD;
 
     if (selected !== v.lastSel) {
       v.lastSel = selected;
@@ -353,11 +360,11 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
       const sel = it.node === selected ? 1.3 : 1;
       const pulse = gold && !v.reduce ? 1 + 0.12 * Math.sin(now / 260 + it.delay * 40) : 1;
       it.sprite.scale.setScalar(it.base * appear * sel * zoomK * (gold ? 1.1 : 1) * pulse);
-      it.sprite.material.color.copy(gold ? GOLD : it.color);
+      it.sprite.material.color.copy(gold ? litColor(it.node.id) : it.color);
       it.sprite.material.opacity = it.a * appear * (it.mark ? 0.5 : 1);
       if (it.mark) {
         it.mark.scale.setScalar((it.node.hub ? 36 : 17) * appear * (sel > 1 ? 1.25 : 1) * (0.6 + 0.4 * Math.min(1, v.dist / 760)));
-        it.mark.material.color.copy(gold ? GOLD : CYAN).lerp(WHITE, gold ? 0.2 : 0.55);
+        it.mark.material.color.copy(gold ? litColor(it.node.id) : CYAN).lerp(WHITE, gold ? 0.2 : 0.55);
         it.mark.material.opacity = Math.min(1, it.a * 1.1) * appear;
       }
     }
@@ -408,6 +415,10 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
       el.style.transform = `translate(${(sx + it.base * 0.32 + (it.mark ? 10 : 0)).toFixed(1)}px,${(sy - 7).toFixed(1)}px)`;
       el.style.opacity = (Math.min(1, it.a * 1.2) * depth).toFixed(2);
       el.classList.toggle("on", gold);
+      // The label is HTML, not WebGL: it takes the same colour through a custom property so
+      // the key in the planner panel and the map always agree.
+      if (gold) el.style.setProperty("--lit", `#${litColor(it.node.id).getHexString()}`);
+      else el.style.removeProperty("--lit");
     }
   });
 

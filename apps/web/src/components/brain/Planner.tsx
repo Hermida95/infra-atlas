@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { graph, type GraphNode } from "@/lib/graph";
-import { detect, plan, type Route, STAGE_LABEL } from "@/lib/planner";
+import { decisions, detect, plan, type Route, STAGE_LABEL } from "@/lib/planner";
+import { readableRule } from "@/lib/rule";
+import { STAGE_COLOR } from "@/lib/stages";
 import { Mark } from "./Mark";
 
 type Props = {
@@ -89,8 +91,14 @@ export function Planner({ route, onRoute, onSelect }: Props) {
       {route && (
         <div className="route" aria-live="polite">
           {route.stages.map((s, i) => (
-            <div key={s.stage} className="step" style={{ animationDelay: `${i * 70}ms` }}>
-              <h3>{STAGE_LABEL[s.stage]}</h3>
+            <div
+              key={s.stage}
+              className="step"
+              // --lit is the stage's colour, and the same value paints its nodes out on the
+              // map: the heading is the key to what is lit, not decoration.
+              style={{ animationDelay: `${i * 70}ms`, "--lit": STAGE_COLOR[s.stage] } as React.CSSProperties}
+            >
+              <h3><span className="dot" aria-hidden="true" />{STAGE_LABEL[s.stage]}</h3>
               {s.steps.map(({ node, why }) => (
                 <button key={node.id} type="button" className="item" onClick={() => onSelect(node)}>
                   <b>
@@ -105,8 +113,41 @@ export function Planner({ route, onRoute, onSelect }: Props) {
           {route.notes.map((n) => (
             <p key={n} className="note">{n}</p>
           ))}
+          <Verdict route={route} />
         </div>
       )}
     </aside>
+  );
+}
+
+/*
+ * The part of a route that is a decision rather than a consequence. Every node here does a job
+ * another node could have done, so the planner says which it took and what the others were
+ * waiting for -- read from the rejected option's own rule, so the reason can never drift from
+ * the behaviour.
+ */
+function Verdict({ route }: { route: Route }) {
+  const picks = decisions(route);
+  if (!picks.length) return null;
+
+  return (
+    <div className="verdict">
+      <h3>Why these, and not the others</h3>
+      {picks.map(({ chosen, rejected }) => (
+        <p key={chosen.id}>
+          <b>{chosen.title}</b> rather than {rejected.map((r) => r.node.title).join(" or ")}.
+          {rejected.map(({ node, when }) => (
+            <span className="instead" key={node.id}>
+              {node.title} when{" "}
+              {readableRule(when).map((t, i) => (
+                <span key={i} className={t.kind === "requirement" ? "req" : undefined}>
+                  {t.text}{" "}
+                </span>
+              ))}
+            </span>
+          ))}
+        </p>
+      ))}
+    </div>
   );
 }
