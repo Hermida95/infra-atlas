@@ -563,7 +563,7 @@ jobs:
       # Built here, per environment, rather than once for both: NEXT_PUBLIC_SITE_URL ends up
       # inside the output (sitemap.xml) and it is this environment's own distribution, whose
       # domain only exists once the apply above has run.
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
       - run: uv sync --all-packages
       # graph.json is what the pages are generated from; the vector index is not needed here,
       # so this is `brain graph` and not the `brain embed` the image build runs.
