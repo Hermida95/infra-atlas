@@ -5,7 +5,7 @@ description = "Infra Atlas HTTP API."
 requires-python = ">=3.12"
 dependencies = [
   "brain[search]",
-  "fastapi>=0.115",
+  "fastapi>=0.157.0",
   "prometheus-client>=0.21",
   "uvicorn[standard]>=0.54.0",
 ]
