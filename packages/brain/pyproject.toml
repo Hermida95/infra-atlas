@@ -12,7 +12,7 @@ dependencies = [
 [project.optional-dependencies]
 # Semantic index: `brain embed` and the API's /search.
 search = [
-  "fastembed>=0.9",
+  "fastembed>=0.9.1",
   "lancedb>=0.40",
 ]
 # Only needed with EMBEDDINGS_PROVIDER=bedrock.
