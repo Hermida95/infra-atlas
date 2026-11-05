@@ -1,0 +1,39 @@
+---
+id: site-to-site-vpn
+title: "Site-to-Site VPN"
+type: service
+domain: network
+summary: "An IPsec tunnel to your data centre over the internet, two tunnels per connection, up in minutes rather than weeks."
+monogram: STS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: direct-connect
+    text: "Cheap and immediate where Direct Connect is neither, which is exactly why it is the usual failover path."
+  - to: transit-gateway
+    text: "Attached to the Transit Gateway it reaches every VPC, and supports equal-cost multipath across several tunnels."
+reviewed: 2026-11-05
+---
+
+An IPsec tunnel between your network and AWS, over the public internet. It is up in minutes,
+costs a small hourly rate plus data transfer, and is encrypted by definition -- which is the
+thing Direct Connect is not.
+
+Every connection comes with **two tunnels** terminating on different AWS endpoints, and both
+should be configured. Many outages are a customer router with one tunnel set up and the other
+left for later. On the AWS side it terminates on a **virtual private gateway** attached to one
+VPC, or on a **Transit Gateway**, which is the better default because the same tunnel then
+reaches every VPC behind it.
+
+Routing is static or BGP, and BGP is worth the trouble: it fails over between tunnels without
+anyone being paged, and with a Transit Gateway it supports **equal-cost multipath**, so several
+tunnels aggregate rather than sitting idle. A single tunnel is capped around 1.25 Gbps, so ECMP
+is also the way to get past that number.
+
+Its two jobs in a design. As the **backup** for Direct Connect, with BGP preferring the circuit
+and failing over to the tunnel automatically -- the standard resilient pattern, and the cheapest
+way to stop a cable cut being an outage. And as the **immediate** option while a circuit is
+provisioned, or for sites too small to justify one at all. **Accelerated VPN** routes the tunnel
+over the AWS backbone from the nearest edge location, which takes some of the jitter out of the
+internet portion.

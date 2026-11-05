@@ -1,0 +1,44 @@
+---
+id: stacksets
+title: "StackSets"
+type: service
+domain: deploy
+summary: "One template deployed to many accounts and regions from the management account, with automatic deployment to new accounts in an OU."
+monogram: ST
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [cloudformation]
+connects:
+  - to: organizations
+    text: "Targeting an OU means an account created next month gets the baseline without anyone remembering to do it."
+  - to: control-tower
+    text: "Control Tower's own customisations ride on StackSets, which is why the two are usually seen together."
+reviewed: 2026-11-05
+---
+
+A StackSet deploys one CloudFormation template to many accounts and many regions from a single
+place, and tracks the result of each instance.
+
+The reason it exists is the baseline problem. Every account needs the same things: a Config
+recorder, a GuardDuty detector, an IAM role for the security team, VPC flow logs, a standard set
+of SCPable resources, the organisation's tags. Doing that by hand means it is right in the
+accounts somebody remembered.
+
+Two permission models. **Self-managed** requires an administration role in the management
+account and an execution role in each target -- the older model, still needed outside an
+organization. **Service-managed** uses Organizations directly, targets **OUs** rather than
+account lists, and supports **automatic deployment**: an account created tomorrow, or moved into
+the OU, receives the stack without anyone doing anything. That last property is the whole point,
+and it is why targeting an OU rather than a list of ids is the rule.
+
+Operationally, the controls that matter are the **deployment preferences**: maximum concurrent
+accounts, failure tolerance, and region order. Rolling a change across two hundred accounts with
+a failure tolerance of zero and concurrency of one is slow and safe; the opposite is fast and
+occasionally memorable. **Drift detection** reports where someone has changed a stack instance
+by hand.
+
+Control Tower's customisations ride on StackSets, which is why the two usually appear together.
+And the natural pairing in an exam answer is "SCPs for what must not happen, StackSets for what
+must exist".

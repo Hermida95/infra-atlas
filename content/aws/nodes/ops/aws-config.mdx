@@ -1,0 +1,64 @@
+---
+id: aws-config
+title: "AWS Config"
+type: service
+domain: ops
+summary: "Resource configuration over time, rules that say whether it is compliant, conformance packs, and remediation when it is not."
+monogram: AWS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cloudtrail
+    text: "CloudTrail says who changed it; Config says what it looked like before and after."
+  - to: security-hub
+    text: "Most of Security Hub's compliance score is Config rules, aggregated across accounts."
+  - to: tagging
+    text: "The required-tags rule with automatic remediation is how a tagging policy stops being a wiki page."
+lead: "A recording of what every resource looked like, over time, plus rules about what it should look like."
+parts:
+  - name: "Configuration recorder"
+    kind: loop
+    text: "Captures a configuration item each time a resource changes. The thing that costs money, and the thing everything else depends on."
+  - name: "Rules"
+    kind: gate
+    text: "Managed or custom (Lambda, or Guard policy-as-code). Evaluate a resource and mark it compliant or not, on change or on a schedule."
+  - name: "Remediation"
+    kind: trigger
+    text: "An SSM Automation document run on a non-compliant resource, manually or automatically. The step that turns a report into a fix."
+  - name: "Conformance packs"
+    kind: modules
+    text: "A bundle of rules and remediations deployed as one unit across the organization: CIS, PCI, HIPAA or your own."
+  - name: "Aggregator"
+    kind: graph
+    text: "One view across accounts and regions, in the audit account. Without it, compliance is thirty separate dashboards."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Config records the configuration of your resources and keeps the history. For any resource it
+can answer: what does it look like now, what did it look like last Tuesday, what changed between
+the two, and what else is related to it. CloudTrail says who made the call; Config shows the
+before and after.
+
+On top of that history sit **rules**. A rule evaluates resources and marks them compliant or
+not: `s3-bucket-public-read-prohibited`, `encrypted-volumes`,
+`rds-instance-public-access-check`, `required-tags`. There are hundreds of managed ones, and
+custom rules can be a Lambda function or a **Guard** policy-as-code file. Rules trigger on
+configuration change, on a schedule, or both.
+
+The part that makes it more than a report is **remediation**: a rule can be wired to an SSM
+Automation document that fixes the resource. `required-tags` with automatic remediation is how a
+tagging policy stops being a wiki page nobody follows; a public-bucket rule with automatic
+remediation closes the bucket in seconds rather than at the next review.
+
+Across an organization, deploy rules as **conformance packs** through the organization API and
+aggregate the results into an **aggregator** in the audit account. That is the only way to
+answer "is the estate compliant" as one number. Security Hub's compliance scores are built on
+exactly this, which is why Config has to be recording for those scores to mean anything.
+
+The cost is the thing to plan. Config charges per **configuration item recorded** plus per rule
+evaluation, and a busy account with everything recorded is not cheap. Scope the recorder
+deliberately -- exclude high-churn resource types you do not audit, consider daily recording for
+some -- rather than switching it off, because the alternative is having no history on the day
+you need it.

@@ -1,0 +1,41 @@
+---
+id: storage-gateway
+title: "Storage Gateway"
+type: service
+domain: storage
+summary: "An on-premises appliance presenting NFS, SMB, iSCSI or a virtual tape library, with a local cache and the real data in S3."
+monogram: SG
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [datasync, outposts]
+connects:
+  - to: s3
+    text: "File Gateway writes each file as an S3 object, so the lifecycle and replication rules then apply to it like any other."
+  - to: direct-connect
+    text: "Bandwidth to the gateway is the limit, which is why it is usually paired with a private circuit."
+reviewed: 2026-11-05
+---
+
+Storage Gateway is a virtual appliance that runs in your data centre (or as a hardware box, or
+on EC2) and presents a familiar storage protocol locally while keeping the data in AWS. It
+exists for the applications that cannot be changed to speak S3.
+
+Four flavours. **S3 File Gateway** presents NFS and SMB, and each file becomes an S3 object --
+which means lifecycle rules, replication and Glacier then apply to it like any other object.
+**FSx File Gateway** does the same for FSx for Windows, with a local cache for branch offices.
+**Volume Gateway** presents iSCSI block devices, either *cached* (primary data in S3, hot blocks
+local) or *stored* (primary data local, asynchronously backed up to S3 as EBS snapshots). **Tape
+Gateway** presents a virtual tape library to existing backup software -- Veeam, NetBackup,
+Commvault -- and writes the tapes to S3 and Glacier, which is how a tape process is retired
+without replacing the backup software.
+
+Every flavour keeps a **local cache** so recently used data is served at LAN speed, and the
+bandwidth to AWS is what limits everything else -- which is why it is usually paired with Direct
+Connect.
+
+In the exam it is the answer to hybrid storage phrased as "keep the on-premises application and
+protocol unchanged, but store the data in AWS". It is distinct from **DataSync**, which is a
+one-time or scheduled *transfer* rather than a standing presence, and from **Direct Connect**,
+which is the pipe rather than the appliance.

@@ -1,0 +1,62 @@
+---
+id: well-architected
+title: "Well-Architected Framework"
+type: concept
+domain: foundation
+summary: "Six pillars AWS reviews a workload against: operational excellence, security, reliability, performance, cost and sustainability."
+monogram: WAF
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: trusted-advisor
+    text: "Trusted Advisor is the automated slice of the same questions, run against your real account."
+  - to: rto-rpo
+    text: "The reliability pillar always comes back to two numbers: how long you may be down, and how much data you may lose."
+  - to: cost-explorer
+    text: "The cost pillar is unanswerable without the bill broken down by tag, which is what Cost Explorer does."
+lead: "Six pillars, a set of questions each, and a review that produces a list rather than a score."
+parts:
+  - name: "Operational excellence"
+    kind: loop
+    text: "Run and improve: infrastructure as code, small reversible changes, observability, runbooks, and learning from failure."
+  - name: "Security"
+    kind: shell
+    text: "Identity, traceability, defence in depth, encryption everywhere, automation of controls, and preparation for incidents."
+  - name: "Reliability"
+    kind: zones
+    text: "Recover from failure automatically, test recovery, scale horizontally, stop guessing capacity, manage change through automation."
+  - name: "Performance efficiency"
+    kind: bars
+    text: "Use the right resource for the job, go serverless where it fits, experiment often, and consider latency geographically."
+  - name: "Cost optimisation and sustainability"
+    kind: disc
+    text: "Pay only for what you use, measure and attribute it, adopt new and cheaper options -- and minimise the resources, which is also the carbon."
+layout: stack
+reviewed: 2026-11-05
+---
+
+The Well-Architected Framework is a set of questions AWS asks about a workload, grouped into six
+pillars, with design principles and best practices behind each. Most exam answers are one of
+those principles in disguise, which is why reading the pillars is a surprisingly efficient way
+to study.
+
+The two that generate the most exam questions are **reliability** and **cost optimisation**, and
+both reduce to a small number of habits: span Availability Zones, scale horizontally, automate
+recovery, test it, stop guessing capacity, pay only for what you use, and attribute the spend so
+somebody owns it.
+
+The mechanism in practice is the **Well-Architected Tool** in the console: you register a
+workload, answer the questions, and get a list of high and medium risk items with links to the
+remediation. It is not a score and not a certification -- the output is a prioritised list of
+things you already half knew, written down, which is its value.
+
+Around it sit **lenses** for specific domains -- serverless, SaaS, machine learning, data
+analytics, financial services, IoT -- each adding questions the general framework does not ask.
+And **Trusted Advisor** is the automated slice of the same material run against your real
+account, so the two are complementary: Trusted Advisor finds what a machine can see, the review
+finds what only a conversation can.
+
+The honest way to use it is as a recurring design review rather than a one-off audit, and to
+accept that some risks are accepted deliberately. A workload with three documented, accepted
+high risks is in better shape than one that has never been reviewed.

@@ -191,6 +191,20 @@ Aceptada el 2026-10-21. Plan de ejecución: [PLAN-CICD-MULTICLOUD.md](PLAN-CICD-
 - **Qué se pierde / riesgo:** el dominio pasa de 3 fichas a unas 25 y se vuelve el más denso del mapa; hay que vigilar que no se apelmace. La etapa nueva obliga a regenerar `content/planner-cases.yaml` y a comprobar las tres suites (Python, API y web) a la vez. `evidence` crea una dependencia entre contenido y código que puede romper el CI en un refactor: es el efecto buscado, pero conviene que los rangos de líneas sean generosos.
 - **Cuándo revisarla:** si el dominio supera las 30 fichas, partirlo en `ci` y `cd` con posiciones 3D propias.
 
+### 13. Dentro de AWS hay un segundo cerebro, con casos reales
+Aceptada el 2026-11-05.
+
+- **Opciones valoradas:** meter los servicios de AWS como fichas más en el mapa del viaje; dar a la ficha `aws` un teardown mucho más largo; **un segundo grafo con su propio contenido, su propia disposición 3D y su propia página**.
+- **Elegida y motivo:** el segundo grafo, en `content/aws/`, renderizado en `/aws` con el mismo holograma.
+  - Las dos preguntas son distintas. El mapa del viaje responde *"¿qué necesito para desplegar esto?"* y por eso se ordena en etapas, de `localhost` a producción. El atlas de AWS responde *"¿qué hay dentro de AWS y cuál de estos servicios resuelve lo que tengo delante?"* y por eso se ordena **de la cuenta hacia fuera**: todo corre dentro de una VPC, el borde está delante, y gobierno, seguridad y operación lo envuelven. Mezclarlos habría roto las dos lecturas: 156 fichas de AWS sobre 77 del viaje dejan el viaje ilegible, y las etapas no dicen nada de un servicio de migración.
+  - **Nada nuevo en la tubería.** `brain validate` y `brain graph` ya aceptan `--content` y `--out`, así que el segundo grafo es una invocación más (`make content` hace las dos) y hereda esquema, validación, disposición determinista y formato de salida. El coste del segundo cerebro es contenido, no código de construcción.
+  - **Campo `connects`**, una arista con frase: `to` más el texto que dice *qué cruza por ahí*. Era el criterio de aceptación —"las conexiones entre servicios son visibles y comprensibles"— y una lista de ids no lo cumple. Una `connects` dibuja la misma línea que una `related` y además se explica, así que las dos conviven sin duplicar nada: 245 de las 385 aristas del atlas llevan frase.
+  - **Casos en `content/aws/cases.yaml`.** Un caso describe una situación real, enciende en el mapa todos los servicios que toca y ofrece de dos a cuatro **opciones** con veredicto `best`, `works` o `avoid`, cada una con su porqué, su coste y lo que te muerde después. Elegir una opción reduce lo encendido a lo suyo, pintado del color de su veredicto: comparar dos formas de resolver algo es entonces un diff que se ve, no dos listas que comparar a ojo. `brain validate` exige **exactamente un `best`** por caso (un caso no puede quedarse en "depende"), que un `avoid` diga qué sale mal, y que los servicios de una opción sean un subconjunto de los del caso (elegir una opción nunca añade servicios al mapa).
+  - **Campo `exam`** (`saa`, `sap`): filtra el atlas por certificación sin inventar un segundo eje de clasificación.
+  - El holograma, el teardown, el panel de detalle y ⌘K pasaron a recibir un `World` (grafo + índices) en vez de leer el módulo del mapa. Es el cambio que hace que el segundo cerebro no sea un segundo componente.
+- **Qué se pierde / riesgo:** el bundle de la web crece con un segundo `graph.json` (156 fichas); si pesa, se carga `/aws` con `fetch` en vez de `import`. El índice semántico de la API solo cubre `/content`, así que dentro de `/aws` el ⌘K es léxico (búsqueda por texto, sin "por significado"): embeber el atlas es trabajo aparte. Y 156 fichas de AWS son 156 fichas que envejecen: `reviewed` y el aviso de caducidad a los 365 días son la red.
+- **Cuándo revisarla:** si aparece un tercer cerebro (Azure, GCP), extraer el patrón "grafo anidado" a algo declarativo en vez de copiar `/aws`.
+
 ## Coste mensual estimado
 | Concepto | Estimación | Verificado |
 |---|---|---|
@@ -220,6 +234,7 @@ infra-atlas/
 ├── content/
 │   ├── nodes/<dominio>/*.mdx # docker/, terraform/, kubernetes/, aws/, cicd/, observability/, ai/
 │   ├── journeys/*.yaml       # localhost-to-aws.yaml, …
+│   ├── aws/                  # segundo grafo: el atlas de AWS (nodes/, domains.yaml, cases.yaml)
 │   └── assets/
 ├── infra/
 │   ├── terraform/

@@ -1,0 +1,43 @@
+---
+id: dax
+title: "DynamoDB Accelerator"
+type: service
+domain: database
+summary: "An in-VPC, write-through cache in front of DynamoDB that serves cached reads in microseconds. Eventually consistent reads only."
+monogram: DA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [elasticache]
+connects:
+  - to: dynamodb
+    text: "It speaks the DynamoDB API, so adopting it is a client library change rather than an application rewrite."
+  - to: elasticache
+    text: "The difference that matters: DAX understands DynamoDB and invalidates itself; ElastiCache is a cache you have to manage yourself."
+reviewed: 2026-11-05
+---
+
+DAX is a write-through cache that speaks the DynamoDB API. Point the DAX client at the cluster
+instead of the table and cached reads return in **microseconds** rather than single-digit
+milliseconds, with no change to your queries.
+
+Two caches inside it. The **item cache** holds results of `GetItem` and `BatchGetItem`; the
+**query cache** holds results of `Query` and `Scan`, and that one is invalidated by any write to
+the relevant key range rather than per item. Writes go through DAX to DynamoDB and update the
+item cache on the way, so a read immediately after a write through DAX sees the new value.
+
+The limitation to state clearly: DAX serves **eventually consistent** reads only. A request for
+a strongly consistent read passes straight through to DynamoDB, which is correct but means DAX
+does nothing for it. Any workload that needs read-after-write consistency on every read gets no
+benefit.
+
+Where it earns its place: read-heavy, repetitive access -- product catalogues, game
+leaderboards, configuration, session data -- especially where the same hot items are read
+constantly. It also absorbs hot-key traffic that would otherwise throttle a partition.
+
+Against ElastiCache for the same job: DAX understands DynamoDB, so it invalidates itself and
+needs no cache-population code; ElastiCache is a general cache you write and invalidate
+yourself, which is more work and more flexible. For a DynamoDB table, DAX is nearly always the
+right one. It lives in the VPC, is cluster-based with a primary and read replicas across zones,
+and is priced per node-hour -- so for a small table the cache can cost more than the table.

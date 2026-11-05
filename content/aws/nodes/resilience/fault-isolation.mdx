@@ -1,0 +1,45 @@
+---
+id: fault-isolation
+title: "Cells & bulkheads"
+type: pattern
+domain: resilience
+summary: "Partition the workload into independent cells and shuffle-shard tenants across them, so one bad tenant takes down a cell rather than the service."
+monogram: CB
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [active-active]
+connects:
+  - to: placement-group
+    text: "Spread and partition placement groups are the hardware-level version of the same idea."
+  - to: sqs
+    text: "A queue per cell, with its own concurrency limit, keeps one noisy tenant's backlog out of everyone else's."
+reviewed: 2026-11-05
+---
+
+Beyond zones and regions there is a third axis of failure containment: dividing the workload
+itself so that one bad input, one noisy tenant or one bad deployment cannot reach everyone.
+
+A **cell** is a complete, independent copy of the stack -- its own compute, its own data, its
+own limits -- serving a subset of customers. Cells share nothing, so a failure inside one is
+bounded by definition. Deployments go cell by cell, which also makes a bad release a partial
+outage rather than a total one. The routing layer in front is deliberately as simple as
+possible, because it is the only shared component and therefore the only one whose failure is
+total.
+
+**Shuffle sharding** is the refinement that makes it powerful at small cell counts. Instead of
+assigning each customer to one cell, assign each to a random *combination* of two cells from the
+pool. With eight cells there are 28 pairs, so two customers sharing an exact pair is rare; one
+customer causing a problem affects their two cells, and almost no other customer loses both. The
+blast radius drops dramatically without multiplying the infrastructure.
+
+On AWS the building blocks are familiar: a queue and a concurrency limit per tenant so one
+backlog cannot starve the others, **reserved concurrency** on Lambda per cell, separate DynamoDB
+tables or partitions, separate Auto Scaling groups, **partition placement groups** for
+rack-level isolation, and **bulkheads** -- fixed resource pools per dependency so one slow
+downstream cannot consume every thread in the application.
+
+It is a Professional-level topic because the trade is real: more cells means more operational
+surface, more deployment time and more cost. The question it answers is "when this fails, how
+many customers notice", and for some systems that is the only availability number that matters.

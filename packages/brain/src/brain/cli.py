@@ -53,7 +53,9 @@ def _print_issues(issues: list[Issue]) -> None:
 
 
 def _run_validation(content: Path | None) -> ValidationReport:
-    report = validate_content(_content_dir(content))
+    # The repo root is passed explicitly: `evidence` paths are repo-relative, and a nested
+    # content directory (content/aws) would otherwise resolve them against content/.
+    report = validate_content(_content_dir(content), repo_root=find_repo_root())
     _print_issues(report.warnings)
     if not report.ok:
         _print_issues(report.errors)
@@ -68,9 +70,11 @@ def validate(content: ContentOption = None) -> None:
     report = _run_validation(content)
     links = related_links(report.nodes)
     rules = sum(node.meta.planner is not None for node in report.nodes)
+    explained = sum(1 for *_, text in links if text)
     typer.echo(
-        f"{len(report.nodes)} nodes, {len(report.domains)} domains, {len(links)} links, "
-        f"{len(report.requirements)} requirements, {rules} planner rules, OK"
+        f"{len(report.nodes)} nodes, {len(report.domains)} domains, {len(links)} links "
+        f"({explained} explained), {len(report.requirements)} requirements, "
+        f"{rules} planner rules, {len(report.cases)} cases, OK"
     )
 
 
@@ -87,10 +91,17 @@ def graph(
     report = _run_validation(content)
     target = out if out is not None else find_repo_root() / "apps/web/src/data/graph.json"
     data = build_graph(
-        report.domains, report.nodes, requirements=report.requirements, include_pro=include_pro
+        report.domains,
+        report.nodes,
+        requirements=report.requirements,
+        cases=report.cases,
+        include_pro=include_pro,
     )
     write_graph(data, target)
-    typer.echo(f"Wrote {_display(target)}: {len(data['nodes'])} nodes, {len(data['links'])} links")
+    typer.echo(
+        f"Wrote {_display(target)}: {len(data['nodes'])} nodes, {len(data['links'])} links, "
+        f"{len(data['cases'])} cases"
+    )
 
 
 @app.command()

@@ -1,0 +1,40 @@
+---
+id: ebs-snapshot
+title: "EBS snapshots"
+type: service
+domain: storage
+summary: "Incremental, encrypted copies stored in S3. The basis of AMIs, cross-region copies, and almost every EC2 backup policy."
+monogram: EBS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: aws-backup
+    text: "Data Lifecycle Manager or AWS Backup is what actually takes them on a schedule, with retention and a cross-region copy."
+  - to: ami
+    text: "An AMI is a set of snapshots plus a manifest, which is why copying an AMI is mostly copying snapshots."
+reviewed: 2026-11-05
+---
+
+A snapshot is a point-in-time copy of a volume stored in S3 (in AWS's own buckets, not yours).
+The first is effectively full; each later one stores only changed blocks, while still being
+independently restorable -- deleting an old snapshot never breaks a newer one, because the
+blocks it still needs are retained.
+
+They are **regional** and that is what makes them a disaster-recovery tool: copying a snapshot
+to another region, encrypted with a key that exists there, is the cheapest cross-region
+protection for EBS data. It is also how an AMI travels, since an AMI is a manifest over
+snapshots.
+
+A few practical points. A snapshot of a running volume is **crash-consistent**, not
+application-consistent: the database may have been mid-write. For anything transactional, flush
+and freeze first, or use the service's own backup. Restoring creates a new volume whose blocks
+are **lazily loaded** from S3, so the first read of each block is slow -- *Fast Snapshot
+Restore* removes that at a price per snapshot per zone, which matters when the restore is part
+of a recovery time objective you have promised.
+
+Automate them with **Data Lifecycle Manager** or, better across an estate, **AWS Backup**, which
+covers EBS alongside RDS, EFS, DynamoDB and the rest under one policy with cross-region and
+cross-account copies. The **Recycle Bin** gives a retention window after a deletion, which is
+the thing that saves you from a bad script. And watch for orphans: deregistering an AMI leaves
+its snapshots behind, which is one of the quieter lines on a long-lived account's bill.

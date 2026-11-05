@@ -1,0 +1,43 @@
+---
+id: consolidated-billing
+title: "Consolidated billing"
+type: concept
+domain: account
+summary: "One invoice for the whole organization, with volume tiers, Reserved Instance discounts and Savings Plans pooled across every account."
+monogram: CB
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [organizations]
+connects:
+  - to: savings-plans
+    text: "A commitment bought in one account covers matching usage anywhere in the organization, which is why it is bought centrally."
+  - to: cost-explorer
+    text: "The consolidated bill is what Cost Explorer breaks down, and what cost allocation tags have to be activated for."
+reviewed: 2026-11-05
+---
+
+Consolidated billing is the default in an organization: one invoice for every account, paid by
+the management account. Beyond the convenience there are two effects that are worth real money.
+
+**Volume tiering.** Usage is aggregated across accounts before tiered pricing is applied, so the
+whole organization's S3 storage or data transfer reaches the cheaper tiers together rather than
+each account starting at the top of the price list.
+
+**Discount sharing.** Savings Plans and Reserved Instances bought in one account apply to
+matching usage **anywhere in the organization**. This is why commitments are bought centrally by
+whoever owns the bill, rather than by each team: a Compute Savings Plan purchased once covers
+EC2, Fargate and Lambda in every account. Sharing can be turned off per account when a business
+unit must not benefit from another's commitment.
+
+The reporting side is what makes it usable. **Cost allocation tags** have to be activated in the
+management account before they appear in any report, and only from that day forward -- the most
+common reason a tagging strategy produces no data for months. The **Cost and Usage Report** is
+the detailed, line-item-level export to S3 that feeds Athena or a third-party tool, and it is
+the only source precise enough for real chargeback. **Cost Categories** group accounts and tags
+into business units so the bill can be read by someone who does not know the account ids.
+
+For separation, **billing conductor** and per-account budgets handle the "each team sees its own
+spend" requirement without splitting the organization, which would lose both of the benefits
+above.

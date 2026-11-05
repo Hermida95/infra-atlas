@@ -1,0 +1,40 @@
+---
+id: oidc-federation
+title: "Federation & OIDC"
+type: pattern
+domain: identity
+summary: "Trust an external identity provider to issue the token, then exchange it for a role. No AWS user, no stored access key."
+monogram: FO
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-identity-center, cognito]
+connects:
+  - to: sts
+    text: "AssumeRoleWithWebIdentity and AssumeRoleWithSAML are the two doors in. Both hand back credentials that expire."
+  - to: iam-role
+    text: "The trust policy pins the provider, the audience and usually the exact repository or group allowed to assume it."
+reviewed: 2026-11-05
+---
+
+Federation is the answer to "where do I put the access key for my pipeline", and the answer is
+that there is no access key. An external identity provider issues a short-lived, signed token
+saying who the caller is; you register that provider in IAM once; and the caller exchanges the
+token for an AWS session through `AssumeRoleWithWebIdentity` or `AssumeRoleWithSAML`.
+
+The important work is in the **trust policy**, because the token is only as good as the
+conditions you check on it. For GitHub Actions, trusting the provider alone means any repository
+on GitHub can assume your role. The condition has to pin the subject:
+`token.actions.githubusercontent.com:sub` equal to `repo:myorg/myrepo:ref:refs/heads/main`, and
+the audience to `sts.amazonaws.com`. Pin to an environment or a branch when a deployment role is
+involved, so a pull request from a fork cannot reach production. The same shape applies to a
+Kubernetes cluster outside AWS, to Google or Apple sign-in in a mobile app, and to GitLab.
+
+SAML federation is the enterprise variant: an assertion from ADFS, Okta or Entra maps a group to
+a role, and the user lands in the console with a session. In practice IAM Identity Center now
+does this for you, with permission sets instead of hand-built roles -- federation underneath, a
+product on top. Direct SAML federation is for what Identity Center does not cover.
+
+Either way, the result is the same and it is the point: no credential exists that is still valid
+an hour from now.

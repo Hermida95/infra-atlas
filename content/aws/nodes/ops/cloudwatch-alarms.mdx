@@ -1,0 +1,66 @@
+---
+id: cloudwatch-alarms
+title: "CloudWatch alarms"
+type: service
+domain: ops
+summary: "A threshold, anomaly band or composite condition over a metric, with notify, auto scaling, EC2 recovery and Systems Manager actions."
+monogram: CA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudwatch, auto-scaling]
+connects:
+  - to: sns
+    text: "Almost every alarm ends at a topic, which is how one threshold reaches a human and a function at once."
+  - to: codedeploy
+    text: "A deployment that watches an alarm rolls itself back, which is what makes canary releases safe."
+lead: "A metric, a threshold, and what happens when it is crossed. The settings between those three are where alarms go wrong."
+parts:
+  - name: "Threshold and statistic"
+    kind: bars
+    text: "Static or anomaly-detection band, over a statistic -- average, sum, p99 -- for a period. p99 says something average never will."
+  - name: "Evaluation periods"
+    kind: loop
+    text: "N datapoints out of M, which is what stops a single spike paging someone. Three of five is a reasonable default."
+  - name: "Missing data"
+    kind: gate
+    text: "notBreaching, breaching, ignore or missing. The setting that decides whether an alarm on a stopped service fires or goes quiet."
+  - name: "Actions"
+    kind: trigger
+    text: "Notify through SNS, scale an Auto Scaling group, recover or stop an EC2 instance, or run a Systems Manager action."
+  - name: "Composite alarms"
+    kind: modules
+    text: "AND/OR over other alarms, so one page fires instead of forty when a dependency fails."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An alarm watches one metric and moves between three states: OK, ALARM and INSUFFICIENT_DATA.
+Everything useful about alarms is in the configuration around that.
+
+**Evaluation periods** are the first thing to get right. An alarm that fires on a single
+datapoint fires on noise. "3 out of 5 datapoints" means a real, sustained condition, and the `M
+out of N` form is what you want for anything that pages a human. **Treat missing data** is the
+second, and it is subtle: if a service stops emitting a metric entirely -- because it is down --
+an alarm set to `notBreaching` stays green. For health signals, `breaching` is usually correct.
+
+**Anomaly detection** builds a band from the metric's own history, including its daily and
+weekly shape, and alarms on departures from it. That is the right tool for anything with a
+natural cycle, where a static threshold is either too loose at the peak or too tight at night.
+
+**Composite alarms** solve alert fatigue. When a database fails, twenty service alarms fire; a
+composite alarm expressing "the database alarm OR (two services AND the error rate)" pages once
+and the rest stay as context. Pair it with alarm actions suppression so dependent alarms do not
+notify while a parent is already in ALARM.
+
+The actions are more than notifications. **Auto Scaling** policies are alarms underneath. **EC2
+recover** restarts an instance on new hardware when the system status check fails, which handles
+a class of failure with no human at all. **Systems Manager** actions can run a runbook. And
+**CodeDeploy** watches alarms to roll back a deployment automatically -- which is the mechanism
+that makes a canary release safe.
+
+Two habits that matter: alarm on what users experience (latency at p99, error rate, queue depth,
+request count per target) rather than on CPU, which is a symptom and arrives late; and give
+every alarm a description saying what to do about it, because the person woken at 3am did not
+write it.

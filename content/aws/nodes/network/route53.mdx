@@ -1,0 +1,72 @@
+---
+id: route53
+title: "Route 53"
+type: service
+domain: network
+summary: "Authoritative DNS with health checks and routing policies: simple, weighted, latency, failover, geolocation, geoproximity and multivalue."
+logo: aws:route53
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [global-accelerator, multi-region]
+connects:
+  - to: route53-failover
+    text: "Health checks plus failover records are the cheapest cross-region switch there is, and the one most DR designs use."
+  - to: cloudfront
+    text: "An alias record to a distribution costs nothing to resolve and lets the apex of a domain point at it."
+  - to: acm
+    text: "A DNS validation record is how a certificate proves the domain, and how it renews itself for ever after."
+lead: "Authoritative DNS with health checks, and seven routing policies. Most cross-region designs are one of them."
+parts:
+  - name: "Hosted zones"
+    kind: disc
+    text: "Public for the internet, private for one or more VPCs. The same domain can have both, and the private one wins inside the VPC -- split-horizon DNS."
+  - name: "Alias records"
+    kind: orbit
+    text: "A Route 53 extension: points at an ALB, CloudFront, S3 website or API Gateway, works at the zone apex where CNAME cannot, and resolves free of charge."
+  - name: "Routing policies"
+    kind: lanes
+    text: "Simple, weighted, latency, failover, geolocation, geoproximity, multivalue and IP-based. The policy is the design decision."
+  - name: "Health checks"
+    kind: bell
+    text: "Against an endpoint, a CloudWatch alarm, or other health checks combined. What makes a record conditional, and what makes failover automatic."
+  - name: "Resolver"
+    kind: bus
+    text: "Inbound and outbound endpoints with forwarding rules: how on-premises resolves AWS private names and the other way round."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Route 53 is authoritative DNS, and on AWS it is also the cheapest traffic-steering device there
+is. The routing policy is where the design lives.
+
+**Simple** is one answer. **Weighted** splits traffic by a number you set, which is how canary
+releases and blue/green at the DNS layer work. **Latency** sends each resolver to the region
+with the lowest measured latency to it -- not the geographically nearest, which is often a
+different place. **Failover** pairs a primary with a secondary and a health check.
+**Geolocation** routes by where the user is, for compliance or language. **Geoproximity** routes
+by distance with a bias dial you can shift to shed load from a region. **Multivalue** returns up
+to eight healthy records, a poor man's load balancer. **IP-based** routes by the client's CIDR,
+for ISP or corporate-range specific answers.
+
+**Alias records** are the Route 53 extension worth knowing cold. A CNAME cannot exist at the
+apex of a zone (`example.com`, as opposed to `www.example.com`), so pointing a bare domain at a
+load balancer is impossible in standard DNS. An alias is an A record that Route 53 resolves
+internally to the target's current addresses, it works at the apex, it follows the target as it
+changes, and queries against it are not charged. Use it for ALB, NLB, CloudFront, S3 website
+endpoints, API Gateway and another record in the same zone.
+
+**Health checks** are what turn a record into a decision. They can watch an endpoint directly,
+watch a **CloudWatch alarm** -- which is how you health-check something that has no public
+endpoint, like a private database -- or combine other checks with AND/OR/NOT into a calculated
+check. Pair a failover record with a health check and a region removes itself. The caveat is
+**TTL**: clients and resolvers cache, so a 60-second TTL means up to a minute of users still
+being sent to the dead endpoint, and some resolvers ignore TTLs they dislike. When that is
+unacceptable, Global Accelerator moves the traffic instead, behind IP addresses that never
+change.
+
+The **Resolver** is the hybrid piece. Inbound endpoints let on-premises DNS query private hosted
+zones in AWS; outbound endpoints with forwarding rules let AWS resolve names from your corporate
+DNS. Resolver DNS Firewall sits on the same path and blocks queries to known-bad domains, which
+is one of the signals GuardDuty reads.

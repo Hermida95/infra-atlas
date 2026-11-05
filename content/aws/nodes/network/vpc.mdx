@@ -1,0 +1,79 @@
+---
+id: vpc
+title: "VPC"
+type: service
+domain: network
+hub: true
+summary: "Your own software-defined network in one region: an address range, subnets across zones, routing, and the gateways you choose to add."
+logo: aws:vpc
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [igw, nat-gateway, privatelink, ipam]
+connects:
+  - to: subnet
+    text: "A VPC is only useful once it is cut into subnets, and a subnet is where the zone and the routing are decided."
+  - to: vpc-endpoint
+    text: "Endpoints are how a private subnet reaches S3, DynamoDB or any AWS API without a NAT Gateway or the internet."
+  - to: transit-gateway
+    text: "Past three VPCs, peering stops scaling and a Transit Gateway becomes the hub everything attaches to."
+  - to: flow-logs
+    text: "Flow logs are the only record of what actually crossed the network, and the first thing to turn on before you need it."
+  - to: security-group
+    text: "Security groups are attached inside the VPC, and they can reference each other instead of IP ranges."
+lead: "A VPC is not a firewall and not a data centre. It is a routing domain: an address range you cut into subnets, and a set of decisions about which of them can reach what."
+parts:
+  - name: "CIDR block"
+    kind: sheet
+    text: "The address range, chosen once and awkward to change. Big enough for growth, and not overlapping anything you may ever connect to."
+  - name: "Subnets per zone"
+    kind: zones
+    text: "The range cut into pieces, each pinned to one Availability Zone. Two per tier, in two zones, is the baseline shape."
+  - name: "Route tables"
+    kind: lanes
+    text: "What makes a subnet public or private. A default route to an Internet Gateway, to a NAT Gateway, or to nothing at all."
+  - name: "Gateways"
+    kind: gate
+    text: "Internet Gateway for two-way public traffic, NAT Gateway for outbound-only, endpoints for AWS APIs, Transit Gateway for everything else."
+  - name: "Security groups and NACLs"
+    kind: shell
+    text: "Stateful allow rules on each resource, and stateless ordered rules on each subnet. The first is where you work; the second is where you deny."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A VPC is a software-defined network in one region: an address range you cut into subnets, a set
+of route tables, and the gateways you choose to attach. It is not a firewall and not a data
+centre -- it is a routing domain, and nearly every VPC question is really about routing.
+
+**The CIDR** is chosen once and is awkward to change. Pick a range from RFC 1918 that does not
+overlap anything you may ever need to connect to -- another VPC, a partner, an acquisition --
+because overlapping ranges can never be routed together. That is what **IPAM** exists to
+prevent. A /16 is the usual size; secondary CIDRs can be added later, and five addresses per
+subnet are reserved by AWS.
+
+**Subnets** pin resources to an Availability Zone, and "public" or "private" is a description of
+the route table rather than a property. The standard shape is three tiers across two or three
+zones: public subnets holding only load balancers and NAT gateways, private subnets with the
+application, and isolated subnets with no default route for the data.
+
+**The gateways** are the vocabulary: an **Internet Gateway** for two-way public traffic, a **NAT
+Gateway** per zone for outbound-only, **VPC endpoints** for AWS services without leaving the
+network, a **Transit Gateway** for everything else, and **peering** or **PrivateLink** for
+specific point-to-point cases.
+
+**Security** has two layers that work differently. **Security groups** are stateful, allow-only
+and attached to an interface, and they can reference each other -- which is how a tier-to-tier
+design avoids ever mentioning an IP address. **Network ACLs** are stateless, ordered and the
+only place inside a VPC that can deny, which is their single reason to exist.
+
+**Three settings** to get right at creation and then forget: `enableDnsSupport` and
+`enableDnsHostnames`, without which private DNS for endpoints does not work; **flow logs**,
+because they are the only record of what crossed the network and you will want them before you
+think to turn them on; and the **default security group**, which allows all traffic from itself
+and should never be used.
+
+At scale, the pattern is one well-designed VPC per account owned by a network team and
+**shared** through RAM, or a hub-and-spoke of VPCs attached to a Transit Gateway with its route
+tables providing the segmentation between environments.

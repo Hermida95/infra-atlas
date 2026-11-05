@@ -1,0 +1,69 @@
+---
+id: iam-role
+title: "IAM roles"
+type: service
+domain: identity
+summary: "An identity with no long-lived credentials, assumed for minutes or hours. How an instance, a function, a pipeline or a person gets access."
+monogram: IAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [sts, iam-identity-center, service-catalog]
+connects:
+  - to: ec2
+    text: "An instance profile gives an instance a role, so no key ever lands on the disk or in an environment variable."
+  - to: lambda
+    text: "The execution role is the function's identity: the only thing it is allowed to touch."
+  - to: oidc-federation
+    text: "A GitHub Actions workflow assumes a role with an OIDC token, which is how a pipeline deploys without a stored key."
+lead: "A role has two policies, and people only ever read one of them. The trust policy is the half that decides who gets in."
+parts:
+  - name: "Trust policy"
+    kind: gate
+    text: "Who may assume it: a service principal (`ec2.amazonaws.com`), an account, a federated provider, or a specific role. This is the door, and the only lock on it."
+  - name: "Permissions policy"
+    kind: sheet
+    text: "What the session can do once inside. Managed, inline or both, capped by any boundary."
+  - name: "Session"
+    kind: orbit
+    text: "Credentials that expire -- fifteen minutes to twelve hours, one hour by default. No key to rotate, because there is no key."
+  - name: "External id and conditions"
+    kind: chips
+    text: "For a third party: an `sts:ExternalId` they cannot guess, so a confused deputy cannot assume your role on someone else's behalf."
+  - name: "Who wears it"
+    kind: satellites
+    text: "An instance profile on EC2, the execution role on Lambda, a task role on ECS, IRSA or Pod Identity on EKS, a GitHub workflow through OIDC."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A role is an identity nobody owns. It has permissions but no password and no access key, and the
+only way to use it is to ask STS for a temporary session, which expires. That single property is
+why "use a role" is the right answer to almost every question about credentials: there is
+nothing to leak that is still valid tomorrow.
+
+Every role carries two policies and they answer different questions. The **trust policy** says
+*who may assume this role*, and it is a resource policy: the role is the resource. The
+**permissions policy** says *what the session may then do*. Breaking into a role means getting
+past the trust policy, so that is the one to read first and the one to write carefully. A trust
+policy naming `"Service": "ec2.amazonaws.com"` lets any EC2 instance in the account that gets
+this instance profile assume it; one naming `"AWS": "arn:aws:iam::111122223333:root"` lets
+*anyone in that whole account who also has `sts:AssumeRole` in their own policy* assume it,
+which is why cross-account trust is usually narrowed to a specific role ARN.
+
+How the role reaches the workload differs by service and the distinction matters. On EC2 it is
+an **instance profile**, and the credentials appear at the instance metadata endpoint -- which
+is why IMDSv2 is not optional: IMDSv1 lets a server-side request forgery bug in your application
+read the role's credentials with a single GET. On Lambda it is the **execution role**, the
+single security boundary of the function. On ECS there are two, and conflating them costs an
+afternoon: the **task execution role** is what pulls the image and writes the log stream, the
+**task role** is what your code uses. On EKS, **IRSA** or **Pod Identity** maps a Kubernetes
+service account to a role, so a pod gets its own identity rather than the node's.
+
+For anything outside AWS -- a CI pipeline, a partner's SaaS -- the pattern is federation, not a
+user with keys. A GitHub Actions workflow presents an OIDC token and the trust policy pins the
+repository and even the branch, so a fork cannot deploy. For a third-party vendor, require an
+`sts:ExternalId` they alone know: without it, a vendor who manages many customers can be talked
+into using *your* role on another customer's behalf -- the confused-deputy problem, and the
+reason the field exists.

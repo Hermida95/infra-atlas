@@ -65,6 +65,11 @@ PartKind = Literal[
 Layout = Literal["stack", "row", "cluster"]
 Level = Literal["core", "intermediate", "advanced"]
 Access = Literal["free", "pro"]
+# Which certification a node or a case is studied for. Empty means "not exam material".
+Exam = Literal["saa", "sap"]
+# What a case thinks of an option: one `best`, any number of `works`, and the ones that
+# look right in a question and are not.
+Verdict = Literal["best", "works", "avoid"]
 
 Stage = Literal[
     "build",
@@ -80,6 +85,7 @@ Stage = Literal[
 
 SUMMARY_MAX_LENGTH = 200
 WHY_MAX_LENGTH = 160
+CONNECTION_MAX_LENGTH = 180
 
 
 class _Strict(BaseModel):
@@ -98,6 +104,13 @@ class Part(_Strict):
     name: NonEmptyStr
     kind: PartKind | None = None
     text: NonEmptyStr
+
+
+class Connection(_Strict):
+    """A labelled edge. `text` says what travels between the two nodes, read from this end."""
+
+    to: Slug
+    text: Annotated[str, StringConstraints(min_length=1, max_length=CONNECTION_MAX_LENGTH)]
 
 
 class Relations(_Strict):
@@ -159,6 +172,11 @@ class NodeFrontmatter(_Strict):
     level: Level = "core"
     access: Access = "free"
     relations: Relations = Relations()
+    # Labelled edges. A `connects` entry draws the same line `relations.related` would, and
+    # adds the sentence that says what crosses it, so a map of services explains itself.
+    connects: list[Connection] = []
+    # Certifications this node is studied for. Drives the SAA/SAP filter of the AWS atlas.
+    exam: list[Exam] = []
     lead: NonEmptyStr | None = None
     parts: list[Part] = []
     layout: Layout = "stack"
@@ -167,6 +185,35 @@ class NodeFrontmatter(_Strict):
     evidence: list[Evidence] = []
     reviewed: date
     planner: Planner | None = None
+
+
+class CaseOption(_Strict):
+    """One way to solve a case. `nodes` are the services it lights up on the map."""
+
+    id: Slug
+    name: NonEmptyStr
+    verdict: Verdict
+    nodes: list[Slug] = []
+    why: NonEmptyStr
+    cost: NonEmptyStr | None = None
+    # What breaks, costs or surprises you later. The reason an option is not the best one.
+    watch: list[NonEmptyStr] = []
+
+
+class Case(_Strict):
+    """A real situation to solve with the services of this atlas, and the ways to solve it."""
+
+    id: Slug
+    title: NonEmptyStr
+    exam: list[Exam] = []
+    scenario: NonEmptyStr
+    # What the scenario is really asking for, in the words an exam question would use.
+    asks: list[NonEmptyStr] = []
+    # Every service the case touches, whichever option you take: these light up first.
+    nodes: list[Slug] = []
+    options: list[CaseOption]
+    # The one sentence to remember. Usually what separates the best option from the rest.
+    teaches: NonEmptyStr | None = None
 
 
 @dataclass(frozen=True, slots=True)

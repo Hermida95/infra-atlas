@@ -1,0 +1,40 @@
+---
+id: iam-access-analyzer
+title: "IAM Access Analyzer"
+type: service
+domain: identity
+summary: "Proves which resources are reachable from outside the account, and rewrites over-broad policies down to the access actually used."
+monogram: IAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-policy]
+connects:
+  - to: security-hub
+    text: "Its findings land in Security Hub alongside GuardDuty and Inspector, so one queue covers them all."
+  - to: resource-policy
+    text: "External access findings are almost always a bucket, key or role policy that is broader than anyone intended."
+reviewed: 2026-11-05
+---
+
+Two tools under one name, and they solve opposite ends of the same problem.
+
+**External access analysis** answers "what in this account can be reached from outside it". It
+is not a scanner guessing at risk: it uses automated reasoning over the actual policies --
+bucket policies, key policies, role trust policies, SQS, Lambda, ECR, EFS -- and proves which
+resources are reachable by a principal outside the zone of trust you set, which is usually the
+organization. Every finding is a real path, so there is nothing to triage away as a false
+positive. Set the zone to the organization rather than the account, or every legitimate
+cross-account share shows up as a finding.
+
+**Policy generation** goes the other way. Point it at a role and it reads up to ninety days of
+that role's CloudTrail history and writes the policy that covers exactly what was called,
+resources included. That is least privilege reached by subtraction from evidence, instead of by
+someone guessing which actions an SDK uses. The same service also validates a policy you wrote
+against a hundred-plus checks, and **unused access analysis** flags roles, users and permissions
+nobody has exercised in the window -- the pile that accumulates in every account and never gets
+cleaned up because nobody can prove it is safe to delete.
+
+Findings land in Security Hub with everything else, which is where they get worked rather than
+admired one service at a time.

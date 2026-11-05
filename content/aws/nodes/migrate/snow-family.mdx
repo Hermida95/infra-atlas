@@ -1,0 +1,40 @@
+---
+id: snow-family
+title: "Snowball & Snowmobile"
+type: service
+domain: migrate
+summary: "Petabytes shipped on a physical device, encrypted with your KMS key. Chosen because a 10 Gbps line still takes weeks."
+monogram: SS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [datasync]
+connects:
+  - to: datasync
+    text: "The arithmetic decides: work out the days over the link first, and only then order a device."
+  - to: s3
+    text: "The data lands in a bucket, and the lifecycle and replication rules then treat it like anything else."
+reviewed: 2026-11-05
+---
+
+The Snow family is physical data transfer: AWS ships a device, you fill it, you ship it back,
+and the data lands in S3. It exists because arithmetic beats optimism -- a 1 Gbps link carries
+roughly 10 TB a day under perfect conditions, so 500 TB is around two months of saturated link,
+and nobody has a saturated link.
+
+**Snowball Edge Storage Optimized** carries about 80 TB usable and is the workhorse. **Snowball
+Edge Compute Optimized** adds vCPUs, memory and optional GPU so it can *run* workloads at the
+edge -- preprocessing data where it is generated, in a factory, on a ship or at a remote site
+with no connectivity. **Snowcone** is the small, rugged, two-device-weight option for a few
+terabytes. **Snowmobile**, the shipping container for exabytes, is the famous one and almost
+never the answer.
+
+Security is built in: the data is encrypted with a **KMS key you control**, the device has a
+tamper-evident enclosure and a Trusted Platform Module, and the unlock code is delivered
+separately from the device. AWS wipes it to NIST standards afterwards.
+
+The decision is a calculation, and it is the thing an exam is testing: time over the network
+versus the device turnaround, which is typically about a week each way plus the time to copy
+locally. The common answer for a large migration is both -- Snowball for the bulk historical
+data, DataSync over the network for the ongoing delta and the final cutover.

@@ -1,0 +1,41 @@
+---
+id: edge-location
+title: "Edge location"
+type: service
+domain: foundation
+summary: "Hundreds of points of presence worldwide that terminate TLS and serve cached content metres from the user, instead of oceans away."
+monogram: EL
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cloudfront
+    text: "CloudFront is what you configure; edge locations are where it runs. A cache hit never reaches your region at all."
+  - to: global-accelerator
+    text: "Global Accelerator takes the connection at the same edges and crosses the rest on the AWS backbone, for TCP and UDP."
+  - to: route53
+    text: "Route 53 is answered at the edges too, which is why DNS-based failover reacts in seconds anywhere in the world."
+reviewed: 2026-11-05
+---
+
+Edge locations are AWS points of presence -- several hundred of them, in far more cities than
+there are regions. They are not regions: you cannot run an instance there. What they do is
+terminate connections close to the user.
+
+That matters more than bandwidth. A TLS handshake is several round trips, so a user in Singapore
+reaching a region in Ireland pays that distance repeatedly before any content moves. Terminating
+at a Singapore edge and crossing the rest once, on a warm connection over the AWS backbone,
+removes most of the latency even when nothing is cached.
+
+Four services run there. **CloudFront** caches and serves HTTP, and runs **CloudFront
+Functions** and **Lambda@Edge**. **Global Accelerator** takes TCP and UDP connections at the
+edge and routes them over the backbone. **Route 53** answers DNS from the edge, which is why
+DNS-based failover reacts in seconds anywhere in the world. And **Shield** absorbs volumetric
+attacks there, before they reach a region.
+
+Behind the edge locations sit **regional edge caches**, a mid-tier layer that holds less popular
+content longer, so a cache miss at the edge often does not reach your origin either.
+
+The practical consequence for a design: putting CloudFront in front of an application is usually
+the cheapest latency improvement available, and often reduces cost at the same time, because
+traffic from AWS origins to CloudFront is not charged for data transfer.

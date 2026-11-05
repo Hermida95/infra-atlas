@@ -1,0 +1,59 @@
+---
+id: cognito
+title: "Cognito"
+type: service
+domain: identity
+summary: "Sign-up, sign-in, social and SAML federation and JWTs for your application's end users, which is not what IAM is for."
+logo: aws:cognito
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [appsync, cloudfront]
+connects:
+  - to: api-gateway
+    text: "A Cognito authoriser validates the token at the front door, so no request without a valid user reaches the backend."
+  - to: iam-role
+    text: "An identity pool exchanges a user's token for temporary AWS credentials, scoped by their group."
+lead: "Two pools with similar names and completely different jobs. Getting them the wrong way round is the classic mistake."
+parts:
+  - name: "User pool"
+    kind: core
+    text: "A directory of your application's users: sign-up, sign-in, MFA, password policy, hosted UI, social and SAML federation. It issues JWTs."
+  - name: "Tokens"
+    kind: sheet
+    text: "An id token (who the user is), an access token (what scopes they hold) and a refresh token. Your API validates the signature against the pool's JWKS."
+  - name: "Identity pool"
+    kind: bus
+    text: "Different job: it swaps a token -- from the user pool, Google, or anything OIDC -- for temporary AWS credentials, including for guests."
+  - name: "Triggers"
+    kind: trigger
+    text: "Lambda hooks on sign-up, pre-token-generation, custom auth and migration. Where custom claims and a legacy-user import go."
+  - name: "Groups and claims"
+    kind: chips
+    text: "A group maps to a role for the identity pool and to a `cognito:groups` claim for your own authorisation."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Cognito exists because IAM is not for your users. IAM principals are a small, administrative
+population; an application with fifty thousand customers needs a directory, not fifty thousand
+IAM users -- and the account quota would stop you anyway at five thousand.
+
+A **user pool** is that directory. It holds the accounts, enforces the password policy and MFA,
+runs the sign-up and sign-in flows (including a hosted UI you can skin), and federates to
+Google, Apple, SAML or any OIDC provider so a user can bring an identity they already have. The
+output is a set of JSON Web Tokens. Your backend never sees a password: it validates the token's
+signature against the pool's public keys and reads the claims.
+
+An **identity pool** does something else entirely, and the similar name is the whole problem. It
+takes a token -- from your user pool, or straight from Google, or none at all for a guest -- and
+exchanges it for temporary AWS credentials through STS. That is how a mobile app uploads
+straight to a per-user S3 prefix with no backend in the path. If the question is *"let my users
+sign in"*, it is a user pool. If it is *"let my users call AWS directly"*, you need both.
+
+Two things worth remembering for an exam. First, API Gateway has a built-in **Cognito
+authorizer**: point it at the user pool and unauthenticated requests are rejected at the edge of
+the API, before any of your code runs. Second, **pre-token-generation** and the other Lambda
+triggers are where custom claims get added -- a tenant id, a plan tier -- so your authorisation
+logic reads the token instead of querying a database on every request.

@@ -1,0 +1,65 @@
+---
+id: security-group
+title: "Security groups"
+type: service
+domain: network
+summary: "A stateful, allow-only virtual firewall attached to an elastic network interface. Return traffic is automatic; there is no deny rule."
+monogram: SG
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [vpc]
+connects:
+  - to: nacl
+    text: "Security groups are stateful and cannot deny; NACLs are stateless and can. You need the second only for blocking."
+  - to: alb
+    text: "The pattern worth remembering: the application's group allows the load balancer's group, not a CIDR, so addresses never matter."
+  - to: flow-logs
+    text: "A rejected flow in the logs is almost always a security group, and the log says which interface."
+lead: "Stateful, allow-only, and attached to the interface rather than the subnet. Three properties that explain every security group question."
+parts:
+  - name: "Inbound rules"
+    kind: gate
+    text: "Protocol, port range and a source. Nothing is allowed until a rule allows it -- a new group permits no inbound traffic at all."
+  - name: "Outbound rules"
+    kind: lanes
+    text: "Wide open by default: allow all to 0.0.0.0/0. Tightening this is the step most designs skip."
+  - name: "Stateful tracking"
+    kind: loop
+    text: "Return traffic for an allowed connection is automatic. There is no need for an ephemeral-port rule, and no way to write one that matters."
+  - name: "Source as a group"
+    kind: orbit
+    text: "The source can be another security group instead of a CIDR: \"whatever is in the load balancer's group\", regardless of its addresses."
+  - name: "No deny"
+    kind: shell
+    text: "Allow-only, by design. To block a specific address you need a network ACL, or WAF for anything above layer 4."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A security group is a firewall attached to an elastic network interface, not to an instance and
+not to a subnet. One interface can carry several groups and the rules are additive: the union of
+every group's allows, with no ordering and no deny. That last part is the one people fight:
+there is no way to say "everyone except this address" in a security group, because there is no
+deny rule. If the requirement is to block something specific, the answer is a network ACL at
+layer 3 and 4, or WAF above it.
+
+**Stateful** means the return path is implicit. Allow inbound 443 and the response goes back out
+whatever the outbound rules say; allow outbound 443 and the response comes back in. This is the
+difference from a network ACL, where every flow needs a rule in both directions plus one for the
+ephemeral port range, and forgetting the second half is the classic broken-NACL afternoon.
+
+The feature worth building designs around is **referencing another group as the source**. A
+database group whose inbound rule is "port 5432 from `sg-app`" keeps working as the application
+scales from two instances to two hundred, moves zones, or is replaced entirely -- there is no
+address list to maintain and no CIDR that is wider than it should be. Chain them: internet to
+the ALB's group, the ALB's group to the app's group, the app's group to the database's group.
+Each tier can only be reached from the one in front of it, and nothing in the design mentions an
+IP address.
+
+Defaults to know. A new group denies all inbound and allows all outbound. The **default**
+security group of a VPC additionally allows all traffic from itself, which quietly means every
+resource that lands on it can talk to every other -- do not use it. Limits are per interface
+(five groups by default) and per group (sixty rules each way), and a rule referencing a group
+counts as one rule however many instances are in it.

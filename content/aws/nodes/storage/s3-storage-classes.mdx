@@ -1,0 +1,64 @@
+---
+id: s3-storage-classes
+title: "S3 storage classes"
+type: comparison
+domain: storage
+summary: "Standard, Intelligent-Tiering, Standard-IA, One Zone-IA, Glacier Instant, Glacier Flexible and Deep Archive. Same durability, very different retrieval."
+monogram: S3
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: s3-lifecycle
+    text: "Classes are chosen once at upload and changed thereafter only by a lifecycle transition."
+  - to: s3
+    text: "Intelligent-Tiering is the honest default when the access pattern is unknown: a small monitoring fee instead of a guess."
+lead: "Same durability everywhere. What changes is how fast you get the object back, and what you pay to keep it and to ask for it."
+parts:
+  - name: "Standard"
+    kind: disc
+    text: "Milliseconds, three or more zones, no retrieval fee and no minimum duration. The default, and the right one for anything hot."
+  - name: "Intelligent-Tiering"
+    kind: loop
+    text: "Moves objects between tiers on observed access for a small monitoring fee per object. The honest default when the pattern is unknown."
+  - name: "Standard-IA and One Zone-IA"
+    kind: lanes
+    text: "Cheaper storage, a per-GB retrieval fee, 30-day minimum and 128 KB minimum billable size. One Zone is 20% less and dies with its zone."
+  - name: "Glacier Instant and Flexible"
+    kind: cylinder
+    text: "Instant retrieves in milliseconds with a 90-day minimum; Flexible is minutes to hours with a restore request first."
+  - name: "Deep Archive"
+    kind: shell
+    text: "The cheapest storage AWS sells, twelve hours to retrieve, 180-day minimum. Tape, for compliance retention."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Every S3 class has the same eleven nines of durability except One Zone-IA, which is the one
+stored in a single Availability Zone. Everything else that differs is cost and time.
+
+The shape of the pricing matters more than the headline per-GB number. The infrequent-access and
+archive classes trade a lower storage price for three things: a **per-GB retrieval fee**, a
+**minimum storage duration** (30 days for IA, 90 for Glacier Instant and Flexible, 180 for Deep
+Archive) that is charged even if you delete sooner, and a **minimum billable object size** of
+128 KB. Which is why moving a million 4 KB thumbnails to Standard-IA costs more, not less: each
+is billed as 128 KB, and reading them pays a retrieval fee every time.
+
+**Intelligent-Tiering** exists for the common case where nobody knows the access pattern. It
+charges a small monitoring fee per object and moves objects between frequent, infrequent and
+optional archive tiers based on what is actually accessed, with no retrieval fees. For a bucket
+of mixed, unpredictable data it is almost always cheaper than a guess, and it is the answer to
+most exam questions phrased as "access patterns are unknown or changing".
+
+Retrieval time is the other axis, and it is what the Glacier family is really about. **Glacier
+Instant Retrieval** is milliseconds -- it behaves like IA with cheaper storage and a higher
+retrieval fee, for archives that are rarely read but needed immediately when they are. **Glacier
+Flexible Retrieval** needs a restore request first: expedited (1-5 minutes), standard (3-5
+hours) or bulk (5-12 hours, free). **Deep Archive** is standard (12 hours) or bulk (48), and is
+the cheapest storage AWS sells.
+
+So the question that picks the class is always the same: *how fast do you need it back, and how
+often will you ask?* Hot and frequent is Standard. Unknown is Intelligent-Tiering. Known cold
+but must be instant is Glacier Instant. Known cold and hours are fine is Flexible. Compliance
+retention nobody expects to read is Deep Archive. Reproducible data where losing a zone is
+acceptable is One Zone-IA.

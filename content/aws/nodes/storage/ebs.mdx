@@ -1,0 +1,68 @@
+---
+id: ebs
+title: "EBS"
+type: service
+domain: storage
+summary: "Network block storage attached to one instance in one zone. gp3 for almost everything, io2 Block Express for the IOPS you can prove you need."
+monogram: EBS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [instance-store, aws-backup]
+connects:
+  - to: ec2
+    text: "One volume, one zone, one instance at a time, unless you are using io2 Multi-Attach deliberately."
+  - to: ebs-snapshot
+    text: "A snapshot in S3 is the only way a volume leaves its zone, and the way it reaches another region."
+  - to: efs
+    text: "The choice is a question, not a preference: one instance and a block device, or many instances and a shared file system."
+lead: "Network storage that behaves like a disk. One volume, one zone, one instance -- and four types that are really two decisions."
+parts:
+  - name: "gp3"
+    kind: disc
+    text: "The default. 3,000 IOPS and 125 MB/s included, and throughput and IOPS are provisioned independently of size -- which gp2 could not do."
+  - name: "io2 Block Express"
+    kind: core
+    text: "Up to 256,000 IOPS, sub-millisecond, 99.999% durability, and the only type supporting Multi-Attach. For databases that can prove they need it."
+  - name: "st1 and sc1"
+    kind: cylinder
+    text: "Throughput-optimised HDD and cold HDD. Cheap per GB and terrible at random I/O: for big sequential reads, logs and data lakes on a budget."
+  - name: "Snapshots"
+    kind: discs
+    text: "Incremental, stored in S3, the only way a volume leaves its zone. The basis of AMIs and of most EC2 backup policies."
+  - name: "Encryption"
+    kind: shell
+    text: "KMS, on by default if you set the account flag. Encrypting an existing unencrypted volume means snapshot, copy with a key, restore."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An EBS volume is block storage attached over the network to one instance, in one Availability
+Zone. It survives the instance stopping and being terminated (if you clear "delete on
+termination"), and it does not survive the zone. Everything about EBS design follows from those
+two facts.
+
+**gp3** is the right default and the reason is pricing: it includes 3,000 IOPS and 125 MB/s at
+any size, and lets you provision more of either independently. gp2 tied IOPS to size at 3 per
+GB, which meant over-provisioning a terabyte to get IOPS you needed from a 100 GB volume. If you
+have gp2 volumes, moving them to gp3 is usually a straight saving with no downtime.
+
+**io2 Block Express** is for when you can measure the need: provisioned IOPS up to 256,000,
+consistent sub-millisecond latency, and 99.999% durability rather than 99.8-99.9%. It is also
+the only type that supports **Multi-Attach** -- the same volume on up to 16 instances -- and
+that comes with a warning: there is no coordination, so it requires a cluster-aware filesystem.
+Attaching ext4 or NTFS to two writers corrupts it.
+
+**st1** and **sc1** are spinning disks. They are cheap and they are good at exactly one thing:
+large sequential reads. Random I/O on them is miserable. They cannot be boot volumes.
+
+Two operational points. Volumes can be **modified live** -- size, type, IOPS -- without
+detaching, though the filesystem still needs growing afterwards and there is a cooldown before
+the next change. And **snapshots** are incremental against the previous snapshot but each one is
+independently restorable, so deleting an old snapshot never breaks a newer one. Snapshots are
+how a volume crosses a zone or a region, and **Data Lifecycle Manager** or **AWS Backup** is
+what should be taking them on a schedule rather than a cron job on the instance.
+
+Performance has a ceiling you do not control: the instance. Network and EBS bandwidth scale with
+instance size, so a small instance will cap a fast volume long before the volume does.

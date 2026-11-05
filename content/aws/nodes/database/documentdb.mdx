@@ -1,0 +1,39 @@
+---
+id: documentdb
+title: "DocumentDB"
+type: service
+domain: database
+summary: "A managed, MongoDB-compatible document database on the Aurora-style storage layer, for applications already written against Mongo."
+monogram: DO
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [dynamodb]
+connects:
+  - to: dynamodb
+    text: "If nothing requires the MongoDB API, DynamoDB is cheaper to run and scales further."
+  - to: dms
+    text: "DMS is how a self-managed MongoDB gets here with the application still serving."
+reviewed: 2026-11-05
+---
+
+DocumentDB is a managed document database with MongoDB API compatibility, built on the same
+shared-storage architecture as Aurora: six copies across three zones, storage that grows to 128
+TB on its own, up to fifteen replicas with millisecond lag, and automatic failover.
+
+The word that matters is **compatible**, not *is*. It emulates a particular MongoDB wire
+protocol version and does not support everything -- no multi-document transactions in older
+versions, some aggregation stages missing, no `$where`, and nothing from MongoDB Atlas's
+ecosystem. Before committing, the honest step is to run the application's actual queries against
+it rather than reading the compatibility matrix.
+
+When it is right: an existing application written against MongoDB that has to move to AWS
+without being rewritten, where the operational burden of running MongoDB on EC2 is the thing you
+are trying to shed. **DMS** is the usual path in, keeping the source serving while the data
+replicates.
+
+When it is not: anything new. If nothing requires the MongoDB API, DynamoDB is cheaper to
+operate, scales further, has no instances to size, and integrates with the rest of AWS more
+naturally. DocumentDB is a migration answer, and that is a perfectly good reason for it to
+exist.

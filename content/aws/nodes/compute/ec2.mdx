@@ -1,0 +1,78 @@
+---
+id: ec2
+title: "EC2"
+type: service
+domain: compute
+hub: true
+summary: "Virtual machines: you pick the family, the size, the image and the network, and you own everything above the hypervisor."
+logo: aws:ec2
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [instance-types, placement-group, systems-manager, savings-plans]
+connects:
+  - to: auto-scaling
+    text: "An instance you replace by hand is a pet. In an Auto Scaling group it becomes capacity, and health checks replace it for you."
+  - to: ami
+    text: "Immutable deployment means baking the AMI in the pipeline, so launching is the only thing that happens at runtime."
+  - to: ebs
+    text: "The root volume and any data volume are EBS, in the same zone, and the snapshot is how they leave it."
+  - to: spot
+    text: "The same instance at up to 90% off, as long as the workload can survive a two-minute notice."
+  - to: iam-role
+    text: "An instance profile is the right answer to 'where do the credentials go'. There is no other acceptable answer."
+lead: "EC2 is the most flexible and the most work. Every other compute service on AWS is a trade of some of that flexibility for some of that work."
+parts:
+  - name: "Instance type"
+    kind: chips
+    text: "A family letter and a size. The letter is the job -- balanced, compute, memory, storage, accelerated -- and it is most of the answer."
+  - name: "AMI"
+    kind: sheet
+    text: "The image it boots from: operating system, agents, runtime, your application if you bake it in."
+  - name: "Storage"
+    kind: cylinder
+    text: "An EBS root volume that survives a stop, optionally more EBS volumes, and instance store NVMe that does not."
+  - name: "Network interface"
+    kind: bus
+    text: "An ENI in one subnet, so in one zone, with its security groups and optionally a public address."
+  - name: "Instance profile"
+    kind: shell
+    text: "The IAM role the instance assumes, so the application has credentials nobody has to store."
+layout: stack
+reviewed: 2026-11-05
+---
+
+EC2 is a virtual machine: you choose the hardware shape, the image, the network and the storage,
+and everything above the hypervisor is yours to run and patch. It is the most flexible compute
+on AWS and the most work, and every other compute service is a trade of some of that flexibility
+for some of that work.
+
+**The instance type** is the first decision and most of the answer: the family letter is the
+workload's bottleneck (`m` balanced, `c` compute, `r` memory, `i` storage, `g`/`p`
+accelerators), the generation should be the newest available, and **Graviton** is typically 20%
+cheaper and often faster for anything that can run on Arm.
+
+**Storage** splits three ways. The **EBS** root volume survives a stop and is zonal. Extra EBS
+volumes are the same. **Instance store** is physically attached NVMe -- the fastest thing
+available, and gone the moment the instance stops. The rule is that anything you would miss
+lives on EBS or S3.
+
+**Identity** is an **instance profile** carrying an IAM role, and there is no acceptable
+alternative. The credentials appear at the instance metadata endpoint, which is why **IMDSv2**
+must be enforced: with IMDSv1, a server-side request forgery bug in your application reads the
+role's credentials with a single GET, and that is the most common way an EC2 role gets stolen.
+
+**Access** should be **Session Manager**, not SSH: a shell through IAM, with no key pairs to
+distribute, no bastion host, no inbound port 22, and a full session log. For a private subnet
+with no NAT it needs the `ssm`, `ssmmessages` and `ec2messages` endpoints.
+
+**The lifecycle** is the mental shift. An instance you log into and fix is a pet; in an **Auto
+Scaling group** it is capacity, replaced rather than repaired, launched from a **launch
+template** that points at a baked **AMI**. That is also what makes the purchase model a design
+decision -- on-demand for what cannot be interrupted, **Spot** at up to 90% off for what can,
+and a **Savings Plan** for the steady baseline.
+
+What it still wins at: anything needing the operating system, a specific kernel, a GPU, a
+per-socket licence, a long-running process, or software that simply has not been containerised.
+Everything else is usually cheaper and quieter on Fargate or Lambda.

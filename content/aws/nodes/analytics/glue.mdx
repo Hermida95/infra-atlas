@@ -1,0 +1,45 @@
+---
+id: glue
+title: "Glue"
+type: service
+domain: analytics
+summary: "A crawler that catalogues S3 into tables, a serverless Spark for transformation, and the Data Catalog that Athena, EMR and Redshift all read."
+monogram: GL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [emr]
+connects:
+  - to: athena
+    text: "One catalogue, several engines. Registering a table once is what lets all of them query it."
+  - to: lake-formation
+    text: "Lake Formation layers column- and row-level permissions over the same catalogue."
+reviewed: 2026-11-05
+---
+
+Glue is three things, and conflating them makes it confusing. The **Data Catalog** is a metadata
+store: databases, tables, columns, partitions and serialisation formats. It is the piece with
+the widest reach, because Athena, Redshift Spectrum, EMR, Lake Formation and QuickSight all read
+from it, so a table registered once is queryable from everywhere.
+
+**Crawlers** populate the catalogue by scanning S3 (or JDBC sources), inferring the schema and
+the partition structure, and keeping it current on a schedule. They are convenient and worth
+treating with care: a crawler can guess a column type wrong, and once it is wrong every query
+downstream is wrong. For stable, important tables, declaring the schema explicitly is the
+sturdier choice.
+
+**ETL jobs** are serverless Spark (or Python shell, or Ray) that transform data, billed per
+DPU-hour with a one-minute minimum. **DynamicFrames** are Glue's schema-flexible alternative to
+Spark DataFrames, useful when the source is semi-structured. **Job bookmarks** track what has
+already been processed so an incremental run does not reprocess everything -- the feature that
+turns a job into a pipeline.
+
+Around them: **Glue Studio** for building jobs visually, **DataBrew** for no-code preparation,
+**Data Quality** for rules that fail a job when the data is wrong rather than letting it
+through, and **workflows** or Step Functions for orchestration.
+
+Where it sits: Glue for serverless, managed ETL where you do not want a cluster; **EMR** when
+the job is big enough or custom enough that you want the cluster and the Spot savings;
+**Firehose** when no transformation beyond format conversion is needed; and **Athena CTAS** when
+the transformation is expressible as SQL.

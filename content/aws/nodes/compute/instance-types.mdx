@@ -1,0 +1,64 @@
+---
+id: instance-types
+title: "Instance families"
+type: comparison
+domain: compute
+summary: "The letter says the job: t and m balanced, c compute, r and x memory, i and d storage, g and p accelerators. Graviton is the cheaper Arm option."
+monogram: IF
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: ec2
+    text: "Choosing the family before the size is the habit: a memory-bound job on a c-family instance just costs more to be slow."
+  - to: spot
+    text: "Flexibility across families and sizes is what keeps Spot interruptions low, so the choice is a list, not one type."
+lead: "A family letter, a generation number, a size, and some suffixes. Each part answers a different question."
+parts:
+  - name: "The family letter"
+    kind: chips
+    text: "t burstable, m balanced, c compute, r and x and z memory, i and d storage, g and p and inf and trn accelerators, hpc networking."
+  - name: "The generation"
+    kind: disc
+    text: "Higher is newer, faster and usually cheaper per unit of work. m7 beats m5 on price-performance; there is rarely a reason to stay behind."
+  - name: "The processor suffix"
+    kind: modules
+    text: "a is AMD, g is Graviton (Arm, roughly 20% cheaper and often faster), i is Intel, no letter is the default for that generation."
+  - name: "The size"
+    kind: bars
+    text: "large, xlarge, 2xlarge upward -- vCPU, memory, network and EBS bandwidth all scale together. .metal is the whole host with no hypervisor."
+  - name: "Extra suffixes"
+    kind: plugin
+    text: "d is local NVMe, n is extra network bandwidth, e is extra memory or storage, flex trades sustained performance for a lower price."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Choosing an instance starts with the letter, and the letter is the workload's bottleneck. A
+memory-bound database on a `c` instance just costs more to be slow. The quick map: **t**
+burstable for idle-most-of-the-time workloads, **m** balanced, **c** compute-optimised, **r**
+memory-optimised (and **x**/**z** for extreme memory), **i** and **d** for local NVMe
+throughput, **g**/**p**/**inf**/**trn** for GPUs and ML accelerators, **hpc** for tightly
+coupled clusters.
+
+**Graviton** -- the `g` suffix, as in `m7g` -- is AWS's own Arm processor, typically around 20%
+cheaper than the x86 equivalent and frequently faster per vCPU. For anything running on an
+interpreted or JIT runtime, or in a container that can be built multi-arch, it is close to free
+money. The reason not to is a dependency with no Arm build.
+
+**T instances** have a model of their own and it catches people out. They earn CPU credits at a
+fixed rate and spend them when busy above a baseline. Run out and the instance throttles hard.
+`unlimited` mode (the default on t3 and later) keeps the performance and charges for the surplus
+instead -- fine for spiky workloads, expensive for a steadily busy one, where an `m` instance is
+cheaper. A t-family instance behind a load balancer under sustained load is a classic wrong
+answer.
+
+Two details that decide designs. **Network and EBS bandwidth scale with size**, so a small
+instance can be the bottleneck for a database long before its CPU is; `n` variants and
+EBS-optimised bandwidth figures are in the documentation table, and that table is the right
+place to settle an argument. And **`.metal`** gives you the bare host, which matters for
+software licensed per socket and for hypervisors you bring yourself.
+
+On sizing in general: measure before choosing, and prefer scaling out to scaling up when the
+workload allows, because horizontal scale is also fault tolerance. Compute Optimizer reads your
+real utilisation and recommends a type, which beats a guess and is free.

@@ -1,0 +1,64 @@
+---
+id: nat-gateway
+title: "NAT Gateway"
+type: service
+domain: network
+summary: "Outbound-only internet access for private subnets. Managed, zonal, and charged per hour plus per gigabyte processed."
+monogram: NAT
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [igw, route-table]
+connects:
+  - to: vpc-endpoint
+    text: "The cost fix: traffic to S3 or DynamoDB through a gateway endpoint is free, and skips the NAT Gateway entirely."
+  - to: az
+    text: "One per zone, or a zone failure takes out the other zone's outbound traffic along with it."
+  - to: cost-explorer
+    text: "Data processing charges here are one of the most common unexplained line items on a bill."
+lead: "Managed, zonal, and metered twice. Two of those three are what people get wrong."
+parts:
+  - name: "Where it sits"
+    kind: disc
+    text: "In a public subnet, with an Elastic IP. The private subnet's route table sends 0.0.0.0/0 to it, not to the Internet Gateway."
+  - name: "Zonal, not regional"
+    kind: zones
+    text: "One gateway serves one zone. A single gateway for three zones is both a single point of failure and a cross-zone data charge."
+  - name: "Two meters"
+    kind: bars
+    text: "An hourly rate per gateway plus a per-GB data processing charge, on top of the normal data transfer. The second one is what surprises people."
+  - name: "Outbound only"
+    kind: gate
+    text: "Connections your instances start, never ones started from outside. For inbound you need a load balancer or an Internet Gateway."
+  - name: "What avoids it"
+    kind: orbit
+    text: "A gateway VPC endpoint for S3 and DynamoDB costs nothing and bypasses it entirely. Interface endpoints do the same for the other APIs."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A NAT Gateway lets instances in private subnets start connections outward -- package
+repositories, third-party APIs, AWS public endpoints -- without being reachable from outside.
+AWS manages it, it scales to 100 Gbps on its own, and there is nothing to patch.
+
+It is also one of the top two or three lines on a surprised AWS bill, because it is metered
+twice: an hourly charge per gateway, and a **data processing charge per gigabyte** that is paid
+on top of normal data transfer. Forty terabytes a month through a NAT Gateway costs more in
+processing than most of the compute behind it. The fix is almost always the same: traffic to S3
+and DynamoDB should leave through a **gateway VPC endpoint**, which has no hourly fee and no
+processing charge at all, and traffic to other AWS APIs through **interface endpoints**, which
+are cheaper than NAT above a modest volume. Once those are in place, what is left going through
+NAT is usually small enough not to matter.
+
+The second mistake is architectural. A NAT Gateway is **zonal**. One gateway serving all three
+zones means a zone failure takes down egress for the other two, and every byte from the other
+zones pays cross-zone transfer on the way. The correct shape is one gateway per zone, with each
+private subnet's route table pointing at the one in its own zone. It costs more per hour and
+less per gigabyte, and it survives a zone.
+
+Worth knowing: a NAT Gateway cannot be used with a security group (it has none) and cannot
+forward inbound connections. **NAT instances** -- an EC2 instance doing the same job -- still
+exist and come up in exams as the cheaper, less available, you-patch-it alternative; in practice
+they are a legacy answer. And IPv6 does not use NAT at all: outbound-only IPv6 is an egress-only
+Internet Gateway.

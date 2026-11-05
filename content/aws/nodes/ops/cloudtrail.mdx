@@ -1,0 +1,69 @@
+---
+id: cloudtrail
+title: "CloudTrail"
+type: service
+domain: ops
+summary: "Every API call in the account: who, when, from where, and what the request was. An organization trail into a locked bucket is the audit baseline."
+monogram: CL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [aws-config, detective]
+connects:
+  - to: s3
+    text: "Management events are free for 90 days in the console; a trail to S3 is what keeps them, and Object Lock is what protects them."
+  - to: guardduty
+    text: "GuardDuty reads the same events and turns the suspicious ones into findings."
+  - to: organizations
+    text: "An organization trail covers every member account, including the ones created tomorrow."
+lead: "Who called what, from where, and whether it worked. The one log that has to exist before you need it."
+parts:
+  - name: "Management events"
+    kind: panel
+    text: "Control-plane calls -- create, delete, modify, assume role. On by default, free for 90 days in Event history, and the baseline of any audit."
+  - name: "Data events"
+    kind: discs
+    text: "Object-level and item-level calls: S3 GetObject, Lambda Invoke, DynamoDB PutItem. Off by default, charged per event, and usually what an investigation needs."
+  - name: "Organization trail"
+    kind: shell
+    text: "One trail in the management account covering every member account, including ones created tomorrow, and not disableable from inside them."
+  - name: "The destination"
+    kind: cylinder
+    text: "An S3 bucket, ideally in a separate log archive account with Object Lock and an SCP protecting it. Optionally CloudWatch Logs for metric filters."
+  - name: "Lake and Insights"
+    kind: graph
+    text: "CloudTrail Lake for SQL over years of events without building a pipeline, and Insights for unusual API call rates."
+layout: stack
+reviewed: 2026-11-05
+---
+
+CloudTrail records API calls: the identity that made it, the time, the source IP, the parameters
+and the response. It is the answer to "who deleted that", and it is also the data GuardDuty,
+Detective and half of Security Hub read.
+
+**Event history** in the console gives the last 90 days of management events for free, in the
+current account and region, with no configuration. It is enough for a quick question and not
+enough for an audit, because it does not persist, cannot be aggregated and omits data events.
+
+A real setup is an **organization trail**: created once in the management account, applied to
+every member account including future ones, and not disableable from inside them. It writes to
+an S3 bucket in a **separate log archive account** that no workload administrator can reach,
+with **Object Lock** for immutability and an SCP forbidding anyone from modifying the trail or
+the bucket. That combination is what makes the record trustworthy, and it is the shape Control
+Tower sets up for you.
+
+**Data events** are the decision with a cost attached. Management events are cheap; S3
+object-level and Lambda invocation events are charged per event and can be voluminous. They are
+also, almost always, what an investigation actually needs -- "which objects did this role read"
+is a data event question. The usual compromise is to enable them selectively: sensitive buckets,
+specific prefixes, specific functions, using advanced event selectors.
+
+Two features worth naming. **CloudTrail Lake** stores events in a managed lake queryable with
+SQL for up to ten years, which removes the Athena-plus-Glue pipeline for most people.
+**Insights** detects unusual rates of API calls -- a sudden spike in `RunInstances` or
+`DeleteObject` -- and raises them as events.
+
+Finally, the distinction exams test: CloudTrail says *who did it*, Config says *what it looked
+like before and after*, and CloudWatch Logs holds *what the application printed*. Three
+different questions, three different services.

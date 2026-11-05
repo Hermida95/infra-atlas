@@ -1,0 +1,43 @@
+---
+id: route-table
+title: "Route tables"
+type: service
+domain: network
+summary: "Where traffic for a destination goes. Longest prefix wins, the local VPC route cannot be removed, and one table can serve many subnets."
+monogram: RT
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [subnet, vpc-endpoint]
+connects:
+  - to: igw
+    text: "0.0.0.0/0 to an Internet Gateway is the single line that makes a subnet public."
+  - to: nat-gateway
+    text: "0.0.0.0/0 to a NAT Gateway in the same zone is the line that makes a subnet private but still able to reach out."
+  - to: transit-gateway
+    text: "Routes for other VPCs and on-premises ranges point at the Transit Gateway attachment, not at a peering connection."
+reviewed: 2026-11-05
+---
+
+A route table is a list of destination CIDRs and where to send traffic for each, and the
+algorithm is one line: **most specific prefix wins**. A route for `10.0.5.0/24` beats one for
+`10.0.0.0/16`, which beats `0.0.0.0/0`. That is how an inspection appliance gets inserted into a
+path, and how one subnet is given a different exit from its neighbours.
+
+Every VPC route table starts with a **local** route for the VPC's own CIDR that cannot be
+removed or overridden. This is why resources in different subnets of one VPC can always reach
+each other at the routing layer, and why blocking that traffic is a security-group or NACL job,
+never a routing one.
+
+The targets worth knowing by name: an **Internet Gateway** for two-way public traffic, a **NAT
+Gateway** for outbound-only from private subnets, a **Transit Gateway** attachment for other
+VPCs and on-premises, a **virtual private gateway** for a VPN, a **peering connection**, a
+**gateway endpoint** (which appears as a prefix list rather than a CIDR), and a **network
+interface** when traffic has to pass through an appliance you run.
+
+Three shapes come up constantly. A subnet is **public** because its table has `0.0.0.0/0` to an
+Internet Gateway. A subnet is **private** because the same route points at a NAT Gateway -- and
+that NAT Gateway should be the one in its own zone, or a zone failure takes out the other zone's
+egress along with it. And **edge association**: a route table attached to the Internet Gateway
+itself, which forces inbound traffic through an appliance before it reaches the subnet.

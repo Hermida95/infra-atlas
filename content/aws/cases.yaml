@@ -1,0 +1,606 @@
+# Real situations, and the ways to solve them. A case lights up every service it touches on
+# the AWS map; each option lights up only its own, so switching between them is a diff you
+# can see. Exactly one option per case is `best` -- that is checked by `brain validate`, so
+# a case can never sit on the fence.
+#
+#   nodes     every service the case touches, whichever option you take
+#   asks      what the scenario is really asking for, in the words an exam question uses
+#   options   verdict `best`, `works` (right in some conditions) or `avoid` (looks right, is not)
+#   watch     what breaks, costs or surprises you later. Required on an `avoid`.
+
+- id: spiky-traffic-site
+  title: "A site with huge traffic, now and then"
+  exam: [saa, sap]
+  scenario: >-
+    A shop and its marketing pages are quiet for most of the month, and then a campaign or a
+    product drop puts fifty times the traffic through them for two days. Nobody knows the date
+    in advance, and the bill has to look like the traffic, not like the peak.
+  asks:
+    - "Cost follows traffic: nothing paid for while idle"
+    - "No capacity to provision ahead of a spike nobody scheduled"
+    - "Must not fall over at the peak"
+    - "Readers all over the world"
+  nodes: [route53, cloudfront, s3, acm, waf, shield, alb, ecs, fargate, auto-scaling, ec2, spot,
+          lambda, api-gateway, cognito, dynamodb, aurora-serverless, elasticache,
+          cloudwatch-alarms, budgets, edge-location]
+  options:
+    - id: static-at-the-edge
+      name: "S3 and CloudFront, with Lambda for the parts that move"
+      verdict: best
+      nodes: [route53, cloudfront, s3, acm, waf, api-gateway, lambda, dynamodb, edge-location]
+      why: >-
+        Pages, images and scripts are built ahead of time into a private bucket and served from
+        hundreds of edge locations. A spike is absorbed by a cache that was already there, so
+        there is no capacity to scale and nothing to fall over. Only the genuinely dynamic calls
+        reach an API, and those run per request on Lambda against DynamoDB on-demand.
+      cost: "Cents a day at rest; the peak is paid in CloudFront data transfer and requests."
+      watch:
+        - "Everything cacheable has to be genuinely cacheable: no per-user markup on a shared URL."
+        - "The certificate for CloudFront must be issued in us-east-1, not in your own region."
+        - "Invalidations are charged beyond the free monthly allowance -- version filenames instead."
+    - id: serverless-api
+      name: "API Gateway, Lambda and DynamoDB on-demand"
+      verdict: works
+      nodes: [route53, api-gateway, lambda, dynamodb, cognito, cloudfront, waf]
+      why: >-
+        The right answer when the pages really are per-user and cannot be cached. Concurrency
+        rises with the traffic and falls back to nothing, and there is still no server.
+      cost: "Per request and per millisecond; zero between campaigns."
+      watch:
+        - "Cold starts show up at the start of a spike. Provisioned concurrency fixes it, and costs while idle."
+        - "Account concurrency is a quota: raise it before the campaign, not during it."
+        - "A relational database behind this needs RDS Proxy, or the connections run out."
+    - id: fargate-autoscaling
+      name: "ALB and ECS on Fargate, scaling on requests per target"
+      verdict: works
+      nodes: [route53, cloudfront, alb, ecs, fargate, aurora-serverless, elasticache, cloudwatch-alarms, acm, waf]
+      why: >-
+        The pragmatic answer for an application that already exists as a container and is not
+        going to be rewritten. Target tracking on requests per target adds tasks within a minute
+        or two, and CloudFront still takes the static load off it.
+      cost: "Per vCPU-second and GB-second of the tasks actually running, with a small baseline."
+      watch:
+        - "Scaling takes a minute or two, so a vertical spike hits a smaller fleet first. Keep a warm baseline."
+        - "The database becomes the bottleneck long before the tasks do."
+    - id: scale-up-beforehand
+      name: "A bigger instance, scaled up before each campaign"
+      verdict: avoid
+      nodes: [ec2, alb, auto-scaling]
+      why: >-
+        It works, right up to the campaign nobody told you about. It is the answer that turns an
+        elasticity problem into a calendar problem and a permanent bill.
+      cost: "Paid at the peak size for the whole month, whether the peak happens or not."
+      watch:
+        - "Someone has to know the date. The spike that hurts is always the one that was not planned."
+        - "Vertical scaling needs a restart, so the change itself is an outage."
+        - "A single large instance is still one Availability Zone's worth of risk."
+  teaches: >-
+    Spiky traffic is a caching question before it is a scaling question. Whatever can be served
+    from the edge never needs capacity at all, and what is left is small enough to pay per request.
+
+- id: relational-ha-and-reports
+  title: "The database must survive a zone failure, and the reports are killing it"
+  exam: [saa]
+  scenario: >-
+    One PostgreSQL instance runs an application and, every morning, a reporting job that takes
+    the whole thing down to a crawl. The business wants to be told that a data centre failure
+    will not lose the data, and the morning slowdown has to stop.
+  asks:
+    - "Survive the loss of one Availability Zone with no data loss"
+    - "Read-heavy reporting must not affect the application"
+    - "Failover must not need a person"
+  nodes: [rds, rds-multi-az, read-replica, aurora, aurora-serverless, elasticache, rds-proxy,
+          az, multi-az, aws-backup, secrets-manager, cloudwatch-alarms]
+  options:
+    - id: multiaz-plus-replica
+      name: "Multi-AZ for the failover, a read replica for the reports"
+      verdict: best
+      nodes: [rds, rds-multi-az, read-replica, az, multi-az, cloudwatch-alarms, aws-backup]
+      why: >-
+        These are two different requirements and they need two different features. Multi-AZ puts
+        a synchronous standby in another zone and fails over on its own, with no data loss and no
+        read capacity. A read replica takes the reporting query, lags a little, and nobody cares
+        because a report is allowed to be a few seconds stale.
+      cost: "Roughly double for the standby, plus one more instance for the replica."
+      watch:
+        - "The standby serves nothing. Pointing reports at it is not possible, and that is the point."
+        - "The application has to send reads to the replica endpoint: this is a code change too."
+    - id: aurora-cluster
+      name: "Aurora with a reader endpoint"
+      verdict: works
+      nodes: [aurora, read-replica, rds-proxy, az, multi-az, aws-backup]
+      why: >-
+        One cluster does both jobs: storage already spans three zones with six copies, and the
+        reader endpoint load-balances reports across replicas that are promotable in seconds.
+        The better answer if you are willing to move engines.
+      cost: "Per instance plus per I/O, usually cheaper per transaction at scale."
+      watch:
+        - "It is a migration, not a setting: test the engine version and the extensions first."
+    - id: cache-the-reads
+      name: "ElastiCache in front of the existing instance"
+      verdict: works
+      nodes: [elasticache, rds, cloudwatch-alarms]
+      why: >-
+        The cheapest way to take read load off a database is to stop asking it the same question
+        twice. Worth doing as well as the above, never instead of it.
+      cost: "One small cache node."
+      watch:
+        - "It does nothing for availability. A zone failure still loses the database."
+        - "Invalidation is now your problem, and a stale report is harder to notice than a slow one."
+    - id: replicas-only
+      name: "Two read replicas and no Multi-AZ"
+      verdict: avoid
+      nodes: [read-replica, rds]
+      why: >-
+        The classic wrong answer, because replicas look like redundancy. They are asynchronous,
+        they do not fail over, and promoting one is a manual decision taken during an incident.
+      watch:
+        - "Promotion is manual and takes minutes you will not have."
+        - "Asynchronous replication means the writes in flight are gone."
+  teaches: >-
+    Multi-AZ buys availability; read replicas buy read capacity. They are not alternatives, and
+    an exam question that mentions both requirements wants both features.
+
+- id: nat-bill-for-s3
+  title: "Private workers pull terabytes from S3 and the NAT bill is enormous"
+  exam: [saa, sap]
+  scenario: >-
+    A fleet in private subnets reads forty terabytes a month out of S3 and writes results back.
+    Everything works. The line item for NAT Gateway data processing is larger than the compute.
+  asks:
+    - "Private instances must stay private"
+    - "Traffic to AWS services must not be paid for twice"
+    - "Nothing should leave the AWS network"
+  nodes: [vpc, subnet, route-table, nat-gateway, igw, vpc-endpoint, privatelink, s3, dynamodb,
+          resource-policy, cost-explorer, flow-logs, ecr, systems-manager, ec2]
+  options:
+    - id: gateway-endpoint
+      name: "A gateway VPC endpoint for S3 and DynamoDB"
+      verdict: best
+      nodes: [vpc-endpoint, route-table, s3, dynamodb, resource-policy, vpc]
+      why: >-
+        A gateway endpoint adds a prefix-list route so S3 and DynamoDB traffic leaves through the
+        endpoint instead of the NAT Gateway. There is no hourly charge and no data processing
+        charge, the traffic never touches the internet, and an endpoint policy plus a bucket
+        policy can then require that path for every request.
+      cost: "Free. The NAT Gateway data processing for this traffic disappears entirely."
+      watch:
+        - "Gateway endpoints exist for S3 and DynamoDB only. Everything else is an interface endpoint."
+        - "Each route table that needs it has to be associated: a missed one silently keeps paying."
+    - id: interface-endpoints
+      name: "Interface endpoints for the other AWS APIs too"
+      verdict: works
+      nodes: [vpc-endpoint, privatelink, ecr, systems-manager, vpc]
+      why: >-
+        The same reasoning for ECR, Systems Manager, Secrets Manager and the rest, which is what
+        finally lets the NAT Gateway be removed rather than merely relieved.
+      cost: "Per endpoint per hour per zone, plus per GB -- cheaper than NAT above a modest volume."
+      watch:
+        - "Charged per zone, so a three-zone VPC pays three times for each endpoint."
+        - "Private DNS has to be enabled, or the SDK keeps resolving the public name."
+    - id: public-subnets
+      name: "Move the workers to public subnets with public IPs"
+      verdict: avoid
+      nodes: [igw, subnet, ec2]
+      why: >-
+        It does remove the NAT charge, by removing the thing the NAT was protecting. Every worker
+        becomes directly addressable from the internet and a security group is the only thing left.
+      watch:
+        - "An inbound misconfiguration is now reachable from everywhere, not from nowhere."
+        - "Public IPv4 addresses are charged per hour each since 2024, so the saving is smaller than it looks."
+        - "Most compliance baselines simply forbid it."
+  teaches: >-
+    Any sentence containing "private subnet" and "S3" is a VPC endpoint question. Gateway
+    endpoints are free; a NAT Gateway charges for every gigabyte that could have used one.
+
+- id: cross-region-dr
+  title: "Fifteen minutes of downtime, one minute of data loss, in another region"
+  exam: [sap]
+  scenario: >-
+    A regulated workload on Aurora and ECS has been given an RTO of fifteen minutes and an RPO
+    of sixty seconds, in a second region. Nobody will fund a second production estate running at
+    full size all year.
+  asks:
+    - "RTO 15 minutes, RPO 60 seconds, cross-region"
+    - "Recovery must be rehearsed, not theoretical"
+    - "The second region must not cost what the first one does"
+  nodes: [multi-region, rto-rpo, warm-standby, pilot-light, backup-restore, active-active,
+          aurora-global, global-tables, s3-replication, route53-failover, route53,
+          global-accelerator, cloudformation, stacksets, aws-backup, fis, ecs, auto-scaling,
+          fault-isolation]
+  options:
+    - id: warm-standby
+      name: "Warm standby: Aurora Global Database and a small stack, promoted on failover"
+      verdict: best
+      nodes: [warm-standby, aurora-global, s3-replication, route53-failover, route53, ecs,
+              auto-scaling, cloudformation, stacksets, fis, multi-region]
+      why: >-
+        An Aurora global database replicates in well under a second, which answers the RPO
+        outright, and promotes in about a minute. A complete but minimal copy of the application
+        runs in the second region taking no traffic, so failover is a promotion, a scale-up and a
+        Route 53 health check flipping -- comfortably inside fifteen minutes, and testable.
+      cost: "Secondary database instances plus a small always-on fleet: a fraction of production."
+      watch:
+        - "Scale-up on failover has to be tested, including whether the quotas in the second region allow it."
+        - "Every template has to be deployable in both regions: StackSets, not a console."
+        - "Rehearse it with Fault Injection Service, or it is a document rather than a plan."
+    - id: pilot-light
+      name: "Pilot light: data replicating, compute switched off"
+      verdict: works
+      nodes: [pilot-light, aurora-global, s3-replication, route53-failover, cloudformation, auto-scaling]
+      why: >-
+        Cheaper, and still meets the RPO. It meets a fifteen-minute RTO only if launching the
+        whole application really does take minutes, which is an assumption to measure, not to make.
+      cost: "Replication and storage, almost no compute."
+      watch:
+        - "Cold start of a whole stack is the risk: image pulls, migrations, warm caches."
+    - id: active-active
+      name: "Active/active in both regions"
+      verdict: works
+      nodes: [active-active, global-tables, route53, global-accelerator, multi-region, fault-isolation]
+      why: >-
+        Overshoots the requirement, and is the right answer when the RTO is near zero. It needs
+        data that tolerates multi-writer conflicts, which usually means DynamoDB global tables
+        rather than a relational engine.
+      cost: "Two production estates, and the engineering to keep them consistent."
+      watch:
+        - "Write conflicts become an application problem the moment both regions accept writes."
+    - id: backup-restore
+      name: "Cross-region backups, restored when needed"
+      verdict: avoid
+      nodes: [backup-restore, aws-backup, s3-replication]
+      why: >-
+        The cheapest strategy and the wrong one here: a restore of a large database is hours, and
+        the last snapshot is older than sixty seconds by definition.
+      watch:
+        - "RPO is the snapshot interval, which will not be one minute."
+        - "RTO is a restore plus a deploy, measured in hours."
+  teaches: >-
+    Read the RTO and the RPO first and the four strategies become a lookup table. Nothing else in
+    the scenario changes which row you are on.
+
+- id: lambda-too-many-connections
+  title: "The serverless API dies with \"too many connections\""
+  exam: [saa, sap]
+  scenario: >-
+    An API Gateway and Lambda application talks to PostgreSQL on RDS. Under load it starts
+    failing, and the database reports that the connection limit is exhausted. The functions
+    themselves are fine.
+  asks:
+    - "Thousands of concurrent functions, one database with a finite connection limit"
+    - "No rewrite of the data layer"
+    - "Credentials must not be held by the function"
+  nodes: [lambda, api-gateway, rds, rds-proxy, aurora-serverless, secrets-manager, sqs,
+          iam-role, vpc, cloudwatch-alarms, dynamodb]
+  options:
+    - id: rds-proxy
+      name: "RDS Proxy between the functions and the database"
+      verdict: best
+      nodes: [rds-proxy, lambda, rds, secrets-manager, iam-role, vpc]
+      why: >-
+        The proxy keeps a warm pool of database connections and multiplexes thousands of client
+        connections onto a few of them. It is a configuration change and an endpoint change, it
+        holds the credential in Secrets Manager so the function authenticates with IAM, and it
+        shortens failover time as a side effect.
+      cost: "Per vCPU of the database instance, per hour."
+      watch:
+        - "Pinning: a session-level feature such as a temporary table ties a client to a connection and undoes the pooling."
+        - "The proxy lives in the VPC, so the function has to be in the VPC too."
+    - id: aurora-data-api
+      name: "Aurora Serverless v2 with the Data API"
+      verdict: works
+      nodes: [aurora-serverless, lambda, secrets-manager, iam-role]
+      why: >-
+        The Data API is an HTTPS endpoint, so there are no connections to exhaust and the function
+        does not need to be in a VPC at all. A larger change, and the right one for a new build.
+      cost: "Per ACU-second; scales down to near nothing between bursts."
+      watch:
+        - "Different driver and different semantics -- this is a rewrite of the data layer."
+    - id: queue-the-writes
+      name: "An SQS queue in front of the writes"
+      verdict: works
+      nodes: [sqs, lambda, rds, cloudwatch-alarms]
+      why: >-
+        Decouples the spike from the database: the API accepts and enqueues, and a consumer with
+        reserved concurrency writes at a rate the database can take. The answer when the writes
+        can be asynchronous.
+      cost: "Per million requests, effectively nothing."
+      watch:
+        - "The response is now an acknowledgement, not a result: the client has to cope with that."
+    - id: raise-max-connections
+      name: "Raise max_connections and the instance size"
+      verdict: avoid
+      nodes: [rds]
+      why: >-
+        Buys a little headroom and spends it on memory, because every connection costs memory on
+        the server. It moves the cliff rather than removing it.
+      watch:
+        - "Each connection reserves memory, so a high limit on a small instance trades one failure for another."
+        - "Lambda concurrency can grow faster than any instance size can follow."
+  teaches: >-
+    Lambda scales by creating more copies of itself, and a relational database counts
+    connections. Any question that puts those two sentences together is asking for RDS Proxy.
+
+- id: five-teams-one-account
+  title: "Five teams, one account, and nobody can be trusted with admin"
+  exam: [sap]
+  scenario: >-
+    Everything runs in a single account with IAM users and shared keys. Teams keep tripping over
+    each other's resources and limits, the audit asked who deleted a bucket last month, and no
+    one can answer.
+  asks:
+    - "Blast radius per team, including quotas"
+    - "No long-lived credentials for people"
+    - "Guardrails that cannot be removed by the team they apply to"
+    - "One audit trail nobody can delete"
+  nodes: [organizations, scp, control-tower, iam-identity-center, ram, service-catalog, stacksets,
+          cloudtrail, aws-config, security-hub, guardduty, iam-role, iam-policy, sts,
+          permission-boundary, consolidated-billing, cost-explorer, tagging, service-quotas]
+  options:
+    - id: control-tower
+      name: "Control Tower, an OU per environment, Identity Center for people"
+      verdict: best
+      nodes: [control-tower, organizations, scp, iam-identity-center, cloudtrail, aws-config,
+              security-hub, guardduty, iam-role, sts, stacksets, consolidated-billing]
+      why: >-
+        One account per team and environment makes the blast radius, the quotas and the bill
+        separate by construction. Control Tower sets up the organization, the log archive and
+        audit accounts and the mandatory guardrails; SCPs on the OU cap what the team's own
+        administrators can grant; and people sign in once at Identity Center and assume a
+        short-lived role, so no access key exists to leak.
+      cost: "Control Tower itself is free; you pay for CloudTrail, Config and GuardDuty."
+      watch:
+        - "Accounts are cheap but not free of work: baseline networking and tooling need StackSets."
+        - "SCPs never grant anything -- a permission still has to exist in IAM as well."
+        - "Moving existing workloads between accounts is the real project."
+    - id: organizations-by-hand
+      name: "Organizations and StackSets without Control Tower"
+      verdict: works
+      nodes: [organizations, scp, stacksets, cloudtrail, aws-config, iam-identity-center, ram]
+      why: >-
+        The same structure, assembled yourself. Reasonable when the landing zone has to look
+        unlike the opinionated one, or when Control Tower's guardrails clash with an existing estate.
+      cost: "The same services, more of your time."
+      watch:
+        - "You now own the drift: the baseline is only as good as the StackSets behind it."
+    - id: iam-users-per-team
+      name: "Stay in one account, with an IAM user and a boundary per team"
+      verdict: avoid
+      nodes: [iam-policy, permission-boundary, tagging]
+      why: >-
+        Tag-based policies and permission boundaries can separate teams on paper, but the account
+        is still one quota pool, one bill and one blast radius, and one missing condition in one
+        policy crosses all of it.
+      watch:
+        - "Service quotas are per account: one team's load test throttles everyone."
+        - "Long-lived access keys are the single most common cause of a compromise."
+        - "A deletion in a shared account is a shared incident."
+  teaches: >-
+    The account is the only hard boundary AWS has. Any question about blast radius, limits or
+    separating teams is answered with more accounts, and Organizations is what makes that bearable.
+
+- id: upload-triggers-long-job
+  title: "An upload starts a ten-minute conversion, and five thousand arrive at once"
+  exam: [saa]
+  scenario: >-
+    Users upload video. Each file needs about ten minutes of CPU-bound processing. Most hours
+    nothing arrives; occasionally five thousand files land within a few minutes, and none of
+    them may be lost.
+  asks:
+    - "Bursty arrival, long per-item processing"
+    - "No item may be dropped, and failures must be retried"
+    - "Nothing paid for while idle"
+  nodes: [s3, eventbridge, sqs, sns, lambda, step-functions, batch, ecs, fargate, spot,
+          auto-scaling, cloudwatch-alarms, dynamodb, firehose]
+  options:
+    - id: queue-and-workers
+      name: "S3 event to SQS, workers on Fargate or Batch scaling on queue depth"
+      verdict: best
+      nodes: [s3, sqs, ecs, fargate, batch, spot, auto-scaling, cloudwatch-alarms, dynamodb]
+      why: >-
+        The queue absorbs five thousand arrivals without anything else noticing, and it holds each
+        message until a worker finishes, with a dead-letter queue for the ones that never do. The
+        worker fleet scales on backlog per task, runs for as long as the job takes, and on Spot it
+        is a fraction of the price because every job is retryable by definition.
+      cost: "Per task-second while draining the queue; nothing while it is empty."
+      watch:
+        - "The visibility timeout must exceed the processing time, or the job is handed out twice."
+        - "Scaling on queue depth per worker, not on CPU: a backlog is the signal, CPU is a symptom."
+    - id: step-functions
+      name: "Step Functions orchestrating chunked Lambda steps"
+      verdict: works
+      nodes: [s3, eventbridge, step-functions, lambda, dynamodb]
+      why: >-
+        If the work can be split into pieces well under fifteen minutes, a state machine gives
+        retries, parallel fan-out with Map and a visible execution history for free.
+      cost: "Per state transition plus per function millisecond."
+      watch:
+        - "Splitting CPU-bound work into chunks is sometimes impossible, and always more code."
+    - id: lambda-alone
+      name: "S3 event straight to Lambda"
+      verdict: avoid
+      nodes: [s3, lambda]
+      why: >-
+        The obvious wiring, and it cannot work: a function stops at fifteen minutes, and a
+        ten-minute job leaves no margin for a slow file.
+      watch:
+        - "The fifteen-minute ceiling is hard, and a timeout loses the item unless something else is holding it."
+        - "Asynchronous invocation retries twice and then drops the event if there is no dead-letter target."
+        - "Five thousand concurrent invocations will hit the account concurrency quota."
+  teaches: >-
+    Burst plus long-running means a queue plus workers. Lambda is for work that finishes in
+    minutes; anything longer belongs on Fargate or Batch, with a queue in front holding the item.
+
+- id: windows-smb-share
+  title: "A Windows application needs one SMB share from several servers"
+  exam: [saa]
+  scenario: >-
+    A lifted-and-shifted .NET application runs on four Windows instances behind a load balancer
+    and expects a shared drive, authenticated against Active Directory, with Windows ACLs and
+    volume shadow copies.
+  asks:
+    - "SMB, from several instances at once"
+    - "Active Directory authentication and Windows ACLs"
+    - "Managed: no file server to patch"
+  nodes: [fsx, efs, ebs, directory-service, s3, storage-gateway, aws-backup, ec2, multi-az]
+  options:
+    - id: fsx-windows
+      name: "FSx for Windows File Server, Multi-AZ"
+      verdict: best
+      nodes: [fsx, directory-service, aws-backup, multi-az, ec2]
+      why: >-
+        It is a real Windows file server: native SMB, Active Directory joined, Windows ACLs, DFS
+        namespaces and shadow copies, managed and available across two zones. Every item on the
+        requirement list is a feature rather than a workaround.
+      cost: "Per GB of provisioned capacity and throughput; Multi-AZ roughly doubles it."
+      watch:
+        - "It must join a directory, so Directory Service or a trust is a prerequisite, not an extra."
+        - "Capacity and throughput are provisioned, so they need sizing rather than discovering."
+    - id: fsx-ontap
+      name: "FSx for NetApp ONTAP"
+      verdict: works
+      nodes: [fsx, directory-service, multi-az]
+      why: >-
+        Right when the requirement names SMB and NFS at once, or asks for snapshots, cloning,
+        tiering and replication that the team already knows from ONTAP.
+      cost: "Higher, with tiering to cold storage to bring it back down."
+      watch:
+        - "More capability than this application asks for, and more to learn."
+    - id: efs-share
+      name: "EFS mounted on the Windows instances"
+      verdict: avoid
+      nodes: [efs, ec2]
+      why: >-
+        EFS is NFS, and Windows does not support it. There is no supported way to make this the
+        shared drive the application expects.
+      watch:
+        - "EFS has no SMB protocol and no Windows support at all."
+        - "Even through a translation layer there are no Windows ACLs and no AD identities."
+    - id: ebs-shared
+      name: "One EBS volume attached to all four instances"
+      verdict: avoid
+      nodes: [ebs, ec2]
+      why: >-
+        An EBS volume belongs to one instance in one zone. Multi-Attach exists for io2 and
+        needs a cluster-aware file system, which NTFS is not.
+      watch:
+        - "Attaching NTFS to several writers corrupts it."
+        - "One volume is also one Availability Zone, so it is a single point of failure."
+  teaches: >-
+    The protocol in the question picks the service. SMB and Windows means FSx; NFS and Linux
+    means EFS; one instance and a block device means EBS.
+
+- id: auditor-wants-everything
+  title: "The auditor wants every change, everywhere, and proof nobody deleted it"
+  exam: [sap]
+  scenario: >-
+    Thirty accounts. The auditor wants to know who made every API call, what each resource looked
+    like before and after each change, and evidence that the record itself cannot be tampered
+    with -- including by an account administrator.
+  asks:
+    - "Every API call in every account, including new ones"
+    - "Configuration history, not just events"
+    - "Logs that an administrator cannot delete"
+    - "One place to see compliance"
+  nodes: [cloudtrail, aws-config, security-hub, guardduty, organizations, scp, s3, kms,
+          control-tower, iam-access-analyzer, detective, cloudwatch-logs, athena, macie]
+  options:
+    - id: org-trail-locked-bucket
+      name: "Organization trail into a locked bucket in a separate account, Config aggregated, Security Hub on top"
+      verdict: best
+      nodes: [cloudtrail, s3, kms, organizations, scp, aws-config, security-hub, athena, control-tower]
+      why: >-
+        An organization trail covers every member account, including the ones created next month,
+        and cannot be switched off from inside them. The bucket lives in a log archive account no
+        workload administrator can reach, with Object Lock for immutability and an SCP forbidding
+        anyone from touching the trail. Config supplies the before-and-after that CloudTrail does
+        not, aggregated into the audit account, and Security Hub scores all of it against a standard.
+      cost: "Management events are cheap; Config and data events are the real line items."
+      watch:
+        - "S3 and Lambda data events are off by default and are usually what the auditor actually wants."
+        - "Config recording is charged per configuration item -- scope it before enabling it everywhere."
+        - "Athena over the trail bucket is how the questions get answered; partition it or the queries cost more than the storage."
+    - id: per-account-trails
+      name: "A trail and a Config recorder in each account"
+      verdict: works
+      nodes: [cloudtrail, aws-config, s3, security-hub]
+      why: >-
+        Equivalent coverage if nothing is ever missed. Reasonable only where there is no
+        organization to hang an organization trail on.
+      watch:
+        - "A new account arrives with no trail, and nobody notices until the audit."
+        - "A local administrator can stop a local trail."
+    - id: logs-only
+      name: "CloudWatch Logs retention and nothing else"
+      verdict: avoid
+      nodes: [cloudwatch-logs]
+      why: >-
+        Application logs are not an audit trail: they do not record API calls, they do not record
+        configuration, and the account that writes them can delete them.
+      watch:
+        - "No record of control-plane calls at all."
+        - "Deletable by whoever has access to the log group -- which defeats the requirement."
+  teaches: >-
+    CloudTrail answers "who did it", Config answers "what did it look like", and immutability
+    comes from putting the bucket in another account with Object Lock and an SCP over it.
+
+- id: global-latency
+  title: "The API is in Ireland and the users in Singapore are complaining"
+  exam: [saa, sap]
+  scenario: >-
+    A single-region API in eu-west-1 serves customers in Europe, North America and South East
+    Asia. Europe is fine. Asia sees several hundred milliseconds on every call, most of it
+    spent crossing the planet repeatedly.
+  asks:
+    - "Reduce latency for users far from the region"
+    - "Without running the application in every region yet"
+    - "Keep one place to deploy to"
+  nodes: [cloudfront, global-accelerator, edge-location, route53, api-gateway, alb, acm, waf,
+          multi-region, active-active, global-tables, aurora-global, elasticache, dynamodb]
+  options:
+    - id: cloudfront-in-front
+      name: "CloudFront in front of the API, caching what it can"
+      verdict: best
+      nodes: [cloudfront, edge-location, route53, api-gateway, alb, acm, waf]
+      why: >-
+        Most of the loss is the TLS handshake and the TCP round trips, not the bytes. Terminating
+        both at a Singapore edge location and crossing the remaining distance once, on a warm
+        connection over the AWS backbone, removes most of the latency without moving anything.
+        Whatever is cacheable then never crosses at all.
+      cost: "Per GB and per request at the edge; often offset by less data transfer from the origin."
+      watch:
+        - "Set the cache key deliberately: forwarding every header and cookie turns a CDN into a very slow proxy."
+        - "Uncacheable, chatty APIs still pay one round trip -- the fix for those is fewer calls."
+    - id: global-accelerator
+      name: "Global Accelerator with the region as its endpoint"
+      verdict: works
+      nodes: [global-accelerator, edge-location, alb, route53]
+      why: >-
+        The same backbone advantage for traffic that is not HTTP, or where two static anycast IP
+        addresses are a requirement. No caching, so the gain is the network path only.
+      cost: "A fixed hourly fee plus per GB."
+      watch:
+        - "It will not cache anything, so a cacheable workload leaves most of the win on the table."
+    - id: second-region
+      name: "A second region in Asia, active/active"
+      verdict: works
+      nodes: [multi-region, active-active, global-tables, aurora-global, route53, elasticache]
+      why: >-
+        The real answer once the application is chatty, write-heavy or legally required to keep
+        data in region. It is also a different project: replicated data and two estates to operate.
+      cost: "A second production estate."
+      watch:
+        - "Latency returns the moment a request has to reach the primary region to write."
+    - id: bigger-instance
+      name: "A larger instance in Ireland"
+      verdict: avoid
+      nodes: [alb, api-gateway]
+      why: >-
+        The latency is distance, not load. A faster server shortens the small part of the budget
+        that was never the problem.
+      watch:
+        - "Speed of light is not a quota you can raise."
+        - "It costs more every hour and changes nothing for the users who complained."
+  teaches: >-
+    Distance is paid in round trips. Terminate the connection at the edge first, and only move the
+    application closer when the remaining cost is the request itself rather than the handshake.

@@ -1,0 +1,35 @@
+---
+id: permission-boundary
+title: "Permission boundaries"
+type: service
+domain: identity
+summary: "A ceiling on what an identity can ever be granted, so you can delegate IAM to a team without delegating the whole account."
+monogram: PB
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: iam-policy
+    text: "The effective permission is the overlap of the boundary and the policy, never the sum."
+  - to: scp
+    text: "Same mechanism at a different scale: SCPs bound an account, boundaries bound a principal."
+reviewed: 2026-11-05
+---
+
+A boundary is a ceiling, not a grant. You attach a policy to a user or a role as its permission
+boundary, and from then on that principal's effective permissions are the intersection of its
+own policies and the boundary. Giving it `AdministratorAccess` changes nothing if the boundary
+only allows S3 and CloudWatch.
+
+The reason it exists is delegation. In a large organization, platform teams cannot be the
+bottleneck for every IAM change, but letting a developer create roles is letting them create a
+role with `*:*` and assume it. The pattern that solves it: grant `iam:CreateRole` and
+`iam:AttachRolePolicy` on the condition `iam:PermissionsBoundary` equals your boundary policy's
+ARN, and deny `iam:DeleteRolePermissionsBoundary`. Now the developer can create and manage roles
+all day, and every role they create is born under the same ceiling they are.
+
+The distinction from an SCP is the scope. An SCP caps an entire account and is attached in
+Organizations; a boundary caps one principal and is attached in IAM. They stack: a request has
+to be allowed by the identity policy, the boundary, the SCP and, for cross-account, the resource
+policy. Boundaries do not apply to service-linked roles, and they never grant anything on their
+own -- a principal with a boundary and no identity policy can do nothing at all.
