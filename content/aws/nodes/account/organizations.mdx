@@ -43,4 +43,30 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-One management account with member accounts underneath. The account is the unit of blast radius, of billing and of policy.
+An AWS account is the only hard boundary the platform has. Not a VPC, not a tag, not an IAM
+policy -- an account. It is the boundary for blast radius, for service quotas, for billing, for
+most compliance scoping, and for the default denial of everything outside it. Organizations is
+what makes running many of them practical.
+
+The structure is a **management account** at the root, **organizational units** forming a tree,
+and member accounts in them. Policies attach to OUs and are inherited, so the OU design is the
+policy design. A common shape: Security (log archive, audit), Infrastructure (networking, shared
+services), Workloads (Prod, Non-Prod), Sandbox, and Suspended for accounts on their way out.
+
+The management account should be empty. It is exempt from SCPs, it owns the billing and the
+organization itself, and a compromise of it is a compromise of everything. Run nothing in it,
+restrict it to a tiny number of people, and delegate administration of GuardDuty, Security Hub,
+Config, IAM Access Analyzer, Backup and the rest to purpose-built accounts -- all of those
+support a **delegated administrator** precisely so the management account does not become an
+operations account by accident.
+
+What the organization gives you beyond structure: **consolidated billing** with volume tiers and
+Savings Plans pooled across every account; **service control policies** as guardrails;
+**resource sharing** through RAM so one VPC or Transit Gateway serves many accounts;
+**organization-wide** CloudTrail, Config, GuardDuty, Security Hub and Backup policies that cover
+accounts created tomorrow; and **StackSets** for deploying a baseline everywhere.
+
+The counter-argument people raise is that accounts add overhead. They do -- which is what
+Control Tower, Account Factory and StackSets exist to remove. The overhead of *not* separating
+is a single quota pool, a single bill nobody can attribute, and one mistake that reaches
+everything.

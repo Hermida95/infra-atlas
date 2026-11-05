@@ -16,4 +16,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Transitions objects between classes and expires them by age or prefix, including old versions and incomplete multipart uploads.
+Nobody moves objects between classes by hand. A lifecycle configuration is a set of rules on the
+bucket that transition and expire objects by age, and it is how archival actually happens.
+
+A rule has a **filter** -- a prefix, a tag, an object size range, or nothing for the whole
+bucket -- and then actions. **Transitions** move an object to another storage class after N
+days. **Expiration** deletes it. There are separate actions for **noncurrent versions** in a
+versioned bucket, which is where most forgotten spend lives, and for **incomplete multipart
+uploads**, which is the one-line rule everyone should have: a failed large upload leaves parts
+that are stored and billed and that no console listing shows.
+
+A typical policy: Standard for 30 days, Standard-IA to 90, Glacier Flexible to a year, Deep
+Archive after that, expire at seven years. Noncurrent versions to IA after 30 days and deleted
+after 90. Incomplete multipart uploads aborted after 7 days.
+
+Three things to know before relying on it. Transitions **cost money per thousand objects**, so
+moving millions of tiny objects can cost more than the storage it saves -- another argument for
+Intelligent-Tiering on small objects. Transitions only go **down** the cost ladder; bringing an
+object back means a restore or a copy. And the minimum duration charges still apply: an object
+transitioned to Glacier and deleted a week later is billed for 90 days.
+
+Lifecycle is also the enforcement half of a data retention policy. **Object Lock** with a
+retention period is the other half, and the two together are what stops a backup being deleted
+by an attacker or by a lifecycle rule nobody reviewed.

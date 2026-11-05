@@ -18,4 +18,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Queues thousands of jobs with dependencies and retries onto capacity it provisions and tears down, usually Spot, on Fargate or EC2.
+Batch is a job queue and a scheduler for containerised work that runs to completion. You submit
+jobs; it decides what capacity is needed, launches it, runs them, and tears the capacity down.
+The reason it exists is that this is precisely the workload Spot is best at, and doing it by
+hand is a lot of code.
+
+Four objects. A **compute environment** is where jobs can run -- managed Fargate, managed EC2,
+or EC2 you manage -- with the instance types and the Spot or on-demand mix. A **job queue**
+feeds one or more compute environments in priority order, which is how you say "try Spot first,
+fall back to on-demand". A **job definition** is the container, vCPU, memory, role and retry
+policy. A **job** is one submission, and it can declare dependencies on others, so a pipeline is
+expressible without an orchestrator.
+
+The features that matter in practice: **array jobs** for ten thousand near-identical tasks
+indexed by a variable, **retry strategies** that can specifically retry a Spot interruption
+without burning an attempt on a genuine failure, **fair-share scheduling** so one team's
+submission does not starve everyone else, and **multi-node parallel** jobs for tightly coupled
+MPI work.
+
+Where it sits against the alternatives: Lambda for work that finishes in under fifteen minutes,
+Batch for long CPU-bound jobs where cost matters, Step Functions to orchestrate a pipeline whose
+heavy steps are Batch jobs, and EMR when the job is Spark or Hive rather than a container of
+your own.

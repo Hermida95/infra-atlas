@@ -16,4 +16,22 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Managed Microsoft Active Directory, a one-way trust to the forest you already run, or a simple directory for small estates.
+Three products with one name, and the exam difference is who runs the domain controllers.
+
+**AWS Managed Microsoft AD** is real Active Directory, running on domain controllers AWS patches
+and replicates across two zones. Group Policy works, schema extensions work, and you can build a
+**trust** to the forest you already run on-premises -- usually one-way, so your corporate forest
+stays authoritative and AWS resources trust it without AWS being able to administer it. **AD
+Connector** is a proxy with no directory of its own: it forwards authentication to your existing
+domain controllers, so nothing is stored in AWS, and if the link is down nothing authenticates.
+**Simple AD** is a Samba-based stand-in for small estates that need basic LDAP and nothing
+Microsoft-specific.
+
+What actually needs one: FSx for Windows File Server joins a domain, RDS for SQL Server supports
+Windows authentication through it, EC2 Windows instances domain-join as they would anywhere, and
+WorkSpaces requires one. IAM Identity Center can use it as an identity source, which is how a
+workforce signs in to the AWS console with the credentials they already have.
+
+The decision is almost always between Managed Microsoft AD with a trust, and AD Connector.
+Choose the trust when you want AWS workloads to keep working if the VPN drops, and the connector
+when policy says no directory data may live in AWS.

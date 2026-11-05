@@ -19,4 +19,23 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A container image or a source repository in, an HTTPS URL out, scaling to zero. No load balancer, no cluster and no VPC to design.
+App Runner takes a container image or a source repository and gives back an HTTPS URL. It builds
+(for source), deploys, terminates TLS, provides a domain, autoscales on concurrent requests, and
+scales to zero between them. There is no load balancer, no cluster, no VPC and no scaling policy
+to design.
+
+The scaling model is **concurrency per instance** rather than CPU: set how many simultaneous
+requests one instance should handle and it adds instances past that. Idle instances are billed
+at a reduced rate rather than nothing, so "scales to zero" means close to free, not free.
+
+A **VPC connector** is the piece that makes it usable for real applications: it gives the
+service private access to an RDS database or an ElastiCache cluster while the service itself
+stays publicly reachable. Without one, it has no route into your VPC at all.
+
+Where it fits: a small-to-medium stateless HTTP service that would otherwise need an ALB, a
+cluster and a scaling policy to do the same job. Where it does not: anything non-HTTP, anything
+needing fine control over networking or placement, long-running background work, or a workload
+big enough that the premium over Fargate starts to matter. Against Lambda, the difference is
+that App Runner runs a normal long-lived server process with no 15-minute ceiling and no cold
+start per request; against ECS, it is that you give up the knobs in exchange for not having to
+set them.

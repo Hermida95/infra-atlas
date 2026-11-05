@@ -18,7 +18,53 @@ connects:
     text: "The AWS Load Balancer Controller turns an Ingress into an ALB and a Service into an NLB."
   - to: fargate
     text: "Fargate profiles run selected namespaces with no nodes, usually alongside a managed node group rather than instead of it."
+lead: "A managed control plane and a long list of decisions that are still yours."
+parts:
+  - name: "Control plane"
+    kind: core
+    text: "Managed, multi-AZ, charged per cluster per hour. AWS runs and patches the API server and etcd; you still choose when to upgrade the version."
+  - name: "Node groups"
+    kind: node
+    text: "Managed node groups, self-managed instances, or Fargate profiles. Where the pods actually run, and what you patch."
+  - name: "VPC CNI"
+    kind: bus
+    text: "Every pod gets a real VPC IP address from the subnet. Simple and fast, and the reason clusters run out of addresses."
+  - name: "IRSA and Pod Identity"
+    kind: shell
+    text: "A Kubernetes service account mapped to an IAM role, so a pod has its own AWS identity rather than the node's."
+  - name: "Add-ons"
+    kind: plugin
+    text: "CoreDNS, kube-proxy, the CNI, the EBS and EFS CSI drivers, the AWS Load Balancer Controller. Managed add-ons keep them versioned with the cluster."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-A managed Kubernetes control plane, charged per hour per cluster. You get the API you already know, with the upgrades and add-ons it implies.
+EKS gives you a conformant Kubernetes control plane that AWS runs across three zones, and
+charges roughly $0.10 per hour for it. Everything above the API server is still your problem,
+and that list is longer than people expect: node lifecycle, version upgrades, add-on versions,
+CNI address planning, and the controllers that make Kubernetes objects turn into AWS resources.
+
+**Identity** is the piece to understand first. **IRSA** (IAM Roles for Service Accounts) uses
+the cluster's OIDC provider so a pod with a particular service account can assume a particular
+IAM role -- the pod gets its own credentials instead of inheriting the node's instance profile,
+which would give every pod on the node the same access. **EKS Pod Identity** is the newer and
+simpler form of the same thing, without the OIDC trust policy to maintain.
+
+**Networking** is the second. The VPC CNI gives every pod a routable VPC address, which makes
+security groups and flow logs work normally and makes address exhaustion a real design
+constraint: a node can hold only as many pods as its instance type has ENIs and addresses, and a
+/24 subnet disappears quickly. Plan with large subnets, or enable prefix delegation, or use a
+secondary CIDR for pods.
+
+**Exposure** goes through the **AWS Load Balancer Controller**: an `Ingress` becomes an ALB, a
+`Service` of type LoadBalancer becomes an NLB, and in IP target mode traffic goes straight to
+pod addresses, skipping kube-proxy. Storage goes through CSI drivers -- EBS for `ReadWriteOnce`,
+EFS when several pods need the same volume across zones.
+
+**Upgrades** are the recurring cost. Kubernetes minor versions arrive about three times a year
+and the supported window is finite, so this is a quarterly task forever: upgrade the control
+plane, then the node groups, then the add-ons, checking deprecated APIs each time. Budget for
+it, because an EKS cluster nobody upgrades becomes an EKS cluster nobody can upgrade.
+
+For capacity, **Karpenter** has largely replaced the cluster autoscaler: it provisions right-
+sized nodes directly from pending pods, consolidates underused ones, and handles Spot well.

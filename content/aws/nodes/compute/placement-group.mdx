@@ -16,4 +16,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Cluster for lowest latency within one zone, spread for separate hardware, partition for separate racks. HPC and clustered databases need them.
+A placement group tells EC2 how to position instances relative to each other on the underlying
+hardware, and there are three kinds answering three different questions.
+
+**Cluster** packs instances close together in one Availability Zone, on the same high-bisection
+network, for the lowest latency and highest packet-per-second throughput between them. This is
+for HPC, tightly coupled distributed computation and clustered databases that replicate
+synchronously. The cost is correlated failure -- one zone, close hardware -- and the practical
+catch is capacity: launch the whole group in one request, because adding to it later can fail
+with an insufficient-capacity error even when the type is available elsewhere.
+
+**Spread** does the opposite, placing each instance on distinct underlying hardware with
+separate power and network. Up to seven instances per zone. This is for a small number of
+critical instances that must not fail together -- the members of a quorum, a pair of brokers.
+
+**Partition** sits between them: instances are divided into partitions, each on its own set of
+racks, with up to seven partitions per zone and no limit on instances. The partition number is
+exposed through instance metadata, so distributed systems like HDFS, Cassandra and Kafka can
+place replicas in different partitions and survive a rack. This is the one that scales.
+
+For the exam, the mapping is: lowest network latency means cluster, maximum fault isolation for
+a few instances means spread, and a large distributed data store that is rack-aware means
+partition.

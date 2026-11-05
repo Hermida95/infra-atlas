@@ -16,4 +16,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-One inventory and progress view across the migration services, fed by discovery agents or an imported application list.
+Migration Hub is the inventory and the progress view. It gathers data from **Application
+Discovery Service** -- an agent on each server, or an agentless appliance for VMware -- and
+tracks the status of each application as the migration services do their work.
+
+The discovery data is what turns a plan from a guess into a decision. **Utilisation** across
+CPU, memory, disk and network gives you right-sizing rather than like-for-like, which is usually
+where the first cloud saving is. **Network dependencies** -- who talks to whom, on which ports
+-- define the **move groups**, because applications that talk to each other should move together
+or you are left with chatty traffic crossing a VPN. And the inventory surfaces the servers
+nobody can account for, which is the Retire list.
+
+**Migration Hub Strategy Recommendations** goes a step further and analyses the running
+application -- the runtime, the framework, the database -- to suggest one of the 7 Rs per
+component with an estimated effort. It is a starting point for the conversation, not an answer.
+
+**Refactor Spaces** is the other piece worth knowing by name: it sets up the routing and account
+structure for the **strangler fig** pattern, where new functionality is built as separate
+services in front of a legacy application and traffic is moved route by route, so a monolith is
+replaced incrementally rather than in one cutover.
+
+Progress tracking is the mundane part that matters at scale: with two hundred servers in waves,
+one place showing replication status, cutover readiness and what has already moved is the
+difference between a programme and a spreadsheet.

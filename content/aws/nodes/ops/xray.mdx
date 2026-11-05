@@ -16,4 +16,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Distributed traces across services with a service map and sampling, so a slow request points at the hop that is slow.
+X-Ray traces a request across services. Each service adds a **segment**, nested **subsegments**
+record calls to databases and other services, and a shared **trace id** stitches them into one
+view. The result is a service map with latency and error rates per edge, and the ability to open
+a single slow request and see exactly which hop consumed the time.
+
+That is the question metrics cannot answer. CloudWatch tells you the API is slow; a trace tells
+you it is slow because one DynamoDB query is being made in a loop, or because a downstream
+service's p99 is terrible while its average looks fine.
+
+Getting data in: API Gateway and Lambda have **active tracing** as a checkbox, which is where
+most people start. ECS, EKS and EC2 need the X-Ray daemon or the **ADOT collector** as a
+sidecar, and the application needs the SDK or OpenTelemetry instrumentation to propagate the
+trace header. Anything not instrumented appears as a gap in the map.
+
+**Sampling** is what keeps it affordable: the default records the first request each second plus
+5% of the rest, and sampling rules can raise that for specific paths. **Annotations** are
+indexed key-values you can filter traces by -- customer id, tenant, feature flag -- and
+**metadata** is unindexed detail. Annotating a trace with a tenant id is how "this one customer
+says it is slow" becomes answerable.
+
+It now lives inside the CloudWatch console alongside metrics and logs, which is the point: alarm
+on latency, open the service map, find the hop, read its logs.

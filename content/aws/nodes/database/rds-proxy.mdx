@@ -18,4 +18,29 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A managed connection pool in front of RDS or Aurora that multiplexes thousands of client connections onto a few database ones.
+RDS Proxy is a managed connection pool that sits between clients and an RDS or Aurora database.
+Clients connect to the proxy; the proxy keeps a warm pool of real database connections and
+multiplexes many client connections onto few of them.
+
+The problem it solves is specific and very common: **Lambda scales by creating more copies of
+itself, and a relational database counts connections**. A thousand concurrent functions means a
+thousand connection attempts, each costing memory on the database server, and PostgreSQL in
+particular falls over well before that. Raising `max_connections` moves the cliff and spends
+memory doing it. The proxy removes it.
+
+It also shortens failover. Because the proxy holds the connections, it can detect a failover and
+reconnect to the new writer without the client noticing, cutting perceived failover time by most
+of its duration. And it integrates with **Secrets Manager and IAM authentication**, so the
+function never holds a database password at all -- it authenticates to the proxy with its IAM
+role.
+
+The catch to know is **pinning**. Multiplexing only works while sessions are interchangeable.
+Anything that makes a session stateful -- a temporary table, a session variable, a prepared
+statement outside the supported set, an explicit lock -- pins that client to its backend
+connection for the rest of the session, and the pooling benefit disappears. CloudWatch exposes
+`DatabaseConnectionsCurrentlySessionPinned`, which is the metric to check when the proxy "isn't
+working".
+
+It lives in the VPC, so the function must be in the VPC too; and it costs per vCPU of the
+database instance per hour, which is modest against the alternative of over-provisioning the
+database for connection memory.

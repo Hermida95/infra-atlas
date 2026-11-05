@@ -18,4 +18,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A curated list of CloudFormation products teams may launch, with the permissions attached to the product rather than to the user.
+Service Catalog lets a central team publish a list of approved, parameterised CloudFormation
+templates -- **products** -- that other teams may launch, with the permissions attached to the
+product rather than to the person.
+
+That last clause is the whole mechanism. A **launch constraint** says "run this product using
+this IAM role", so a developer with almost no permissions can provision a compliant RDS instance
+with encryption, backups, Multi-AZ and the right subnet group -- because the role does it, not
+them. They cannot create a database any other way, and they cannot use the role for anything
+else.
+
+Around that: **portfolios** group products and are shared with accounts or OUs; **TagOptions**
+force the tags your cost allocation depends on; **template constraints** limit parameter values,
+so "instance type" is a dropdown of three rather than a free-text field; and **provisioned
+products** are tracked, so the catalogue knows what exists and can update it to a new version.
+
+Where it shows up: Control Tower's **Account Factory** is a Service Catalog product, which is
+the clearest example of the pattern. Beyond that it is the standard answer to "developers need
+to provision infrastructure, but it must be compliant, and they cannot have the permissions to
+build it by hand" -- a Professional-level question that appears regularly.
+
+Its competition today is a well-run internal platform with Terraform modules or CDK constructs
+in a pipeline, which gives the same guardrails with a developer experience teams tend to prefer.
+Service Catalog's advantage is that it works through the console for people who do not write
+infrastructure code, and that the permission model is enforced by AWS rather than by a pipeline.

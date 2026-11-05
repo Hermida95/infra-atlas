@@ -18,4 +18,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Per-account, per-region limits on almost everything. The reason a design that passed a load test stops dead in production.
+Quotas are per-account, per-region limits on almost everything: how many VPCs, how many Elastic
+IPs, how many vCPUs of a given instance family you may run, Lambda concurrency, API rates. Some
+are adjustable on request, some are hard.
+
+They matter because they fail at the worst moment. A design that passes a load test in a
+development account hits a vCPU limit in production; a disaster recovery plan that needs two
+hundred instances in a second region finds the account limited to twenty, because nobody has
+ever launched anything there. Quotas are the most common reason a failover does not happen.
+
+Three habits prevent it. **Check the quotas for the second region** as part of designing for it,
+not during the incident -- a region you have never used has default limits. **Alarm on usage**:
+Service Quotas publishes utilisation metrics to CloudWatch, so an alarm at 80% gives you the
+weeks that an increase request can take. And **request increases in advance** of a launch or a
+migration, because some go to a team rather than being granted automatically.
+
+A quota is also a design tool. They are per account, so splitting workloads across accounts
+splits their limits -- a test fleet in its own account cannot exhaust production's capacity.
+Lambda **reserved concurrency** does the same inside an account, guaranteeing a share to a
+critical function and capping a noisy one.
+
+**Quota request templates** in Organizations apply increases automatically to new accounts,
+which is the piece that keeps a growing estate from re-learning this every time.

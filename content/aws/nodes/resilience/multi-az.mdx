@@ -20,4 +20,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Two or more zones for everything, stateless and stateful alike. The cheapest availability you will ever buy, and the baseline every answer assumes.
+Multi-AZ is the baseline, and it is cheap enough that there is rarely an argument. Availability
+Zones are physically separate data centres with independent power, cooling and networking, far
+enough apart to fail independently and close enough -- single-digit milliseconds -- to replicate
+synchronously. That combination is what makes high availability on AWS a configuration rather
+than a project.
+
+The checklist, by layer. **Subnets** in at least two zones, symmetric in size. **Load
+balancers** across those subnets, with cross-zone balancing so one zone's loss becomes a
+capacity question rather than an outage. **Auto Scaling groups** spanning the same zones, with
+enough headroom that losing a third of capacity does not take the rest down. **Databases** with
+Multi-AZ enabled -- RDS with a synchronous standby, Aurora with storage already across three
+zones. **NAT Gateways** one per zone, with each private subnet routing to its own, or a zone
+failure takes out the others' egress. **EFS** with mount targets in every zone, or S3 and
+DynamoDB which are regional and already span zones for you.
+
+Two details that undo the rest. **Instance-store data and EBS volumes are zonal**, so anything
+stateful on them is a single-zone dependency however many zones the fleet spans. And capacity:
+after losing a zone, the survivors must be able to absorb the load -- if the group is at 90%
+utilisation across three zones, two zones cannot carry it, and the Auto Scaling group may not be
+able to launch replacements fast enough or at all if the region is under pressure.
+
+What Multi-AZ does **not** protect against: a region-wide service problem, a bad deployment, a
+deleted database, a corrupted record or a compromised account. Those are what cross-region
+strategies, backups and immutable vaults are for, and conflating the two is the most common gap
+in a design that calls itself highly available.

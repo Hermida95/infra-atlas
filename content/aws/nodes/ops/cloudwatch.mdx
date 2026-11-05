@@ -41,4 +41,29 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-Metrics, logs, alarms, dashboards and synthetic canaries for everything in the account, at one-minute or one-second resolution.
+CloudWatch is four products behind one name, and most confusion about it comes from not knowing
+which one a question is about: **metrics**, **logs**, **alarms** and **dashboards**, plus traces
+through X-Ray and synthetic monitoring through canaries.
+
+**Metrics** are time series with dimensions. AWS publishes a set per service free at five-minute
+granularity; **detailed monitoring** makes EC2 one-minute at a charge. Everything the hypervisor
+cannot see -- **memory and disk usage on EC2**, anything inside the operating system -- is not
+there by default and requires the **unified CloudWatch agent**. That gap is a favourite exam
+detail: there is no memory metric for an EC2 instance out of the box. Your own measurements are
+**custom metrics**, charged per metric per month, which is why high-cardinality dimensions get
+expensive quickly; **Embedded Metric Format** is the cheaper route, where structured log lines
+are turned into metrics on ingestion.
+
+**Alarms** turn a metric into an action, **logs** are a separate service with its own retention
+and cost, and **dashboards** are the view, able to show metrics from several accounts and
+regions at once with **cross-account observability**.
+
+Two higher-level pieces worth naming. **Container Insights** and **Lambda Insights** add curated
+metrics and dashboards for ECS, EKS and Lambda, including the per-container and per-function
+detail the default metrics lack. **Synthetics canaries** run a script against your endpoint from
+outside on a schedule, so a broken login page is detected by a robot rather than by a customer
+-- and **Application Signals** builds service-level objectives on top of it all.
+
+The retention model is worth knowing: metrics are kept for 15 months, but aggregated as they age
+-- one-minute data for 15 days, five-minute for 63 days, one-hour for 15 months. Anything
+needing fine granularity beyond two weeks has to be exported.

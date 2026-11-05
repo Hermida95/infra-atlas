@@ -18,7 +18,52 @@ connects:
     text: "A service registers its tasks in a target group, and the ALB routes by path or host to each service."
   - to: fargate
     text: "The launch type is the real decision: Fargate for no nodes, EC2 when you need GPUs, daemons or your own AMI."
+lead: "Three objects and a scheduler. Everything else is detail."
+parts:
+  - name: "Task definition"
+    kind: sheet
+    text: "The blueprint: containers, images by digest, CPU and memory, ports, environment, secrets, log driver, and the two roles. Versioned as revisions."
+  - name: "Task"
+    kind: pod
+    text: "One running instance of a definition. One or more containers that share a network namespace, scheduled together, replaced rather than repaired."
+  - name: "Service"
+    kind: orbit
+    text: "Keeps N tasks running, registers them with a target group, replaces unhealthy ones, and runs the deployment when the definition changes."
+  - name: "Cluster and capacity"
+    kind: machine
+    text: "A namespace plus where tasks run: Fargate, EC2 capacity providers, or both in one cluster with a weighting between them."
+  - name: "Deployment controller"
+    kind: loop
+    text: "Rolling by default, with a circuit breaker that reverses a deployment whose tasks never become healthy. Or CodeDeploy for blue/green."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-AWS's own container orchestrator: task definitions, services, target groups and a deployment circuit breaker, with no control plane to run.
+ECS is AWS's own container orchestrator, and its appeal is the absence of a control plane: there
+is nothing to upgrade, nothing to pay for, and the API is small enough to hold in your head. It
+is the right default on AWS unless something specifically needs Kubernetes.
+
+A **task definition** is the unit of change. It names container images -- by digest, if you want
+deployments to be reproducible -- the CPU and memory, the port mappings, and critically the two
+IAM roles that people conflate: the **task execution role** is used by the ECS agent to pull the
+image and write logs, and the **task role** is the identity your application code assumes. If
+the container cannot read a secret, it is the task role; if it cannot start at all, it is the
+execution role.
+
+A **service** keeps a number of tasks running and ties them to an **ALB target group**. With
+`awsvpc` networking -- the only mode on Fargate, and the right one on EC2 -- each task gets its
+own ENI and private IP, which means security groups apply per task and the clean group-to-group
+pattern works. The **deployment circuit breaker** is a feature worth turning on everywhere: a
+rolling deployment whose new tasks never reach a healthy state stops and reverses itself, with
+nothing else configured.
+
+Scaling has two layers and both matter. **Service auto scaling** changes the number of tasks,
+usually target-tracking on `ALBRequestCountPerTarget` or CPU. On EC2 capacity, **cluster
+capacity providers** with managed scaling then change the number of instances to fit those
+tasks. On Fargate there is no second layer, which is most of why people choose it.
+
+Against EKS: ECS is simpler, free, and integrates with the rest of AWS without add-ons. EKS
+brings the Kubernetes API, its ecosystem and portability, at the price of a control plane bill,
+version upgrades and a set of add-ons to keep current. The honest rule is to pick ECS unless
+there is a Kubernetes-specific reason, and to notice that "the team already knows Kubernetes" is
+a perfectly good reason.

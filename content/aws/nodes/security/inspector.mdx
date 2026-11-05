@@ -18,4 +18,24 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Continuously scans EC2 instances, container images in ECR and Lambda functions for known CVEs and for network paths that reach them.
+Inspector continuously scans for software vulnerabilities and unintended network exposure across
+**EC2 instances**, **container images in ECR**, and **Lambda functions** and their layers.
+
+The word that matters is *continuously*. It is not a scan you schedule: once enabled, it
+re-evaluates as new CVEs are published, so an image that was clean when it was built is
+re-flagged the day a vulnerability in one of its layers becomes known. A point-in-time scan at
+build time cannot do that, and the gap between the two is where most real exposure lives.
+
+Findings are scored with a contextual severity, not just the raw CVSS. Inspector factors in
+**network reachability** -- a vulnerable package on an instance with no path from the internet
+is scored lower than the same package behind an open security group -- which is the difference
+between a list of 4,000 CVEs and a list of the ten that matter this week.
+
+The prerequisites are worth remembering. On EC2 it works through the **SSM agent**, so the agent
+must be running and the instance profile must allow Systems Manager -- an instance Inspector
+cannot see is an instance that reports no findings, which looks identical to a clean one. For
+ECR it is enhanced scanning on the registry. For Lambda it needs no setup.
+
+Enable it organisation-wide from a delegated administrator; findings flow to Security Hub and to
+EventBridge. The usual loop is: Inspector finds a vulnerable base image, the pipeline rebuilds
+from a patched one, ECR lifecycle expires the old tags, and the deployment rolls.

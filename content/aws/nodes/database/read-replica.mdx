@@ -19,4 +19,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Asynchronous copies that serve read traffic and can be promoted to standalone. They lag, and promotion is a manual decision.
+A read replica is an asynchronous copy that serves read traffic. Up to fifteen per source for
+MySQL, MariaDB and PostgreSQL (fifteen per Aurora cluster too), they can live in the same zone,
+another zone, or **another region**, and they can be promoted to a standalone database.
+
+The three properties that decide every question about them: replication is **asynchronous**, so
+there is lag and a read can return stale data; they serve **reads only**, so the application
+must be able to send them somewhere different, which is a code change; and promotion is
+**manual** and breaks the replication link permanently.
+
+What they are for: taking reporting and analytics off the primary, serving read-heavy traffic,
+and -- for the cross-region variety -- putting a copy near users in another continent or holding
+a disaster-recovery copy. What they are not for is availability. A replica does not fail over on
+its own, and if the primary dies the writes that had not replicated are gone. Promoting one
+during an incident is a decision someone has to make under pressure, which is exactly what
+Multi-AZ exists to avoid.
+
+Watch **replica lag** as a first-class metric, because it is the thing that makes a "read your
+own write" bug appear only under load. A heavy write burst, a long transaction or an under-sized
+replica all widen it. If stale reads are unacceptable for some queries, route those to the
+writer and accept the load.
+
+Aurora does this better and it is worth knowing why: its replicas read the same shared storage
+rather than replaying a log, so lag is typically under 100 milliseconds, there is a reader
+endpoint that load-balances across them, and promotion is seconds instead of minutes.

@@ -18,4 +18,23 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Capacity in half-ACU increments, scaling in seconds and down to near zero. For spiky, intermittent or unpredictable load.
+Aurora Serverless v2 is a capacity type, not a separate database. The same cluster, the same
+endpoints, the same features -- but instead of choosing an instance size you set a range in
+**Aurora Capacity Units**, and it scales within that range in increments of half an ACU, in
+seconds, in place. No connection drops and no failover.
+
+The reason it matters is the shape of the bill for workloads that are not busy all the time:
+development and test clusters, internal tools, multi-tenant systems where each tenant is small,
+and anything with a sharp daily or weekly peak. For a steadily busy production database,
+provisioned instances are cheaper.
+
+The important correction to v1: **v2 does not scale to zero** by default and does not pause the
+way v1 did, so there is a floor you pay for (the minimum ACU, now as low as 0 on recent versions
+with a resume delay). v1 could pause entirely but took tens of seconds to wake and dropped
+connections to scale, which made it unusable for anything user-facing. v2 removed both problems
+and the pausing with them.
+
+It mixes with provisioned instances in one cluster, which is the quietly useful part: a
+provisioned writer for predictable write load and serverless readers that appear when a
+reporting job runs. And it pairs naturally with Lambda, where **RDS Proxy** or the **Data API**
+handles the connection problem that a thousand concurrent functions otherwise create.

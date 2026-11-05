@@ -21,4 +21,24 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Serverless capacity for ECS and EKS tasks: each task gets its own kernel, and there are no nodes to patch, scale or bin-pack.
+Fargate is a capacity type for ECS and EKS, not a separate orchestrator. The task definition and
+the service are identical; what changes is that there are no instances. Each task gets its own
+isolated kernel on AWS-managed hardware, you pay per vCPU-second and GB-second of what you
+requested, and there is nothing to patch, scale, bin-pack or right-size.
+
+What you give up is everything that assumes a host. No daemonsets or host-level agents, so
+monitoring and logging go through sidecars or the built-in integrations. No GPUs. No custom AMI
+or kernel parameters. No privileged containers. CPU and memory come from a fixed menu of
+combinations rather than any number you like. And storage is ephemeral -- 20 GB by default, up
+to 200 -- with EFS the answer for anything persistent.
+
+The cost comparison is not the headline rate. Fargate is more expensive per vCPU-hour than EC2,
+and cheaper in practice for workloads that are spiky or small, because EC2 is paid for the whole
+instance whether the tasks fill it or not. A dense, steadily busy cluster that is well
+bin-packed on Graviton Spot will be cheaper on EC2; three services averaging 0.25 vCPU each will
+not. **Fargate Spot** takes around 70% off for interruptible tasks and is available on ECS.
+
+The practical gotchas: a task pulling an image from ECR in a private subnet needs the ECR API,
+ECR DKR and S3 endpoints or a NAT Gateway; the **task execution role** (pulls the image, writes
+logs) and the **task role** (what your code uses) are different things; and scaling is per task,
+so a service with a one-minute image pull is a service with a one-minute scale-out.

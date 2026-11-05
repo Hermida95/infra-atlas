@@ -5,7 +5,7 @@
 
 # Every base image is pinned by digest: a tag can be re-pointed, a digest cannot. Dependabot
 # (.github/dependabot.yml) proposes the new digest when the tag moves.
-ARG PYTHON_IMAGE=python:3.12-slim@sha256:2259debdc6af85626058a15a7bf44ad6a68b8c98c9ae82a02cf5cdb92f096d47
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b
 # AWS Lambda Web Adapter, only in the `lambda` target (docker build --target lambda): the
 # default image, the one Kubernetes runs, carries nothing it does not use. ECR Public also

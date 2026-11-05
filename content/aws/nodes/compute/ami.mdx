@@ -18,4 +18,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A bootable image of a configured machine, backed by EBS snapshots. Immutable deployment and Auto Scaling both start from one.
+An AMI is a template for the root volume plus the metadata to boot it: block device mappings,
+architecture, virtualisation type and default permissions. It is **regional** -- an AMI in
+eu-west-1 cannot launch in us-east-1 until it is copied, and that copy has a new id, which is
+the detail that breaks cross-region deployments written with hard-coded ids.
+
+The real decision an AMI represents is **where configuration happens**. One approach is a
+general base image plus `user data` or a configuration tool at boot: flexible, and every launch
+re-runs work that can fail when a package repository is down. The other is **baking**: build the
+image in the pipeline with EC2 Image Builder or Packer, with the application and its
+dependencies already in it, and launch becomes a boot. Baking is what makes Auto Scaling fast
+enough to matter and what makes a rollback a previous image id. The usual compromise is a golden
+base image with the agents and hardening, refreshed monthly, with the application layered on
+top.
+
+Operationally: AMIs are backed by **EBS snapshots**, so copying one across regions copies those,
+and deleting an AMI leaves the snapshots behind -- a common source of quiet storage spend. They
+can be **shared** with specific accounts or the organization, and an encrypted AMI needs the KMS
+key shared too. Store the current id in **Parameter Store** and have launch templates read it
+from there, so a new image is one parameter update rather than a hunt through templates. AWS
+publishes its own that way, which is why `/aws/service/ami-amazon-linux-latest/...` is the right
+way to reference Amazon Linux.
+
+For compliance, **Image Builder** is the answer worth naming: a pipeline that builds, hardens
+against a CIS benchmark, tests, scans with Inspector and distributes to every region and account
+on a schedule.

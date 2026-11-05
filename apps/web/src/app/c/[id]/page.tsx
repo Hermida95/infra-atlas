@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Mark } from "@/components/brain/Mark";
 import { Header } from "@/components/Header";
+import { inline, Prose } from "@/components/Prose";
 import { conceptBody, evidenceSnippet, evidenceUrl, sourceUrl } from "@/lib/content";
 import { domainById, graph, neighbours, nodeById } from "@/lib/graph";
 import { STAGE_LABEL } from "@/lib/planner";
@@ -96,7 +97,7 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
       {body.length > 0 && (
         <section className="concept-body">
           {body.map((p) => (
-            <p key={p}>{p}</p>
+            <Prose key={p} text={p} />
           ))}
         </section>
       )}
@@ -109,7 +110,7 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
             {node.parts.map((p) => (
               <li key={p.name}>
                 <b>{p.name}</b>
-                <span>{p.text}</span>
+                <span>{inline(p.text)}</span>
               </li>
             ))}
           </ol>

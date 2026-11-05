@@ -16,4 +16,23 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Transparently steers traffic through a fleet of third-party firewall or inspection appliances and back out, using GENEVE encapsulation.
+A Gateway Load Balancer is for inserting third-party network appliances -- firewalls, IDS/IPS,
+deep packet inspection -- into a traffic path transparently. It operates at layer 3, uses
+**GENEVE encapsulation on port 6081** to hand packets to the appliances with the original
+headers intact, and sends the inspected traffic back out towards its destination.
+
+Two properties make it work where a plain load balancer would not. It preserves the original
+source and destination, so the appliance sees what it needs and the destination sees the real
+client. And it maintains **flow stickiness**, so both directions of a connection reach the same
+appliance -- a stateful firewall that sees only half a flow drops it.
+
+The architecture is always the same shape: a **GWLB endpoint** in the spoke VPC's route table,
+the appliance fleet behind the GWLB in a separate inspection VPC, and route tables arranged so
+traffic goes endpoint → GWLB → appliance → back → destination. At scale this sits behind a
+**Transit Gateway**, with a dedicated route table sending spoke traffic through the inspection
+VPC, and **appliance mode** enabled on that attachment so the return path keeps the same zone.
+
+The choice against **Network Firewall** is build versus buy: Network Firewall is AWS's own
+managed stateful engine with Suricata-compatible rules and nothing to run; a Gateway Load
+Balancer is how you put Palo Alto, Fortinet, Check Point or your existing vendor in the same
+place, usually because the security team already owns the rules and the operational process.

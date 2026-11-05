@@ -41,4 +41,35 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-Managed encryption keys that never leave the service. Nearly every AWS service encrypts through it, and the key policy decides who may decrypt.
+Nearly all encryption at rest on AWS has the same shape, and KMS is at the centre of it. The
+service holds key material that never leaves it in plaintext, performs cryptographic operations
+on request, and logs every one of them to CloudTrail.
+
+**Envelope encryption** is why a service that can only handle 4 KB can encrypt a 5 TB object.
+The service asks KMS for a **data key**; KMS returns it twice, once in plaintext and once
+encrypted under the KMS key. The service encrypts your data with the plaintext data key,
+discards it from memory, and stores the encrypted copy alongside the data. To decrypt, it sends
+the encrypted data key back to KMS. Your bytes never go to KMS, which is also why throughput is
+not a function of object size.
+
+The choice that matters is **AWS managed versus customer managed** keys. An AWS managed key
+(`aws/s3`, `aws/ebs`) is free, rotates yearly, and you cannot see or change its policy. A
+**customer managed key** costs a dollar a month plus requests and gives you three things: a
+**key policy** you control, **CloudTrail visibility** of every decrypt (which is how you
+discover who is reading what), and the ability to **disable or schedule deletion**, which is the
+basis of cryptographic erasure. Any requirement mentioning audit, key control or revocation
+means a customer managed key.
+
+The **key policy** is unusual and worth a careful read: it is the resource policy of the key,
+and unlike most services an IAM policy alone is never enough -- the key policy must also allow
+the principal. This is the one place where a careless policy can lock out the account's own
+administrator with no recovery path. The standard first statement grants the account root
+`kms:*`, precisely to keep that door open.
+
+Other things that come up: keys are **regional**, so a cross-region copy needs a key in the
+destination region and a role allowed to use both (the most common cause of a silently failing
+replication rule); **multi-Region keys** exist for the cases where the same key material must be
+usable in several regions; **grants** are the mechanism AWS services use for temporary, scoped
+delegation; and **aliases** let a key be rotated behind a stable name. Automatic rotation
+rotates the backing material yearly while keeping the key id, so nothing in your configuration
+changes.

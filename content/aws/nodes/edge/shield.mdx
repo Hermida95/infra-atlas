@@ -18,4 +18,23 @@ connects:
 reviewed: 2026-11-05
 ---
 
-DDoS protection. Standard is on for everything at no cost; Advanced adds detection, a response team, WAF, and cost protection against a scaling bill.
+**Shield Standard** is on for every AWS customer at no cost and needs no configuration. It
+defends against the common layer 3 and 4 attacks -- SYN floods, UDP reflection, amplification --
+at the edge, and most volumetric attacks never become visible.
+
+**Shield Advanced** is a paid subscription (currently $3,000 a month for the organization, plus
+data transfer) and buys four things that Standard does not. **Cost protection**: credits for the
+scaling and data transfer charges an attack causes, which is often the first and sometimes the
+only symptom of one. Access to the **Shield Response Team**, who can be engaged during an attack
+and can write mitigations for you. **Enhanced detection and visibility**, with near-real-time
+attack diagnostics and a global threat dashboard. And **WAF at no extra charge** on protected
+resources, plus automatic application-layer mitigation that writes WAF rules during an attack.
+
+It protects specific resources you enrol: CloudFront distributions, Route 53 hosted zones,
+Global Accelerator accelerators, ALBs, NLBs and Elastic IPs. The architectural advice that goes
+with it is unchanged by the subscription: put CloudFront and Route 53 in front, because they
+absorb at the edge; keep origins private so they cannot be attacked directly; and use WAF rate
+limiting for the layer-7 portion, which Shield does not handle.
+
+For an exam the division is clean: layers 3 and 4 are Shield, layer 7 is WAF, and the triggers
+for Advanced are "cost protection during an attack", "24/7 response team" or a named SLA.

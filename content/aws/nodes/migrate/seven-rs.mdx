@@ -17,7 +17,56 @@ connects:
     text: "Replatform usually means the same application on a managed database, and DMS is how the data gets there."
   - to: amazon-mq
     text: "Repurchase and replatform both show up as 'keep the protocol, drop the servers', which is what Amazon MQ is for."
+lead: "Seven things you can do with an application. The migration plan is one of these per application, chosen with evidence."
+parts:
+  - name: "Retire"
+    kind: gate
+    text: "Switch it off. Discovery routinely finds 10-20% of servers nobody uses, and this is the cheapest migration there is."
+  - name: "Retain"
+    kind: disc
+    text: "Leave it where it is, for now. A mainframe dependency, a licence, or an application being replaced next year anyway."
+  - name: "Relocate"
+    kind: orbit
+    text: "Move the hypervisor, not the servers: VMware workloads lifted without conversion. Fast, and changes nothing."
+  - name: "Rehost"
+    kind: machine
+    text: "Lift and shift into EC2 with MGN. The default: fastest, lowest risk, and the thing that unblocks everything else."
+  - name: "Replatform and repurchase"
+    kind: modules
+    text: "Same application on managed services -- a database onto RDS -- or replaced with SaaS. Some benefit, bounded risk."
+  - name: "Refactor"
+    kind: core
+    text: "Rewrite for the cloud. The largest benefit and the largest cost, and the one to do after the migration, not during it."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Retire, retain, relocate, rehost, replatform, repurchase, refactor. Every migration question is picking one of these per application.
+Every application in a migration gets one of seven dispositions, and a Professional-level
+question is usually asking you to choose the right one for a described constraint.
+
+**Retire** first, always. Discovery consistently finds a tenth to a fifth of servers that
+nothing talks to. Not migrating them is free. **Retain** is the honest answer for anything
+blocked by a dependency, a licence, a compliance boundary or a decommissioning date that is
+sooner than the migration.
+
+**Relocate** moves VMware workloads to VMware Cloud on AWS without converting them -- fastest of
+all, and it changes nothing about the application. **Rehost** is the default for the bulk: a
+lift and shift into EC2, usually with **MGN**, where the operating system and application are
+unchanged and only the hardware underneath is different. It is fast, low risk, and it is what
+makes the data-centre exit date achievable; the optimisation happens afterwards, in the cloud,
+where it is easier.
+
+**Replatform** changes something without changing the architecture: the same application onto
+**RDS** instead of a self-managed database, or into containers, or onto a managed message
+broker. **Repurchase** replaces it with SaaS. **Refactor** rewrites it -- the largest benefit
+and the largest cost, and the one that should follow a migration rather than block it.
+
+The decision needs evidence, which is what **Migration Hub** and discovery agents are for:
+utilisation (which drives right-sizing), dependencies (which drive the move groups -- things
+that talk to each other move together), and licences. A plan built on a spreadsheet of server
+names and a hope is the usual failure mode.
+
+The sequencing advice that comes up repeatedly: rehost the majority to hit the deadline, pick a
+small number of high-value applications to replatform during the move, and schedule refactoring
+for after. Trying to refactor everything during a migration is how data-centre leases get
+extended.

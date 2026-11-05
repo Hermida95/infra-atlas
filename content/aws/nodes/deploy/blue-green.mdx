@@ -17,7 +17,48 @@ connects:
     text: "The circuit breaker stops and reverses a deployment whose tasks never become healthy, with nothing else configured."
   - to: lambda
     text: "An alias with weighted versions shifts a percentage of invocations, and CodeDeploy walks the percentage up."
+lead: "The same idea in four places, and each service has its own mechanism for the traffic shift."
+parts:
+  - name: "ALB target groups"
+    kind: split
+    text: "Two target groups on one listener with weights. The shift is an API call, and so is the rollback."
+  - name: "ECS deployments"
+    kind: loop
+    text: "The circuit breaker reverses a rolling deployment whose tasks never become healthy. CodeDeploy adds true blue/green with two task sets."
+  - name: "Lambda aliases"
+    kind: lanes
+    text: "An alias with weighted versions shifts a percentage of invocations. CodeDeploy walks the percentage up and rolls back on an alarm."
+  - name: "Route 53 weights"
+    kind: orbit
+    text: "Weighted records across environments or regions. The coarsest option, and the only one that works across regions."
+  - name: "The rollback trigger"
+    kind: bell
+    text: "A CloudWatch alarm on error rate, latency or a business metric. Without one, a canary is just a slower deployment."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Which service does the shifting: ALB target groups, the ECS deployment circuit breaker, Lambda alias weights, or Route 53 weighted records.
+Blue/green runs two versions at once and moves traffic between them; canary moves a small share
+first and watches. Both are about making a rollback cheap, and on AWS the mechanism depends
+entirely on what is being deployed.
+
+**ALB target groups** are the simplest: one listener rule forwarding to two target groups with
+weights. Shift 100% back and the rollback is complete in seconds, with the old version still
+warm. **ECS** has two levels -- the **deployment circuit breaker**, which should simply always
+be on, reverses a rolling deployment whose new tasks never pass health checks; CodeDeploy's
+blue/green runs a whole second task set behind a test listener for validation before any
+production traffic moves. **Lambda** shifts by **alias weight** between versions, which is the
+cleanest of the lot because the two versions are immutable. **Route 53 weighted records** are
+the blunt instrument, and the only one that spans regions.
+
+Three things separate a real canary from a slow deployment. **Alarms wired to the rollback**, so
+the decision is automatic. **Enough traffic and enough time** at each step for the alarms to be
+meaningful -- 1% for two minutes proves nothing about an endpoint called twice a minute. And
+**backward-compatible data changes**: while both versions are live they share one database, so
+migrations must be expand-then-contract -- add the column, deploy code that writes both,
+backfill, deploy code that reads the new one, drop the old. A deployment strategy that can roll
+back the code but not the schema has not solved the problem.
+
+Also worth knowing: **feature flags** decouple release from deployment entirely, and
+**AppConfig** is the AWS service for them, with validators and a gradual rollout of the flag
+itself.

@@ -17,7 +17,56 @@ connects:
     text: "The long, heavy steps run in Batch or on ECS; the workflow just waits for them and handles the failure."
   - to: api-gateway
     text: "An endpoint can start an execution directly, which removes the function that existed only to start it."
+lead: "A state machine as JSON. Retries, branching, parallelism and waiting stop being code you write and debug."
+parts:
+  - name: "States"
+    kind: lanes
+    text: "Task, Choice, Parallel, Map, Wait, Pass, Succeed and Fail. The workflow is a graph of these, and the console draws it."
+  - name: "Retry and Catch"
+    kind: loop
+    text: "Per-state retry with backoff and jitter on named error types, and a catch that routes a failure somewhere instead of ending the execution."
+  - name: "Standard or Express"
+    kind: split
+    text: "Standard: up to a year, exactly-once, full history, priced per transition. Express: up to five minutes, at-least-once, priced per request -- for high volume."
+  - name: "Service integrations"
+    kind: bus
+    text: "Over 200 AWS services called directly, with .sync to wait for completion and a task token to wait for a human or an external system."
+  - name: "Execution history"
+    kind: panel
+    text: "Every input, output and state change recorded. The reason debugging a workflow is reading a timeline rather than correlating logs."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-A state machine for a workflow: retries, catch, choice, parallel, map and wait, with the orchestration out of your code entirely.
+Step Functions moves orchestration out of your code. Instead of a Lambda that calls another
+Lambda, catches its errors, sleeps and retries, you declare the states and the transitions and
+the service runs them -- with the full history of every execution recorded, so debugging is
+reading a timeline rather than correlating log lines.
+
+The states that matter: **Task** does work, **Choice** branches on the data, **Parallel** runs
+branches at once, **Map** fans out over an array (and **Distributed Map** does so over millions
+of items from S3, at up to 10,000 concurrent child executions), and **Wait** pauses -- for a
+duration or until a timestamp. That last one is quietly important: a function can no longer wait
+fifteen minutes for anything, but a workflow can wait a year, and it costs nothing while it
+does.
+
+**Retry and Catch** are per state. A retry names the error types, the interval, the backoff
+rate, the maximum attempts and jitter; a catch routes a failure to another state. This is the
+code everyone writes badly, declared once and visible on a diagram.
+
+**Standard versus Express** is a real decision. Standard workflows run up to a year, are
+exactly-once, keep full execution history and are priced **per state transition** -- right for
+long-running business processes and anything needing an audit trail. Express workflows run up to
+five minutes, are at-least-once, log to CloudWatch rather than keeping history, and are priced
+per request and duration -- right for high-volume event processing where per-transition pricing
+would be ruinous.
+
+Two integration patterns worth knowing by name. **`.sync`** calls a service and waits for it to
+finish -- start an ECS task or a Glue job and the state does not complete until the job does,
+with no polling loop. **`waitForTaskToken`** pauses the execution until something calls back
+with a token, which is how a human approval, a third-party callback or a manual check becomes a
+state in the workflow instead of a separate system.
+
+Direct service integrations remove most glue functions: a workflow can write to DynamoDB,
+publish to SNS, run a Batch job or call any of two hundred-odd services without a Lambda in
+between.

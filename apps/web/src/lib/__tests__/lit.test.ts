@@ -68,3 +68,25 @@ describe("the AWS atlas content", () => {
     expect(explained / AWS.graph.links.length).toBeGreaterThan(0.5);
   });
 });
+
+describe("depth", () => {
+  it("gives every service a teardown or a real explanation, not just a summary", () => {
+    // The atlas is meant to read like a course: a one-line summary is not enough on its own.
+    for (const node of AWS.graph.nodes) {
+      expect(node.summary.length, `${node.id} has no summary`).toBeGreaterThan(0);
+      expect(node.exam.length, `${node.id} declares no exam scope`).toBeGreaterThan(0);
+    }
+  });
+
+  it("takes the hubs apart, and anything with parts explains what they are for", () => {
+    for (const node of AWS.graph.nodes) {
+      if (node.hub) expect(node.parts.length, `hub ${node.id} has no parts`).toBeGreaterThan(2);
+      if (node.parts.length) expect(node.lead, `${node.id} has parts but no lead`).toBeTruthy();
+    }
+  });
+
+  it("explains at least a third of its services part by part", () => {
+    const withParts = AWS.graph.nodes.filter((n) => n.parts.length).length;
+    expect(withParts / AWS.graph.nodes.length).toBeGreaterThan(0.33);
+  });
+});

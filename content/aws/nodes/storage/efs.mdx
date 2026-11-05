@@ -21,4 +21,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-An elastic NFS file system many instances across many zones mount at once, growing and shrinking on its own, with an archive tier.
+EFS is a managed NFS filesystem: many instances, in many Availability Zones, mounting the same
+filesystem read-write at the same time. There is nothing to provision -- it grows and shrinks as
+files are written and deleted, and you pay for what is stored.
+
+You reach it through **mount targets**, one per Availability Zone, each an ENI with a security
+group. The security group is the access control for the network path; **access points** are the
+other half, enforcing a POSIX user and a root directory per application, which is how one
+filesystem serves several workloads without them seeing each other's files.
+
+Two settings decide cost and performance. **Storage classes**: Standard across three zones, One
+Zone for a 47% saving if a single zone is acceptable, and lifecycle policies that move untouched
+files to Infrequent Access and Archive -- which is where most of the saving is for a filesystem
+full of old data. **Throughput mode**: Elastic is the default now and scales with demand, with
+Provisioned available when you need a guaranteed number rather than one that grows with the
+stored size.
+
+Where it fits against the neighbours: EBS is one instance and a block device; EFS is many
+instances and a shared POSIX filesystem; FSx is when the protocol has to be SMB, Lustre or
+ONTAP; S3 is when the application can speak object storage, which is cheaper and scales further.
+The classic EFS use cases are a shared upload directory for a web tier, a CMS with plugins and
+media on disk, home directories, and -- a detail worth remembering -- **Lambda**, which can
+mount EFS and so get a shared, writable, persistent filesystem that survives beyond one
+invocation.

@@ -19,4 +19,24 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Hand it code and it builds the EC2 instances, load balancer, Auto Scaling group and health reporting underneath, all still visible to you.
+Beanstalk takes an application bundle and builds the whole stack underneath it: EC2 instances,
+an Auto Scaling group, a load balancer, security groups, CloudWatch alarms and a health
+dashboard. Crucially, it does this with **CloudFormation**, and the resources it creates are
+ordinary resources in your account that you can inspect and tune. It is a convenience layer, not
+a black box, and that is what separates it from a true platform-as-a-service.
+
+Two environment types. A **web server** environment sits behind a load balancer; a **worker**
+environment reads from an SQS queue, which is the built-in answer for background jobs.
+Configuration lives in `.ebextensions` or the newer `.platform` hooks, and there is a clear
+split between **application** code and **environment** configuration -- the same version can be
+deployed to staging and production.
+
+Deployment policies are the part worth knowing: all-at-once (downtime), rolling, rolling with an
+additional batch (no capacity loss), immutable (a whole new Auto Scaling group, safest), and
+**blue/green by swapping the environment CNAME**, which is the cleanest rollback there is.
+
+Its honest position today: it is still the fastest way to get a conventional web application
+onto AWS with real infrastructure underneath, and it is a legacy choice for new work. For a
+container, App Runner or ECS on Fargate gives you the same "hand it the code" experience without
+EC2 instances to think about. Beanstalk's remaining advantage is that you can reach in and
+change the generated infrastructure when you need to.

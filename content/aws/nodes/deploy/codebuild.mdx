@@ -16,4 +16,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Managed build containers that run your buildspec, cache dependencies, and can run inside a VPC to reach private resources.
+CodeBuild runs a build in a managed container and shuts it down afterwards. You pay per build
+minute by compute size, there is nothing idle, and the build definition is a **buildspec.yml**
+in the repository with phases -- install, pre_build, build, post_build -- and the artifacts and
+caches it produces.
+
+The pieces worth configuring deliberately. **Caching**: local caching of Docker layers and
+source, or an S3 cache of dependency directories, which is usually the difference between a
+two-minute build and a seven-minute one. **VPC configuration**, so a build can reach a private
+database to run migrations or an internal package registry -- at the cost of needing a NAT
+Gateway or endpoints. And the **service role**, which is what lets the build push to ECR, read a
+secret or assume a deployment role.
+
+For container builds it needs **privileged mode** to run Docker, and the standard pipeline is
+build, scan, tag by **digest**, push to ECR. Buildspec can also run the tests and publish
+**reports** -- JUnit, Cucumber and coverage formats are rendered in the console, which is a
+small thing that makes failures readable.
+
+**Batch builds** run several configurations in parallel (matrix, or a graph with dependencies),
+which covers multi-architecture images and multi-version test runs. **Lambda compute** is a
+newer mode for short builds with faster start-up.
+
+Secrets come from Secrets Manager or Parameter Store by reference in the buildspec, never as
+plaintext environment variables -- environment variables in a build project are visible to
+anyone who can read the project.

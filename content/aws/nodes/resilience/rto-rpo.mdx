@@ -19,7 +19,48 @@ connects:
     text: "Minutes: a smaller but complete copy, taking no traffic, scaled up on failover."
   - to: active-active
     text: "Near zero: both regions are serving, and that is the hardest thing in this list to keep correct."
+lead: "Two numbers, agreed with the business, that decide everything else."
+parts:
+  - name: "RPO"
+    kind: discs
+    text: "Recovery point objective: how much data you may lose, measured backwards from the failure. It sets backup frequency and replication mode."
+  - name: "RTO"
+    kind: loop
+    text: "Recovery time objective: how long you may be down, measured forwards. It sets how much has to be running already."
+  - name: "The cost curve"
+    kind: bars
+    text: "Both numbers trade against money, steeply. Going from hours to minutes roughly multiplies the bill; minutes to seconds multiplies it again."
+  - name: "Per workload"
+    kind: lanes
+    text: "There is no single RTO for a company. The payment path and the internal reporting tool get different numbers and different strategies."
+  - name: "Proven, not declared"
+    kind: gate
+    text: "An untested RTO is a guess. The number is whatever the last rehearsal actually took."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-How long you may be down, and how much data you may lose. Every disaster recovery answer is one of these two numbers in disguise.
+**RPO** is how much data you can afford to lose: the gap between the last recoverable state and
+the failure. Daily snapshots mean an RPO of up to 24 hours. Continuous replication means
+seconds. **RTO** is how long you can afford to be down: the time from failure to service
+restored.
+
+These two numbers decide the strategy, and nothing else in the scenario does. Hours of both
+means backup and restore. Tens of minutes means pilot light. Minutes means warm standby.
+Near-zero means active/active. An exam question that states the numbers has already told you the
+answer; the rest of the scenario is there to make you check which services can meet them.
+
+The discipline worth practising is deriving them per workload rather than per company. Asking a
+business owner "how much downtime is acceptable" always returns zero. Asking "what does an hour
+of this being down cost, and what would you spend to avoid it" returns a real answer, and it is
+different for the checkout path and for the internal reporting tool. Running the whole estate at
+the strictest number is how disaster recovery budgets get rejected.
+
+Two things people forget to count in RTO. **Detection and decision** time: if nobody notices for
+twenty minutes and the decision to fail over takes ten more, a five-minute technical recovery is
+a thirty-five-minute outage. And **dependencies**: the application's RTO cannot be better than
+the RTO of the database, DNS, identity provider and third-party APIs it needs.
+
+Finally, both numbers are claims until they are tested. A rehearsal -- a game day, a Fault
+Injection Service experiment, a real restore -- turns them into measurements. What the last
+rehearsal took is the RTO; everything else is a plan.

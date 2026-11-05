@@ -16,4 +16,22 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Plans, allocates and audits CIDR blocks across accounts and regions, so two VPCs that must be connected later do not overlap.
+IPAM is address planning as a service, and it exists because of one fact: two VPCs with
+overlapping CIDRs can never be connected. Not by peering, not by a Transit Gateway, not by
+anything. The only fixes are renumbering one of them -- a migration -- or putting PrivateLink in
+front of a single service and giving up on routing.
+
+The model is a tree of **pools**. A top-level pool holds the organization's whole space, split
+into regional pools, split again per environment or per team. A VPC is then created by asking
+for a CIDR from a pool instead of by someone typing one, and an allocation that would overlap is
+simply refused. Pools carry rules -- allowed netmask sizes, required tags -- so a team cannot
+take a /16 when the standard is a /20.
+
+Beyond allocation it does the two things nobody keeps up to date by hand: **discovery** across
+every account and region in the organization, including addresses in use that were never
+recorded, and **monitoring**, with utilisation metrics and alarms before a pool runs dry. It
+also manages public IPv4 and BYOIP ranges, which has mattered more since public addresses
+started being charged per hour.
+
+For an exam, the trigger phrase is a multi-account estate that has to be interconnected, or a
+merger. The cost of not having it shows up years later as a renumbering project.

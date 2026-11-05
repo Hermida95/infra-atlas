@@ -17,4 +17,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A dedicated FIPS 140-3 level 3 hardware module in your VPC that only you can access. AWS cannot recover the key, and nor can you.
+CloudHSM is a dedicated, single-tenant hardware security module in your VPC, validated to **FIPS
+140-3 Level 3**. You control it completely: AWS manages the hardware, the networking and the
+backups, and has **no access to the keys** and no way to recover them. Lose your credentials and
+the key material is gone, permanently.
+
+That is the entire reason to choose it over KMS, and the requirement is usually written down
+somewhere: a regulation demanding single-tenant hardware, a contract saying the cloud provider
+must not be able to access key material, or an application that needs **PKCS#11**, **JCE** or
+**CNG/KSP** interfaces rather than an AWS API.
+
+What it costs is operations. It is a cluster of HSM instances you size, spread across zones and
+pay for by the hour whether busy or not; you manage users, quorum policies and the client SDK;
+and you are responsible for the availability design. KMS, by contrast, is multi-tenant,
+regional, highly available by default, integrated with every AWS service, and priced per key and
+per request.
+
+The useful middle ground is the **KMS custom key store**: KMS fronts your CloudHSM cluster, so
+services keep using KMS normally while the key material stays in hardware you alone control. You
+get the integrations and the compliance claim at once, at the price of operating the cluster
+underneath.
+
+Typical workloads: certificate authorities and code signing, payment processing under PCI PIN or
+P2PE, TDE for Oracle or SQL Server, and custom cryptographic operations the KMS API does not
+expose.

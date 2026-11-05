@@ -43,4 +43,37 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-Object storage with eleven nines of durability across three zones, addressed by key over HTTP, with no capacity to provision.
+S3 stores objects -- up to 5 TB each -- addressed by key within a globally named bucket, over
+HTTP, with eleven nines of durability from copies across three or more Availability Zones. There
+is nothing to provision, and effectively no capacity limit.
+
+**It is flat.** There are no directories, only keys that contain slashes, which the console
+renders as folders. That matters because listing is a prefix scan, and because performance
+scales per prefix: 5,500 reads and 3,500 writes per second *per prefix*, with no limit on the
+number of prefixes.
+
+**Consistency** is strong read-after-write for everything since 2020, including overwrites and
+deletes. The old eventual-consistency caveats are gone and any material that still mentions them
+is out of date.
+
+**Five decisions** cover almost every S3 question. *Which class* -- the retrieval time you can
+accept, with Intelligent-Tiering as the honest default when nobody knows. *What lifecycle* --
+because nothing moves to Glacier by itself, and expiring incomplete multipart uploads is the one
+rule everyone should have. *Who can read it* -- Block Public Access on, a bucket policy rather
+than ACLs, and presigned URLs or CloudFront for everyone else. *Where the copies are* --
+versioning, replication, and Object Lock for anything that must survive an attacker. *How it is
+encrypted* -- SSE-S3 by default and free, SSE-KMS when you need an audit trail and a key policy
+of your own.
+
+**Security defaults worth stating.** Block Public Access is on for new buckets and should stay
+on. ACLs are disabled by default now, so the bucket policy is the single place access is
+decided. Two statements belong in nearly every bucket policy: deny anything where
+`aws:SecureTransport` is false, and -- for private data -- deny access that does not come
+through your VPC endpoint.
+
+**Features that solve specific problems.** **Presigned URLs** let a browser upload or download
+directly with no proxy. **Multipart upload** is required past 5 GB and advisable past 100 MB.
+**Transfer Acceleration** routes uploads through the nearest edge. **S3 Select** filters inside
+an object so you transfer less. **Event notifications** to Lambda, SQS or EventBridge make a
+bucket a trigger. **Storage Lens** and the inventory report answer "what is actually in here",
+which on a petabyte bucket is not a question you can answer by listing.

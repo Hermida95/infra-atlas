@@ -18,4 +18,23 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A record of who talked to whom, on which port, accepted or rejected, per interface, subnet or VPC. Delivered to S3, CloudWatch Logs or Firehose.
+Flow logs record metadata about traffic -- source, destination, ports, protocol, packets, bytes,
+and whether the flow was ACCEPTed or REJECTed -- for a VPC, a subnet or a single network
+interface. They are not a packet capture: there is no payload. For packets you need Traffic
+Mirroring, which is a different and much more expensive thing.
+
+They answer the questions nothing else can. *Is this security group actually blocking the
+traffic?* A REJECT line on the right interface says yes, and nothing else will. *What did this
+host talk to before we noticed it was compromised?* *Which internal service is generating the
+NAT Gateway bill?* *Is anything still using the subnet we are about to delete?*
+
+Three destinations, and the choice is a cost decision. **CloudWatch Logs** for alarms and Logs
+Insights on recent data, and the expensive option at volume. **S3** for cheap long retention,
+ideally in Parquet with hourly partitions, queried with Athena -- this is the usual answer for
+anything beyond a few days. **Data Firehose** when they should also go somewhere else.
+
+Two practical notes. The default format omits the fields you will want later: add `vpc-id`,
+`subnet-id`, `instance-id`, `tcp-flags`, `pkt-srcaddr` and `pkt-dstaddr` through a **custom
+format**, because the last two show the real source behind a NAT or a load balancer. And
+aggregation is one minute or ten; one minute costs more and is what you want for an
+investigation. GuardDuty reads flow logs itself, so some of the analysis is already done.

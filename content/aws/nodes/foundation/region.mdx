@@ -41,4 +41,28 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-A named geographic area with its own isolated data centres, its own prices and its own set of services.
+A region is a named geographic area -- `eu-west-1`, `us-east-1` -- containing three or more
+Availability Zones. It is the first decision in any design, and it is made on four grounds.
+
+**Where the users are**, because distance is round trips and no amount of compute fixes the
+speed of light. **Where the data is allowed to be**, which for personal data in Europe or health
+data under national rules is a hard constraint rather than a preference. **What is available**,
+because not every service launches in every region and some never arrive. And **price**, which
+differs materially: the same instance can cost 20-40% more in some regions than in `us-east-1`.
+
+The distinction that organises everything else is **scope**. Some services are **global** --
+IAM, Route 53, CloudFront, WAF for CloudFront, Organizations -- and their console always talks
+to `us-east-1`, which is why a certificate for CloudFront must be issued there. Most services
+are **regional**: S3, DynamoDB, SQS, Lambda already span the zones and you never see the
+machines. A few are **zonal**: EC2 instances, EBS volumes and subnets live in one zone, and
+these are the ones you have to place and replicate yourself.
+
+**Nothing crosses a region boundary by accident.** No replication, no failover, no backup copy
+happens unless you configure it -- and that is a safety property as much as a limitation. It is
+also why a multi-region design is a separate project rather than a setting, and why quotas,
+AMIs, KMS keys, certificates and secrets all have to be created again on the other side.
+
+Two region-specific details worth carrying. `us-east-1` hosts several global control planes, so
+it is both the cheapest region and the one whose incidents have the widest reach. And some
+regions are **opt-in** and disabled by default, which is a useful thing to leave that way and to
+enforce with an SCP on `aws:RequestedRegion`.

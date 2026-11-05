@@ -1,5 +1,28 @@
 {
   "$defs": {
+    "Connection": {
+      "additionalProperties": false,
+      "description": "A labelled edge. `text` says what travels between the two nodes, read from this end.",
+      "properties": {
+        "to": {
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "title": "To",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 180,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "text"
+      ],
+      "title": "Connection",
+      "type": "object"
+    },
     "Evidence": {
       "additionalProperties": false,
       "description": "Real code in this repo that proves the concept. `lines` is 1-based and inclusive.",
@@ -324,6 +347,26 @@
         "alternative_to": [],
         "used_by": []
       }
+    },
+    "connects": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Connection"
+      },
+      "title": "Connects",
+      "type": "array"
+    },
+    "exam": {
+      "default": [],
+      "items": {
+        "enum": [
+          "saa",
+          "sap"
+        ],
+        "type": "string"
+      },
+      "title": "Exam",
+      "type": "array"
     },
     "lead": {
       "anyOf": [

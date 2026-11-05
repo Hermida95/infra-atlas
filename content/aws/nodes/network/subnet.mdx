@@ -17,7 +17,47 @@ connects:
     text: "A subnet with a default route to an Internet Gateway is public. The same subnet pointed at a NAT Gateway is private."
   - to: nacl
     text: "A network ACL is attached to the subnet, which is why it is the only place you can block a single address."
+lead: "A subnet is two decisions at once: which zone the resource lands in, and whether it can reach the internet."
+parts:
+  - name: "A slice of the CIDR"
+    kind: sheet
+    text: "A /24 inside the VPC's /16 gives 251 usable addresses, not 254: AWS keeps the first four and the last one in every subnet."
+  - name: "One Availability Zone"
+    kind: zones
+    text: "Always exactly one, and it cannot be changed. Every highly available design is really a list of subnets, one per zone."
+  - name: "Its route table"
+    kind: lanes
+    text: "Public or private is this, and only this: a default route to an Internet Gateway, to a NAT Gateway, or to nothing."
+  - name: "Its network ACL"
+    kind: shell
+    text: "Stateless rules applied to everything in the subnet, including resources whose security group you do not control."
+  - name: "Auto-assign public IP"
+    kind: chips
+    text: "Off by default. On, every instance launched here gets a public address -- and an hourly charge for it since 2024."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-A slice of the VPC range pinned to one Availability Zone. Public or private is decided by its route table, not by a setting.
+A subnet is where the two decisions that shape a VPC actually get made. Choosing a subnet
+chooses an Availability Zone, because a subnet lives in exactly one and never moves. And
+choosing a subnet chooses reachability, because "public" and "private" are not properties of a
+subnet at all -- they are a description of what its route table says. A subnet whose default
+route points at an Internet Gateway is public; point the same subnet at a NAT Gateway and it is
+private. Nothing else about it changes.
+
+Five addresses in every subnet are gone before you start: the network address, the VPC router,
+the DNS resolver (base + 2), one reserved for future use, and the broadcast address. A /24 is
+therefore 251 usable, and a /28 -- the smallest allowed -- is 11. The largest is a /16. Size
+them for what will run there, remembering that EKS gives every pod an address from the subnet by
+default, which is how a cluster exhausts a /24 in an afternoon.
+
+The usual shape is three tiers across at least two zones: public subnets holding only load
+balancers and NAT gateways, private subnets with the application, and isolated subnets with no
+default route at all for the databases. Six subnets for two zones, nine for three. Keep them
+symmetric -- the same CIDR size in each zone -- because an Auto Scaling group that cannot
+balance across zones is not actually highly available.
+
+Two details that bite. Subnets can be **shared** with other accounts through Resource Access
+Manager, which is how a platform team owns one VPC and twenty teams deploy into it without
+twenty VPCs to peer. And a subnet's CIDR cannot be resized after creation: you add another
+subnet instead, which is why an IPAM plan beats a spreadsheet.

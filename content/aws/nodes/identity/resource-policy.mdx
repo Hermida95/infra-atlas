@@ -18,4 +18,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A policy attached to the resource rather than the caller: S3 bucket policies, KMS key policies, SQS and SNS policies, Lambda permissions.
+Most of IAM is attached to the caller. A resource-based policy is attached to the thing being
+called, and it answers a question an identity policy cannot: *who, in any account, may touch
+this?* S3 bucket policies, KMS key policies, SQS and SNS access policies, Lambda resource
+policies, ECR repository policies, Secrets Manager resource policies and API Gateway resource
+policies are all the same mechanism.
+
+The field that only exists here is `Principal`, and it is what makes cross-account access
+possible without creating anything in the other account. For most services, cross-account access
+needs **both** ends to agree: an identity policy in the calling account allowing the action, and
+a resource policy in the owning account allowing that principal. KMS is the famous exception in
+the other direction -- the key policy must allow it, and an IAM policy alone is never enough,
+which is why a key with a careless policy can lock out the account's own administrator with no
+way back.
+
+Two patterns worth having by heart. The **anti-exfiltration pair**: a bucket policy with
+`"Condition": {"StringNotEquals": {"aws:SourceVpce": "vpce-..."}}` and `"Effect": "Deny"`, plus
+an endpoint policy listing the buckets that endpoint may reach. Credentials stolen from that
+environment are then useless anywhere else, and data cannot be copied to a bucket outside the
+list. The **organization-wide grant**: `"Condition": {"StringEquals": {"aws:PrincipalOrgID":
+"o-abc123"}}`, which allows every account in the organization including the ones created
+tomorrow, with no list of account ids to maintain.
+
+A bucket policy is also where you enforce the blanket rules: deny anything where
+`aws:SecureTransport` is false, and deny `s3:PutObject` without the encryption header you
+expect. Those are statements nobody can forget to apply, because they live on the bucket.

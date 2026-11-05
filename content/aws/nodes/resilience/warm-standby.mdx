@@ -19,4 +19,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A complete but smaller copy of the stack running in a second region, taking no production traffic, scaled up on failover. Minutes.
+A complete, working copy of the stack in the second region, scaled down, taking no production
+traffic -- or a trickle of it. On failover you scale it up and shift the traffic.
+
+**RPO** is seconds, from continuous replication. **RTO** is minutes, and crucially the *service*
+is already running: it can start serving the moment traffic arrives, degraded, while the
+scale-up happens behind it. That is the real difference from pilot light, and the reason it is
+the usual answer for a serious RTO.
+
+It is also the strategy that is actually testable. Because the second region is running, you can
+send it real traffic -- a small weighted share through Route 53, or a synthetic canary --
+continuously. A standby that serves 1% of requests every day is a standby you know works. One
+that has never served a request is a configuration you hope works, and those usually have one
+thing missing: a secret not replicated, a quota too low, a security group referencing an ID that
+does not exist in that region.
+
+The cost is a fraction of production -- minimum-size instances, fewer of them, smaller database
+readers -- plus the data replication, which at volume can be the larger line. Budget for the
+scale-up too: the plan must state what size it goes to and the account must have the quota to
+get there.
+
+The components: Aurora Global Database or DynamoDB global tables for the data, S3 replication
+for objects, infrastructure deployed by the same templates in both regions, Route 53 health
+checks with failover records or Global Accelerator for the switch, and a rehearsal schedule.
+Fault Injection Service is the thing that turns the rehearsal from an intention into a recurring
+event.

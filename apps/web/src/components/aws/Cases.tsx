@@ -4,6 +4,7 @@ import type { Case, CaseOption, GraphNode } from "@/lib/graph";
 import { AWS, awsCases, EXAM_LABEL, type ExamFilter } from "@/lib/aws";
 import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/lit";
 import { Mark } from "../brain/Mark";
+import { inline } from "../Prose";
 
 type Props = {
   study: Case | null;
@@ -65,7 +66,7 @@ export function Cases({ study, option, filter, onFilter, onCase, onOption, onSel
           <button type="button" className="btn case-back" onClick={() => onCase(null)}>
             All cases
           </button>
-          <p className="scenario">{study.scenario}</p>
+          <p className="scenario">{inline(study.scenario)}</p>
           {study.asks.length > 0 && (
             <ul className="asks">
               {study.asks.map((ask) => (
@@ -90,7 +91,7 @@ export function Cases({ study, option, filter, onFilter, onCase, onOption, onSel
           {study.teaches && (
             <p className="teaches">
               <span className="tag">Remember</span>
-              {study.teaches}
+              {inline(study.teaches)}
             </p>
           )}
         </>
@@ -124,7 +125,7 @@ function Option({
       </button>
       {open && (
         <div className="option-body">
-          <p>{option.why}</p>
+          <p>{inline(option.why)}</p>
           {option.cost && (
             <p className="cost">
               <span className="field">Cost</span>
@@ -136,7 +137,7 @@ function Option({
               <p className="field">What to watch</p>
               <ul className="watch">
                 {option.watch.map((w) => (
-                  <li key={w}>{w}</li>
+                  <li key={w}>{inline(w)}</li>
                 ))}
               </ul>
             </>

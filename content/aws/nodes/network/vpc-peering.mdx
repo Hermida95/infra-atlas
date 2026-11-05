@@ -16,4 +16,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A one-to-one, non-transitive link between two VPCs, free within a zone and across accounts or regions. Fine for two; unmanageable for twenty.
+A peering connection joins two VPCs so their instances talk over private addresses. It works
+across accounts and across regions, there is no bandwidth bottleneck or single point of failure
+because there is no appliance, and traffic within a zone is free. For two VPCs it is the right
+answer and costs almost nothing.
+
+It has two properties that decide every design question about it. Peering is **non-transitive**:
+if A peers with B and B peers with C, A cannot reach C, and no route table entry will make it.
+And the CIDRs **must not overlap**, with no way around it. Together these mean the number of
+connections grows as n(n-1)/2 -- three VPCs need three, ten need forty-five -- and every one of
+them needs route table entries, security group references and DNS resolution configured on both
+sides.
+
+That is the point at which a **Transit Gateway** becomes the answer: one attachment per VPC,
+routing in the middle, and segmentation through its route tables. The rough rule is that peering
+is fine up to a handful of VPCs with a stable, mostly-pairwise pattern, and a Transit Gateway is
+right as soon as the picture starts to look like a mesh. **PrivateLink** is the third option,
+and the better one when the requirement is a single service rather than a network.
+
+Two details worth carrying. Enable **DNS resolution** on the connection or the peer's private
+hosted zone names will not resolve. And a security group in one VPC can reference a security
+group in the peered VPC, which keeps the clean group-to-group pattern working across the
+boundary -- in the same region only.

@@ -15,7 +15,47 @@ connects:
     text: "A backup policy applied to an OU is how 'everything is backed up' becomes true rather than aspirational."
   - to: backup-restore
     text: "Vault Lock makes a retention period immutable, which is what turns backups into a ransomware answer."
+lead: "One policy, one vault, one restore test, across services that each have their own backup mechanism."
+parts:
+  - name: "Backup plan"
+    kind: lanes
+    text: "Schedule, window, lifecycle to cold storage, retention, and the copy actions to other regions and accounts."
+  - name: "Resource assignment"
+    kind: chips
+    text: "By tag or by ARN. By tag applied to an OU is how 'everything is backed up' becomes true rather than aspirational."
+  - name: "Vault"
+    kind: cylinder
+    text: "Where recovery points live, encrypted with a KMS key. A vault in another account is the copy an attacker in the source account cannot reach."
+  - name: "Vault Lock"
+    kind: shell
+    text: "Compliance mode makes retention immutable -- not even the root user can shorten it. This is what turns backups into a ransomware answer."
+  - name: "Restore testing"
+    kind: loop
+    text: "Scheduled automatic restores with validation, because a backup nobody has restored is not a backup."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-One backup plan, one vault and one restore test across EBS, RDS, Aurora, EFS, FSx, DynamoDB and S3, with cross-region and cross-account copies.
+Every AWS storage and database service has its own backup mechanism, each with its own
+scheduling, retention and permissions. AWS Backup is the layer that makes them one policy: EBS,
+EC2, RDS, Aurora, DynamoDB, EFS, FSx, S3, Storage Gateway, DocumentDB, Neptune and Redshift
+under a single plan, a single vault and a single audit trail.
+
+The feature that changes how an organization works is **assignment by tag, applied across the
+organization**. A backup policy attached to an OU, selecting resources tagged `Backup=daily`,
+means a database created next month by a team you have not met is backed up without anyone
+remembering to configure it. Backup Audit Manager then reports on what is not covered, which is
+the question nobody can otherwise answer.
+
+**Cross-region and cross-account copies** are what make it a disaster-recovery tool rather than
+an undo button. The standard shape is a backup account that no workload administrator can reach,
+holding copies, with **Vault Lock in compliance mode** so the retention period cannot be
+shortened by anyone -- including the root user, including AWS Support. That combination is the
+honest answer to a ransomware requirement, because it is the only configuration where an
+attacker with full administrative access in the source account still cannot destroy the copies.
+
+The part most plans skip is **restore testing**. AWS Backup can run scheduled restores
+automatically and validate them, which is the difference between believing you have backups and
+knowing. Pair it with the recovery objectives: a backup plan is only correct if its frequency
+meets the RPO and its restore time meets the RTO, and the second of those can only be
+established by doing it.

@@ -11,7 +11,54 @@ exam: [saa, sap]
 connects:
   - to: dynamodb
     text: "A GSI has its own capacity and its own partitioning, so it is a second table that AWS keeps in step for you."
+lead: "Partition key, sort key, and two kinds of index. Getting these right before the table exists is the whole job."
+parts:
+  - name: "Partition key"
+    kind: core
+    text: "Hashed to choose a partition. An even spread is the performance story; one hot key throttles while the table sits idle."
+  - name: "Sort key"
+    kind: lanes
+    text: "Orders items inside a partition and makes range queries possible: begins_with, between, greater than. Key plus sort key is the item's identity."
+  - name: "Local secondary index"
+    kind: split
+    text: "Same partition key, different sort key. Created with the table and never after, shares the table's capacity, and caps the partition at 10 GB."
+  - name: "Global secondary index"
+    kind: satellites
+    text: "Different partition key entirely. Added any time, its own capacity, eventually consistent -- effectively a second table AWS keeps in step."
+  - name: "Projection"
+    kind: sheet
+    text: "Which attributes the index carries: keys only, a chosen few, or all. Projecting too little means a second read; too much means paying twice for storage."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Partition key, sort key, local and global secondary indexes. Single-table design means modelling the queries, not the entities.
+In a relational database you model the entities and write queries later. In DynamoDB you list
+the access patterns first and design the keys to serve them, because there is no query planner
+to rescue a bad choice: an access pattern the keys do not support becomes a **Scan**, which
+reads the entire table.
+
+The **partition key** is hashed to pick a physical partition. Everything about performance
+follows from how evenly it spreads. A key like `country` on a table where 80% of rows are one
+country gives you a hot partition that throttles while the rest of the table is idle. Keys with
+high cardinality -- a user id, an order id -- spread well. When a naturally skewed key is
+unavoidable, **write sharding** adds a suffix (`2024-01-15#3`) to spread one logical key over
+several partitions, and reads fan out across the shards.
+
+The **sort key** is what makes DynamoDB more than a key-value store. Within a partition, items
+are ordered by it, so you can query a range: all orders for this customer between two dates, all
+events whose key `begins_with` a prefix. The composite-key pattern -- storing several entity
+types in one table with keys like `USER#123` / `ORDER#2024-01-15` -- is **single-table design**,
+and it exists so that one query returns a customer and their recent orders together rather than
+two round trips.
+
+Indexes cover the patterns the main key cannot. A **local secondary index** keeps the same
+partition key with a different sort key; it is strongly consistent, shares the table's capacity,
+must be created with the table, and caps each partition at 10 GB. A **global secondary index**
+has an entirely different partition key, can be added at any time, has its own capacity, and is
+eventually consistent -- it is effectively a second table that DynamoDB keeps in step. GSIs are
+the usual answer; LSIs are rare.
+
+Two traps with GSIs. **Projection** decides what the index stores: keys-only is cheap but means
+a second read to fetch the rest of the item, while projecting everything doubles the storage.
+And if a GSI is **throttled** on writes, the write to the base table is throttled too -- an
+under-provisioned index can take down the table it belongs to.

@@ -18,4 +18,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Buffers a stream by size or time and delivers it to S3, Redshift, OpenSearch or a partner, converting to Parquet and compressing on the way.
+Data Firehose is the managed path from a stream to storage. There are no shards and no consumer
+to write: you point a delivery stream at a destination, and it buffers, transforms, compresses,
+encrypts and delivers, retrying on its own.
+
+**Buffering** is the central idea: it accumulates until a size (1-128 MB) or a time (60-900
+seconds) threshold is reached, then writes one object. That is what makes it near-real-time
+rather than real-time -- a minute of latency is the normal price -- and it is also what makes
+the output usable, because a million tiny files in S3 is the thing that makes Athena slow and
+expensive.
+
+The transformations that matter happen on the way through. **Format conversion** to Parquet or
+ORC turns JSON into a columnar format, which is where most of the downstream query saving comes
+from. **Dynamic partitioning** writes to `s3://bucket/year=2026/month=11/day=05/` based on
+fields in the record, so Athena prunes partitions instead of scanning everything. A **Lambda
+transform** can enrich, filter or reshape records in flight, with failures routed to a separate
+S3 prefix rather than dropped.
+
+Sources are Kinesis Data Streams, MSK, or direct `PutRecord` calls -- and a great deal of AWS
+plumbing uses it: CloudWatch Logs subscription filters, VPC flow logs, WAF logs and EventBridge
+can all deliver through Firehose. Destinations are S3, Redshift, OpenSearch, Splunk, Iceberg
+tables and generic HTTP endpoints.
+
+The decision against Kinesis Data Streams is simple: if you need custom processing, replay or
+several independent consumers, you need a stream. If you need the data in S3 or a warehouse with
+no code, Firehose is the whole answer.

@@ -20,4 +20,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-AWS secures the cloud; you secure what you put in it. Which side of the line a control falls on decides who has to fix it.
+AWS is responsible for security **of** the cloud; you are responsible for security **in** it.
+The line is not a slogan -- it moves depending on the service, and knowing where it sits for a
+given service is what the model is for.
+
+For **infrastructure services** like EC2, AWS secures the facilities, the hardware, the
+hypervisor and the network fabric. Everything above is yours: the guest operating system and its
+patches, the application, the data, the encryption, the network configuration (security groups,
+NACLs, routing) and IAM. **Patch Manager** exists precisely because that half is yours.
+
+For **managed services** like RDS, Lambda, DynamoDB and S3, AWS takes over the operating system
+and the engine patching. What remains yours is constant across every service on AWS, and it is
+the part worth memorising: **your data, who can access it, and how it is encrypted**. AWS will
+never stop a request your own policy allowed, and it will never classify your data for you.
+
+Three places the line is more specific than people assume. **Encryption**: AWS provides KMS and
+encryption options; enabling them is yours. **Availability**: AWS provides Availability Zones
+and Multi-AZ features; choosing to span them is yours. **Backups**: AWS provides snapshots and
+point-in-time recovery; configuring retention, cross-region copies and actually testing a
+restore is yours.
+
+And there is a third column people forget: the parts that are **shared**. Patch management (AWS
+patches the infrastructure, you patch the guest), configuration management, and awareness and
+training. **AWS Artifact** is where you download the compliance reports -- SOC, ISO, PCI -- that
+evidence AWS's half when an auditor asks.

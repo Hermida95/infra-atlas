@@ -14,4 +14,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Converts the schema, views and stored procedures when the engine changes, and reports in advance what it cannot convert.
+The Schema Conversion Tool converts the parts of a database that DMS does not: the schema,
+views, stored procedures, functions, triggers and packages. It is used only for
+**heterogeneous** migrations, where the engine changes -- Oracle to PostgreSQL, SQL Server to
+MySQL, Teradata or Netezza to Redshift.
+
+Its most useful output is produced before anything is converted: the **assessment report**,
+which lists every object, says whether it converts automatically, and estimates the manual
+effort for the ones that do not. That report is what turns "migrate off Oracle" into a number of
+person-weeks, and it is worth running early even if the decision has not been made.
+
+What does not convert cleanly is predictable: PL/SQL packages with no PostgreSQL equivalent,
+proprietary functions, hierarchical queries, autonomous transactions, and anything relying on
+engine-specific behaviour. Some of it is rewritten; some of it is better moved out of the
+database into the application, which is a decision the report forces you to make explicitly.
+
+The order of operations in a real migration: run the assessment, convert the schema, fix what it
+flagged, apply the converted schema to the empty target, then start the DMS task to move the
+data. Applying the data before the schema is a common way to waste a day.
+
+For Oracle specifically, **Babelfish** for Aurora PostgreSQL is worth knowing as the alternative
+route for SQL Server -- it speaks the T-SQL wire protocol, so the application can often connect
+unchanged, which removes much of the conversion work at the cost of a compatibility surface to
+test.

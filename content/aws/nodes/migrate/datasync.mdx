@@ -19,4 +19,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Moves and then keeps in sync file and object data between on-premises storage and S3, EFS or FSx, with verification and scheduling.
+DataSync is a managed transfer service for file and object data. It moves between on-premises
+storage (NFS, SMB, HDFS, self-managed object stores) and AWS (S3, EFS, FSx), and between AWS
+services, at up to about ten times the speed of open-source tools thanks to a purpose-built
+protocol with parallel transfers and compression.
+
+What you get over `rsync` or a script: **incremental** transfers that only move what changed,
+end-to-end **validation** of every file, **scheduling**, bandwidth throttling so it does not
+saturate the link during business hours, filtering by pattern, preservation of metadata and
+permissions, and CloudWatch metrics and logging for each task.
+
+It needs an **agent** -- a VM on-premises, or an EC2 instance for in-cloud transfers -- except
+for AWS-to-AWS transfers, which are agentless.
+
+Where it sits among the neighbours. **Storage Gateway** is a standing presence that presents a
+protocol locally and keeps data in AWS; DataSync is a transfer, one-off or scheduled.
+**Snowball** is what you use when the arithmetic says the network cannot finish in time -- and
+that arithmetic is worth doing explicitly, because a 1 Gbps link moves roughly 10 TB a day at
+best. **S3 Transfer Acceleration** is for uploads to S3 over long distances from many clients,
+not for bulk migration.
+
+The common pairing: DataSync over Direct Connect for the initial bulk and ongoing sync, with a
+final incremental run at cutover. For very large estates, Snowball for the bulk and DataSync for
+the delta afterwards.

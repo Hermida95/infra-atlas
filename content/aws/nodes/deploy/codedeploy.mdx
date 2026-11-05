@@ -16,4 +16,24 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Blue/green and canary rollouts for EC2, ECS and Lambda, shifting traffic in steps and rolling back automatically on a CloudWatch alarm.
+CodeDeploy performs the deployment itself, and what it can do depends on the target.
+
+On **EC2 and on-premises**, an agent on each instance runs an `appspec.yml` with lifecycle hooks
+-- `BeforeInstall`, `AfterInstall`, `ApplicationStart`, `ValidateService` -- so the deployment
+can stop traffic, swap files, run migrations and verify. Deployment configurations range from
+one-at-a-time to half-at-a-time to all-at-once, and blue/green is done by launching a
+replacement Auto Scaling group and shifting the load balancer to it.
+
+On **ECS**, blue/green uses two target groups: the new task set is registered with the test
+target group, validated, and then production traffic is shifted -- all at once (`AllAtOnce`), in
+steps (`Linear`), or with a small share first (`Canary10Percent5Minutes`). The old task set
+stays for a termination wait period, so a rollback is instant rather than another deployment.
+
+On **Lambda**, it shifts traffic between versions behind an **alias** with the same
+linear/canary options, and runs `BeforeAllowTraffic` and `AfterAllowTraffic` hook functions for
+validation.
+
+The feature that makes any of this safe is **automatic rollback on a CloudWatch alarm**. Attach
+the alarms that represent "the new version is bad" -- error rate, p99 latency, a business metric
+-- and a canary that trips them is reversed without anyone watching. A canary deployment with no
+alarms attached is just a slow deployment.

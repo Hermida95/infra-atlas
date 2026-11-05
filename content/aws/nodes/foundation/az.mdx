@@ -20,4 +20,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-One or more discrete data centres inside a region, far enough apart to fail separately and close enough to replicate synchronously.
+An Availability Zone is one or more discrete data centres with independent power, cooling and
+networking, inside a region. The design of the platform rests on two facts about them: they are
+far enough apart to fail independently, and close enough -- single-digit milliseconds -- to
+replicate synchronously.
+
+That combination is why high availability on AWS is a configuration rather than a project.
+Synchronous replication across zones is what makes RDS Multi-AZ possible with no data loss;
+independent failure is what makes it worth having.
+
+**Zone names are per account.** `eu-west-1a` in your account and in mine are probably different
+physical zones -- AWS randomises the mapping so that everyone does not crowd into "a". When zone
+identity actually matters across accounts, such as placing resources in the same physical zone
+to avoid cross-zone data charges in a shared VPC, use the **Availability Zone ID** (`euw1-az1`),
+which is consistent everywhere.
+
+**Zonal versus regional** is the distinction to carry into every design. A subnet, an EC2
+instance, an EBS volume and a NAT Gateway are zonal: they exist in one zone and die with it. A
+load balancer, an Auto Scaling group, S3, DynamoDB, SQS and Lambda are regional: they already
+span zones. The work in a highly available design is entirely in the first list.
+
+**Cross-zone data transfer is charged** in both directions, which is a real line on a chatty
+workload's bill and the reason a single NAT Gateway serving three zones costs more than three
+serving one each. It is also why some latency-critical designs deliberately keep a request
+inside one zone and accept the availability trade -- a decision worth making explicitly rather
+than discovering in the bill.

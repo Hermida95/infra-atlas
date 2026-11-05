@@ -18,4 +18,30 @@ connects:
 reviewed: 2026-11-05
 ---
 
-One queue for findings from GuardDuty, Inspector, Macie, Config and Access Analyzer, scored against CIS, PCI and the AWS standard.
+Security Hub is the aggregation layer. Findings from GuardDuty, Inspector, Macie, IAM Access
+Analyzer, Config, Firewall Manager, Health and third-party tools arrive in one format -- the
+**AWS Security Finding Format** -- in one place, across every account and region in the
+organization.
+
+It does two things with them. It **aggregates**, deduplicates and lets you work a single queue
+instead of opening six consoles. And it **scores** the estate against standards: the AWS
+Foundational Security Best Practices, CIS Benchmarks, PCI DSS and NIST 800-53, each a set of
+automated controls with a pass rate you can watch move.
+
+Most of those controls are **Config rules** underneath, which is the dependency to know: Config
+has to be recording in each account and region or the score is meaningless. This is also the
+main cost driver, because Config charges per configuration item.
+
+Run it the same way as GuardDuty: a **delegated administrator** in a security account,
+organization-wide, with new accounts enrolled automatically, and **cross-region aggregation** so
+one region shows everything. Without that you get a per-account view of a problem that is
+organisation-wide.
+
+Findings are EventBridge events too, so remediation can be automatic -- Security Hub's
+**automation rules** can also suppress, re-prioritise or change the workflow status of findings
+matching a pattern, which is how the noise from accepted risks is kept out of the queue without
+pretending it is not there.
+
+For an exam, the distinction is: GuardDuty *detects* threats, Inspector finds *vulnerabilities*,
+Macie finds *sensitive data*, Config checks *configuration*, and Security Hub is where all of
+them land and get scored.

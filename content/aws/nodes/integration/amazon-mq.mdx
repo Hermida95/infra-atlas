@@ -17,4 +17,21 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Managed ActiveMQ or RabbitMQ, for applications that already speak AMQP, MQTT, STOMP or JMS and are not going to be rewritten.
+Amazon MQ is managed **ActiveMQ** or **RabbitMQ**. It exists for one reason: applications that
+already speak AMQP, MQTT, STOMP, OpenWire or JMS and are not going to be rewritten.
+
+That makes it a migration service more than a design choice. A Java application using JMS queues
+and topics, or a system built on RabbitMQ exchanges and routing keys, can move to AWS with a
+connection string change instead of a rewrite -- which is often the difference between a
+migration that happens and one that does not. It is the **replatform** answer in the 7 Rs, and
+it appears in exam questions as "lift and shift a message broker without changing the
+application".
+
+What it costs compared to the native services: brokers are instances you size and pay for
+whether busy or not, throughput is bounded by them, and scaling means a bigger broker or a
+cluster rather than being automatic. Availability is an active/standby pair across two zones for
+ActiveMQ, or a cluster for RabbitMQ -- not the regional, nothing-to-manage model of SQS.
+
+So for anything new on AWS, **SQS** and **SNS** are cheaper, scale further and have nothing to
+operate. Choose Amazon MQ when the protocol is the requirement, and plan to revisit it once the
+application is actually being changed.

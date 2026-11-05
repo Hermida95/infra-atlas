@@ -15,7 +15,52 @@ connects:
     text: "Access Analyzer rewrites a broad policy down to the actions that were actually used in the last 90 days."
   - to: tagging
     text: "Conditions on tags turn one policy into a per-team policy, which is how least privilege survives growth."
+lead: "A policy is five fields and one algorithm. Read the algorithm once and policies stop being guesswork."
+parts:
+  - name: "Version and Statement"
+    kind: sheet
+    text: "Always \"2012-10-17\" -- the older version has no variables and no conditions. Below it, a list of statements evaluated independently."
+  - name: "Effect, Action, Resource"
+    kind: lanes
+    text: "Allow or Deny; the API calls (`s3:GetObject`, or `s3:*`); and the ARNs they apply to. A statement with no matching resource grants nothing."
+  - name: "Condition"
+    kind: chips
+    text: "Where real policies live: `aws:SourceVpce`, `aws:MultiFactorAuthPresent`, `aws:PrincipalTag/Team`, `s3:prefix`, `aws:SecureTransport`. Every key is either present or the condition fails."
+  - name: "NotAction and NotResource"
+    kind: split
+    text: "Everything except what is listed. Powerful, and almost always a mistake with Allow: a new service launches and you have just granted it."
+  - name: "Evaluation"
+    kind: gate
+    text: "Deny anywhere wins. Then the request needs an Allow and must survive the SCP, the boundary and the session policy. No Allow is an implicit deny."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-JSON documents of allow and deny statements over actions, resources and conditions. No matching allow is a deny; an explicit deny is final.
+A policy is a JSON document, and the only thing that makes it hard is that four different
+documents can apply to one request at once. The evaluation order is fixed, and it never changes:
+an explicit `Deny` in any of them ends the request immediately. If nothing denies, the request
+needs an `Allow` from the identity's own policy -- or, for a cross-account call, from the
+resource's policy -- and it must also survive every ceiling above it: the service control policy
+of the account, a permission boundary on the principal, and any session policy passed when the
+role was assumed. The effective permission is the intersection of all of them, never the union.
+There is no "grant" that can lift a ceiling.
+
+The parts of a statement that people write are `Effect`, `Action` and `Resource`. The part that
+makes a policy good is `Condition`. A policy that says "this role may read this bucket" is a
+blunt instrument; one that adds `aws:SourceVpce` turns it into "this role may read this bucket
+only through our VPC endpoint", which is the difference between a credential leak being an
+incident and being a non-event. Other conditions worth knowing by name: `aws:SecureTransport` to
+require HTTPS, `aws:MultiFactorAuthPresent` for anything destructive, `aws:PrincipalOrgID` to
+allow the whole organization without listing account ids, and `aws:PrincipalTag` matched against
+`aws:ResourceTag` for attribute-based access control, which is how one policy serves twenty
+teams instead of twenty policies serving one each.
+
+Two traps. The first is wildcards in `Action` with a narrow-looking `Resource`: `"Action":
+"s3:*"` on one bucket still includes `s3:DeleteBucket` and `s3:PutBucketPolicy`, so the holder
+can grant themselves more. The second is `NotAction` with `Allow`, which means "everything
+except these" -- including every service AWS launches next quarter.
+
+Least privilege is reached by subtraction, not by guessing. IAM Access Analyzer reads the last
+ninety days of CloudTrail for a role and generates the policy that covers only what was actually
+called; the policy simulator then answers whether a specific request would be allowed, and which
+statement decided it. Both beat reasoning about the JSON in your head.

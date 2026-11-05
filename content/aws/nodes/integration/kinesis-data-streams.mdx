@@ -18,7 +18,51 @@ connects:
     text: "The real distinction: a queue deletes a message once handled, a stream keeps it for every consumer and for replay."
   - to: lambda
     text: "A function per shard, ordered within the shard, with the batch retried until it succeeds or is parked."
+lead: "An ordered, replayable log. The difference from a queue is that reading does not consume."
+parts:
+  - name: "Shards"
+    kind: lanes
+    text: "The unit of throughput: 1 MB/s or 1,000 records in, 2 MB/s out. A record's partition key picks its shard, and order is per shard."
+  - name: "Retention"
+    kind: cylinder
+    text: "24 hours by default, up to 365 days. Data stays after it is read, which is what makes replay and multiple consumers possible."
+  - name: "Consumers"
+    kind: satellites
+    text: "Shared throughput across all consumers, or enhanced fan-out giving each its own 2 MB/s per shard with push delivery."
+  - name: "On-demand mode"
+    kind: loop
+    text: "No shards to manage: it scales to the traffic and charges per GB. The right default unless the volume is large and steady."
+  - name: "Partition key"
+    kind: core
+    text: "Decides the shard and therefore the ordering group. A skewed key makes a hot shard, which is the main failure mode."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-An ordered, replayable stream read by many consumers at once. Throughput is shards, retention is up to a year.
+A stream is an append-only log that many consumers read independently, each tracking its own
+position. That is the structural difference from a queue: in SQS a message is deleted once
+handled, so adding a second consumer means adding a second queue; in Kinesis the data stays for
+the retention period and every consumer sees all of it, which also makes **replay** possible.
+
+**Shards** are the capacity unit in provisioned mode -- 1 MB/s or 1,000 records per second in, 2
+MB/s out, shared across consumers. Ordering is guaranteed **within a shard**, and a record's
+**partition key** chooses the shard, so the key is simultaneously your sharding strategy and
+your ordering group. A key with poor cardinality produces a hot shard that throttles while the
+others idle, which is the same failure mode as DynamoDB and has the same fix. **On-demand mode**
+removes the sizing question entirely and is usually the right starting point.
+
+When several consumers share a shard's 2 MB/s they compete, and `GetRecords` polling adds
+latency. **Enhanced fan-out** gives each registered consumer its own 2 MB/s per shard with push
+delivery over HTTP/2, at around 70 ms. It costs more per consumer and is the answer when either
+the consumer count or the latency requirement rules out sharing.
+
+What it is for: clickstreams, application and IoT telemetry, log aggregation, change feeds, and
+anything where several teams want the same data for different purposes. **Firehose** is the
+no-code consumer that lands it in S3, Redshift or OpenSearch; **Managed Service for Apache
+Flink** is the one for windowed aggregation and stream joins; **Lambda** is the one for
+per-record processing, one concurrent invocation per shard.
+
+Against the alternatives: **SQS** when each message has exactly one handler and order barely
+matters -- it is simpler and cheaper. **Kinesis** when ordering, replay or multiple independent
+consumers matter. **MSK** when the requirement names Kafka, its ecosystem or an existing Kafka
+estate.

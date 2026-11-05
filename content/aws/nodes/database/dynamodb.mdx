@@ -44,4 +44,34 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-A key-value and document store with single-digit millisecond reads at any scale, no servers, no connections and no capacity planning if you want none.
+DynamoDB is a managed key-value and document store with single-digit millisecond reads at any
+scale. There are no servers, no connections, no version upgrades and no capacity to plan if you
+do not want any. What it asks in return is that you design for the access patterns before the
+table exists, because there is no query planner to rescue a bad key choice.
+
+**The model.** An item is up to 400 KB. The **partition key** is hashed to choose a partition;
+the optional **sort key** orders items within it and enables range queries. Together they are
+the item's identity. Anything the keys do not support becomes a `Scan`, which reads the whole
+table -- and a Scan in production is almost always a design error rather than a tuning problem.
+
+**Capacity.** **On-demand** charges per request and handles any traffic shape, which makes it
+the right default for new or spiky workloads. **Provisioned** with auto scaling is cheaper for
+predictable load. Either way, an uneven partition key produces a **hot partition** that
+throttles while the rest of the table idles, and the fix is a better key or **write sharding**.
+
+**Consistency and transactions.** Reads are eventually consistent by default and strongly
+consistent on request at twice the cost -- and strongly consistent reads do not work through DAX
+or against a global secondary index. `TransactWriteItems` gives ACID across up to 100 items in
+one region, and **conditional writes** are how optimistic locking and idempotency are
+implemented without a transaction.
+
+**The features that come free and change designs.** **TTL** expires items at a timestamp with no
+cost, which is how sessions and temporary data clean themselves up. **Streams** turn every
+change into an event for Lambda. **Point-in-time recovery** gives any second in the last 35
+days. **Global tables** replicate multi-writer across regions. **DAX** adds a microsecond read
+cache that invalidates itself.
+
+**Where it is the wrong answer:** ad-hoc queries, reporting and aggregations across the whole
+table, anything needing joins, and access patterns that are not known in advance. Those are
+relational or analytics problems, and forcing them into DynamoDB produces the scans it is
+designed to avoid.

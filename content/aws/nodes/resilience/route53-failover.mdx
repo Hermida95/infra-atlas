@@ -18,4 +18,29 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Route 53 health checks plus failover, latency or weighted records. The cheapest switch in a DR plan, and the one most of them use.
+The cheapest mechanism for moving traffic between regions, and the one most DR plans use. A
+**health check** watches an endpoint, a CloudWatch alarm, or a boolean combination of other
+checks; records are then conditional on it.
+
+**Failover routing** is the direct form: a primary record and a secondary, with the secondary
+answered only when the primary's health check fails. **Latency** and **weighted** records also
+respect health checks, so an unhealthy region simply stops being returned -- which is how an
+active/active design sheds a region without anyone doing anything.
+
+Health checks come in three kinds, and the second is the one people underuse. **Endpoint
+checks** hit a URL from several AWS locations and need the endpoint to be publicly reachable.
+**CloudWatch alarm checks** make the record conditional on any metric at all, which is how you
+health-check something private -- a database, a queue depth, an internal composite of several
+alarms. **Calculated checks** combine others with AND, OR and NOT, so "healthy means the ALB is
+up AND the database alarm is OK" is expressible.
+
+The limitation to state plainly is **DNS caching**. Resolvers and clients cache for the TTL,
+some ignore it, and some JVMs cache forever. A 60-second TTL means up to a minute of users still
+being sent to the dead endpoint, and in practice a long tail beyond that. Set short TTLs on
+failover records in advance -- changing the TTL during an incident does not help, because the
+old value is already cached. When even that is unacceptable, **Global Accelerator** moves
+traffic behind static IPs that never change, and the client never re-resolves anything.
+
+Build the health check endpoint deliberately: a `/health` path that checks the dependencies that
+actually matter, so a region with a dead database is reported unhealthy rather than cheerfully
+returning 200 from a web server.

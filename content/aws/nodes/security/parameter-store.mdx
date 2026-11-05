@@ -18,4 +18,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Configuration and secrets inside Systems Manager, free at standard tier, encrypted with KMS as SecureString, versioned and hierarchical.
+Parameter Store is configuration as a hierarchy, inside Systems Manager. Parameters are named
+like paths -- `/prod/api/database/host` -- which matters because an application can fetch a
+whole branch in one `GetParametersByPath` call, and an IAM policy can grant access to a prefix.
+
+Three types. **String** and **StringList** for plain configuration, and **SecureString**, which
+is encrypted with KMS exactly as Secrets Manager does it. That last point is the one people
+miss: the encryption is the same, so "secrets must be encrypted at rest with a customer managed
+key" is satisfied by either.
+
+Two tiers. **Standard** is free, 10,000 parameters, 4 KB each. **Advanced** is paid, 100,000
+parameters, 8 KB, and adds parameter policies -- expiry, a notification before expiry, and a
+no-change alarm -- which are a crude form of rotation reminder.
+
+Beyond configuration it is the natural home for a couple of patterns: storing the **current AMI
+id** so launch templates read it from a path rather than being edited (AWS publishes its own
+images this way), and holding feature flags and environment differences that CloudFormation and
+Terraform can resolve at deploy time.
+
+The decision against Secrets Manager is a short list. Choose Secrets Manager when you need
+automatic **rotation**, **cross-region replication**, generated passwords, or the native RDS and
+RDS Proxy integration. Otherwise Parameter Store does the same job for nothing, and for a large
+estate the difference is real money. Many accounts use both: Parameter Store for configuration
+and static secrets, Secrets Manager for database credentials that rotate.

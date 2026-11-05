@@ -18,4 +18,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-An extension of a region placed in a metropolitan area, for single-digit millisecond latency to users or equipment in that city.
+A Local Zone is an extension of a region placed in a metropolitan area -- Los Angeles, Hamburg,
+Lagos -- offering a subset of services (EC2, EBS, some ELB and RDS) for workloads that need
+single-digit millisecond latency to users or equipment in that city.
+
+It behaves as an extra Availability Zone of its parent region: same VPC, same account, same
+APIs, one more subnet. The control plane stays in the parent region, so management traffic
+crosses that link.
+
+What it is for is a short list, and the list is the exam answer. **Media and entertainment**
+workstations where artists need remote desktops that feel local. **Real-time gaming** servers
+near the players. **Industrial and medical** systems where the equipment is in the city and the
+latency budget is a few milliseconds. And **migration** of a latency-sensitive application that
+cannot yet be re-architected.
+
+It is not a disaster-recovery option -- it depends on its parent region -- and not every service
+is there, so the architecture is usually the latency-critical tier in the Local Zone and
+everything else in the region.
+
+The neighbours it is confused with: **Outposts** puts AWS hardware in *your* data centre, for
+when the requirement is that the equipment be on your premises or the data never leave them.
+**Wavelength Zones** sit inside telecom operators' 5G networks for mobile-edge latency. Local
+Zones are AWS-operated facilities in a city, available to anyone, with nothing to install.

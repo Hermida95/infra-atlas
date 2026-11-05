@@ -20,4 +20,33 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A second region is a different problem, not a bigger one: the data has to be replicated, and something has to decide which region is live.
+A second region is a different problem from a second zone, not a bigger one. Within a region,
+AWS gives you synchronous replication, a shared network and managed failover. Across regions you
+get none of that for free, and three questions have to be answered explicitly.
+
+**Where does the data live, and how does it get there?** Everything is asynchronous, so there is
+an RPO greater than zero. Aurora Global Database replicates in under a second with one writer.
+DynamoDB global tables are multi-writer with last-writer-wins. S3 replication is best-effort
+unless you pay for Replication Time Control. Each of those is a different consistency model and
+the application has to be correct under the one you pick.
+
+**What decides which region is live?** Route 53 health checks with failover or latency records,
+or Global Accelerator when DNS caching is unacceptable. Something has to make the call, and in
+most real designs the honest answer is a human with a runbook, because automatic cross-region
+failover can be worse than the outage.
+
+**How does the second region exist at all?** Every piece of infrastructure must be deployable
+there -- which means CloudFormation or Terraform and StackSets, not a console. AMIs, container
+images, KMS keys, certificates, secrets and quotas are all regional and all have to be
+replicated or recreated. The quota one bites hardest: a failover that needs 200 instances in a
+region where the account is limited to 20 does not happen.
+
+Beyond disaster recovery there are two other reasons to go multi-region, and they ask different
+things. **Latency** for a global audience, which may be satisfied by CloudFront or Global
+Accelerator without moving the application at all. And **data residency**, where the requirement
+is that certain data never leaves a jurisdiction -- which is a partitioning problem rather than
+a replication one.
+
+The honest advice: most workloads should be excellent at multi-AZ before they are mediocre at
+multi-region. A second region doubles the operational surface, and an untested one provides
+false confidence rather than availability.

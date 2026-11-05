@@ -43,4 +43,36 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-Who may call which API on which resource. Evaluated on every single request, and the one service no design escapes.
+IAM authenticates and authorises every API call in AWS. It is global, it is free, and it is the
+one service no design escapes -- which is why reading the evaluation logic once is worth more
+than memorising policies.
+
+**Evaluation, in order.** An explicit **Deny** anywhere ends the request. Otherwise the request
+needs an **Allow**, and it must survive every ceiling above it: the **service control policy**
+of the account, any **permission boundary** on the principal, any **session policy** passed at
+assumption, and -- for a cross-account call -- the **resource policy** at the other end. The
+effective permission is the intersection of all of them. No matching allow is an implicit deny.
+
+**Principals.** Use **roles**. A role has no password and no access key; it is assumed through
+STS and the credentials expire. An EC2 instance gets one through an **instance profile**, a
+Lambda function through its **execution role**, an ECS task through its **task role**, an EKS
+pod through **IRSA** or Pod Identity, a pipeline through **OIDC federation**, and a person
+through **IAM Identity Center**. IAM **users** should be a short list of exceptions with a
+reason written down, because a long-lived access key is the most common cause of a compromise.
+
+**Policies.** Identity policies attach to the principal; **resource policies** attach to the
+thing being called and are what make cross-account access possible. The interesting half of any
+good policy is the **Condition** block -- `aws:SourceVpce`, `aws:MultiFactorAuthPresent`,
+`aws:PrincipalOrgID`, `aws:PrincipalTag` matched to `aws:ResourceTag` for attribute-based access
+control, `aws:SecureTransport`. A policy with no conditions is usually broader than anyone
+intends.
+
+**KMS is the exception worth remembering.** For most services an IAM allow is enough; for a KMS
+key the **key policy** must also allow the principal, and a careless key policy can lock out the
+account's own administrator with no recovery.
+
+**Getting to least privilege** is done by subtraction, not by guessing. **IAM Access Analyzer**
+generates a policy from the last ninety days of CloudTrail for a role, validates policies
+against a hundred-plus checks, proves which resources are reachable from outside the account,
+and flags unused access. The **policy simulator** answers whether a specific request would be
+allowed and which statement decided it. Both beat reasoning about JSON in your head.

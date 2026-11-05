@@ -18,4 +18,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Shares a subnet, a Transit Gateway, a Route 53 rule or a licence with other accounts in the organization instead of duplicating it.
+Resource Access Manager shares a resource with other accounts instead of each account creating
+its own. The resource stays owned, billed and managed by one account; the others simply use it.
+
+The headline case is the **shared VPC**. A network account owns one well-designed VPC and shares
+subnets with the workload accounts in an OU. Teams launch into subnets they do not own, the
+platform team keeps control of routing, endpoints, NAT and inspection, and there is no mesh of
+peering connections or a Transit Gateway bill to connect twenty VPCs that should have been one.
+Security groups still work across the participants, and each account only sees its own
+resources.
+
+The second is a **Transit Gateway** shared with the organization, which is the normal way to run
+one: a single gateway in the network account, attachments from every workload account, and no
+per-account duplication.
+
+What else can be shared, and comes up in exams: Route 53 Resolver rules (so every account
+resolves on-premises names the same way), License Manager configurations, Aurora clusters for
+read access, Outposts, Capacity Reservations, Image Builder components, and Lake Formation
+catalogue permissions.
+
+Two practical points. Sharing with an **OU or the whole organization** rather than with a list
+of account ids is what keeps it working as accounts are created -- and it requires enabling
+sharing within Organizations first. And the ownership split needs to be explicit: the owner
+cannot see into the participant's resources, the participant cannot change the shared one, and
+the billing for data transfer lands in places people do not expect until they have looked once.

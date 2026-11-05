@@ -18,4 +18,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A one- or three-year commitment to an hourly spend or an instance family, for roughly 30-70% off on-demand prices.
+Three commitment models, and choosing between them is mostly about how much flexibility you are
+willing to trade for discount.
+
+**Compute Savings Plans** commit to an hourly dollar spend for one or three years and apply
+automatically to EC2 in **any** instance family, size, region, operating system and tenancy,
+plus **Fargate and Lambda**. Up to about 66% off. This is the default recommendation, because it
+survives a migration from EC2 to containers to serverless without being stranded.
+
+**EC2 Instance Savings Plans** commit to a family in a region -- `m7` in eu-west-1 -- and go up
+to about 72%, with size and OS flexibility inside that family. Choose it only for a baseline you
+are confident will not move.
+
+**Reserved Instances** are the older mechanism and mostly matter now for two things: services
+Savings Plans do not cover (**RDS, ElastiCache, OpenSearch, Redshift, DynamoDB** reserved
+capacity), and **zonal RIs**, which reserve capacity in a specific Availability Zone rather than
+just discounting it.
+
+Payment options -- no upfront, partial, all upfront -- step the discount up and the flexibility
+down. One year, no upfront is the low-risk entry; three years, all upfront is the maximum bet.
+
+How to decide: look at the **steady baseline** in Cost Explorer, commit to roughly 70-80% of it
+rather than to the peak, and leave the variable top on demand or on Spot. Over-committing is the
+expensive mistake, because an unused commitment is paid for anyway. Buy from the **management
+account** so the discount pools across the organization, and set **coverage and utilisation
+alerts** so a drift in either is noticed before the renewal.

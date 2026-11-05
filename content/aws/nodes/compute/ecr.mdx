@@ -18,4 +18,23 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A private container registry with vulnerability scanning, lifecycle rules, immutable tags and cross-region replication.
+A private container registry, one per region, with repositories inside it. Authentication is IAM
+-- `aws ecr get-login-password` exchanges your credentials for a token the Docker CLI uses -- so
+there is no separate registry credential to distribute, which is most of why it is worth using
+over a self-managed one.
+
+Four features to turn on deliberately. **Tag immutability** stops `:latest` or `:v1.2.3` being
+repointed at different content, which is what makes a deployment reproducible and a rollback
+real; with it on, deploy by digest and a specific image is a specific set of bytes forever.
+**Scan on push** with basic scanning, or **enhanced scanning**, which is Inspector and keeps
+re-scanning images already in the registry as new CVEs are published -- an image that was clean
+when built is not clean forever. **Lifecycle policies**, because untagged layers from CI
+accumulate until the storage bill is noticeable; a rule that expires untagged images after a few
+days and keeps the last N tagged ones is the standard. **Cross-region replication** for
+multi-region deployments, so a failover region is not pulling across the internet.
+
+The pull path catches people out. A task or pod in a private subnet needs three VPC endpoints --
+`ecr.api`, `ecr.dkr` and an S3 **gateway** endpoint, because the layers themselves live in S3 --
+or it needs a NAT Gateway and the bill that comes with it. **Pull-through cache** rules mirror
+upstream public registries (Docker Hub, Quay, ECR Public) on first use, which both removes the
+rate limits and means a build does not fail because an upstream registry is down.

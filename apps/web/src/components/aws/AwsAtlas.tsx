@@ -9,6 +9,7 @@ import { caseLit, optionLit } from "@/lib/lit";
 import type { MapStore } from "../brain/BrainScene";
 import { Mark } from "../brain/Mark";
 import { Header } from "../Header";
+import { inline } from "../Prose";
 import { Teardown } from "../teardown/Teardown";
 import { Cases } from "./Cases";
 
@@ -58,8 +59,8 @@ export default function AwsAtlas() {
     [revealMap],
   );
 
-  // Deep links: /aws?case=<id> opens a case and /aws?focus=<id> flies to a service, so a
-  // situation or a single service can be shared as a URL.
+  // Deep links: /aws?case=<id> opens a case, /aws?focus=<id> flies to a service and
+  // &open=1 takes it apart, so a situation, a service or a teardown is a shareable URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const picked = awsCaseById.get(params.get("case") ?? "");
@@ -71,6 +72,7 @@ export default function AwsAtlas() {
       if (node) {
         store.current.selected = node;
         setSelected(node);
+        if (params.get("open") && node.parts.length) setTeardown(node);
       }
     });
   }, [light]);
@@ -158,12 +160,15 @@ export default function AwsAtlas() {
                 ))}
               </p>
             )}
-            <p>{selected.summary}</p>
+            <p>{inline(selected.summary)}</p>
             {selected.parts.length > 0 && (
               <button type="button" className="btn gold" onClick={() => setTeardown(selected)}>
                 Take it apart
               </button>
             )}
+            <p className="detail-more">
+              <Link href={`/aws/${selected.id}`}>Read the whole thing →</Link>
+            </p>
             <h4>How it connects</h4>
             <ul className="wires">
               {[...(AWS.neighbours.get(selected.id) ?? [])].map((id) => {
@@ -175,7 +180,7 @@ export default function AwsAtlas() {
                       <Mark node={node} size={14} />
                       {node.title}
                     </button>
-                    {text && <span>{text}</span>}
+                    {text && <span>{inline(text)}</span>}
                   </li>
                 );
               })}

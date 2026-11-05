@@ -18,4 +18,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Managed Hadoop, Spark, Hive and Presto clusters, usually with Spot task nodes, for jobs too large or too custom for Glue.
+EMR runs the open-source big data stack -- Spark, Hive, Presto/Trino, HBase, Flink -- on
+clusters AWS provisions and configures. You get the frameworks and their tuning knobs, and you
+own the cluster.
+
+The cost model is the main reason to choose it over Glue, and it rests on **node groups**.
+**Primary** nodes run the coordinators. **Core** nodes hold HDFS and should be on-demand,
+because losing one loses data. **Task** nodes only compute and should be on **Spot**, often at
+70-90% off, because losing one just reruns a task. That split is most of the saving, and it is
+why EMR appears in cost-optimisation questions.
+
+The architectural habit that matters is **EMRFS**: read and write S3 directly rather than
+keeping data in HDFS. The cluster then becomes disposable -- spin it up for a job, tear it down
+after -- and the data outlives it. **Transient clusters** for scheduled work and **long-running
+clusters** for interactive use are the two shapes, and auto-termination on idle is what stops
+the second becoming an expensive mistake.
+
+Three deployment options: **EMR on EC2** (the classic, most control), **EMR Serverless** (no
+cluster at all, pay for what the job uses -- the simplest place to start now), and **EMR on
+EKS**, which runs Spark on an existing Kubernetes cluster so the data team shares capacity with
+everyone else.
+
+Against Glue: Glue is serverless and opinionated, good for straightforward ETL with little
+operational work. EMR is for jobs that are large, long-running, need specific framework versions
+or tuning, or where Spot economics on task nodes make a real difference to the bill.

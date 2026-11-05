@@ -18,4 +18,28 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Infrastructure in TypeScript, Python, Java or Go that synthesises CloudFormation. Loops, types and tested constructs instead of YAML.
+CDK is a program that synthesises a CloudFormation template. You write TypeScript, Python, Java,
+Go or C#; `cdk synth` produces the template; `cdk deploy` applies it as a stack. Every
+CloudFormation property -- change sets, drift detection, rollback, no state file -- still
+applies underneath, which is the thing to remember when debugging.
+
+What it buys is abstraction. **Constructs** come in three levels: L1 (`Cfn*`) maps one-to-one
+onto CloudFormation resources; **L2** gives an opinionated resource with sensible defaults and
+helper methods -- `bucket.grantRead(role)` writes the IAM policy for you; **L3** patterns
+assemble several resources into one object, such as an ALB-fronted Fargate service in a few
+lines. The saving is largest where the boilerplate is largest: IAM policies, VPC layouts, and
+anything involving wiring permissions between services.
+
+Because it is a real language you get loops, conditionals, types and unit tests. CDK's
+**assertions** library tests the synthesised template, and **snapshot tests** catch an
+unintended change in a diff -- which is as close as infrastructure gets to a regression suite.
+
+Two practical pieces. **`cdk diff`** before every deploy, because the generated template is not
+something you read line by line. And **CDK Pipelines**, a self-mutating pipeline: the pipeline
+is defined in the same codebase and updates itself before deploying the stacks, so adding a
+stage is a commit.
+
+The trade against plain CloudFormation is that the generated template can be large and
+surprising, and against Terraform it is that you are tied to CloudFormation's resource coverage
+and its update semantics. The advantage over both is that complex IAM and multi-resource
+patterns stop being copy-paste.

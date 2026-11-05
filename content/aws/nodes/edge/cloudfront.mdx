@@ -43,4 +43,37 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-A CDN of hundreds of edge locations that caches, compresses, terminates TLS and can run code before the request ever reaches a region.
+CloudFront is a content delivery network of hundreds of edge locations and a layer of regional
+caches behind them. It is usually described as a cache, which is the smallest thing it does: it
+is the place where your application meets the public internet.
+
+**Why it helps even without caching.** Most of the latency for a distant user is round trips,
+not bytes. Terminating TLS at an edge location near them and crossing the remaining distance
+once, on a warm connection over the AWS backbone, removes most of it. A dynamic, uncacheable API
+still gets faster behind CloudFront.
+
+**Cache behaviours** are where it is actually configured: path patterns mapped to origins, each
+with its own **cache key**, TTLs and policies. The cache key is the setting that decides whether
+a CDN works -- forwarding every header, cookie and query string to the origin produces a cache
+that never hits, which is the most common misconfiguration. Use the managed cache and
+origin-request policies, and forward only what the origin actually varies on.
+
+**Origins** can be S3, an ALB, API Gateway, or anything on the internet, with **origin groups**
+for failover between two of them. For S3, **Origin Access Control** keeps the bucket private and
+lets only CloudFront read it -- a public bucket behind a distribution is a configuration error,
+not a pattern.
+
+**Code at the edge.** **CloudFront Functions** run in microseconds for header rewrites, URL
+normalisation and simple redirects, at very low cost. **Lambda@Edge** gives a full runtime with
+network access for authentication, A/B testing and request signing, at higher latency and cost.
+Pick the first unless you need the second.
+
+**Security attaches here**, in front of everything: WAF, Shield, geo-restriction, signed URLs
+and signed cookies for private content, and field-level encryption. And the detail that catches
+everyone: a custom domain needs an ACM certificate **in us-east-1**, because that is where
+CloudFront's control plane lives.
+
+**Cost** is per gigabyte out and per request, with no charge for traffic from AWS origins to
+CloudFront -- so putting it in front of S3 or an ALB often *reduces* the bill while improving
+latency. Invalidations are charged beyond a free monthly allowance, which is why versioned
+filenames beat invalidating.

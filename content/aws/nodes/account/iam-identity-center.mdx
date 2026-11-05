@@ -17,7 +17,50 @@ connects:
     text: "Sign-in exchanges the SAML or OIDC assertion for temporary credentials. Nobody holds an access key."
   - to: directory-service
     text: "The identity source can be Identity Center itself, Active Directory, or any external IdP."
+lead: "One sign-in, then a short-lived role in whichever account you need. What replaced IAM users for people."
+parts:
+  - name: "Identity source"
+    kind: bus
+    text: "Its own directory, Active Directory, or any external IdP through SAML or SCIM -- Okta, Entra, Google. One place people exist."
+  - name: "Permission sets"
+    kind: sheet
+    text: "A policy definition that becomes an IAM role in every account it is assigned to. Managed policies, inline, and a boundary."
+  - name: "Assignments"
+    kind: lanes
+    text: "User or group, plus permission set, plus account or OU. Assigning a group to an OU is what keeps it working as accounts are added."
+  - name: "Access portal"
+    kind: gate
+    text: "One URL listing the accounts and roles a person has, with console sign-in and CLI credentials behind the same session."
+  - name: "Session duration"
+    kind: orbit
+    text: "One to twelve hours, then re-authenticate. No access key exists to be leaked or rotated."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Workforce sign-in once against your own directory, then short-lived roles in any account. What replaced IAM users for people.
+Identity Center is how humans should reach AWS. A person authenticates once against the identity
+source -- your Active Directory, Okta, Entra, Google Workspace, or Identity Center's own
+directory -- and the portal then lists the accounts and roles they are entitled to. Picking one
+assumes a role through STS and hands back credentials that expire.
+
+The mechanics worth knowing: a **permission set** is a definition that Identity Center
+materialises as an **IAM role** in each account it is assigned to. So the thing a person assumes
+is an ordinary role, with an ordinary trust policy, visible in that account -- there is no
+magic, and CloudTrail records it normally. Assignments are made to **groups** and to **OUs**
+rather than to users and accounts, which is the difference between an access model that survives
+growth and one that is edited every time someone joins.
+
+Two features that remove persistent credentials from developer machines. `aws sso login` gives
+the CLI a session from the same sign-in, so no access key is stored in `~/.aws/credentials`. And
+**attribute-based access control** passes directory attributes -- department, cost centre,
+project -- as session tags, so one permission set can grant access scoped by tag instead of
+needing a permission set per team.
+
+It also supports **SCIM provisioning**, so joiners, movers and leavers in the HR-backed
+directory flow through automatically. That is the control an auditor asks about: when someone
+leaves, their AWS access ends because their directory account ended, not because somebody
+remembered.
+
+The position to hold: IAM **users** are for the small number of cases that genuinely cannot
+federate -- a legacy integration, an emergency break-glass account with MFA and heavy
+monitoring. Everything else, human or machine, is a role.

@@ -18,4 +18,22 @@ connects:
 reviewed: 2026-11-05
 ---
 
-The VPC's door to the internet, horizontally scaled and highly available by AWS. Traffic both ways, and only for resources with a public address.
+An Internet Gateway is a horizontally scaled, redundant component with no bandwidth limit and
+nothing to size or pay for. One per VPC, and attaching it does nothing on its own.
+
+Reaching the internet through it takes three things, all of which must be true: a route to
+`0.0.0.0/0` pointing at the gateway, a **public IPv4 address or Elastic IP** on the resource,
+and security group and NACL rules that allow the traffic. Miss the second and the instance sits
+in a "public" subnet unable to reach anything -- the most common form of "my routing is correct
+and it still does not work".
+
+What it actually does is one-to-one NAT. Your instance only ever sees its private address; the
+gateway rewrites the source to the public address on the way out and back. This is why you never
+configure the public address inside the operating system, and why detaching an Elastic IP does
+not need a reboot.
+
+Two notes for current designs. Public IPv4 addresses are **charged per hour each** since
+February 2024, including the ones attached to running instances, which has made "does this
+really need a public address" a cost question as well as a security one. And for IPv6 there is a
+separate component, the **egress-only Internet Gateway**: IPv6 has no NAT, so outbound-only IPv6
+needs its own gateway rather than a NAT Gateway.

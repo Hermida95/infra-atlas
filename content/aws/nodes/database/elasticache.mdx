@@ -16,7 +16,50 @@ connects:
     text: "The cheapest way to take read load off a relational database is to stop asking it the same question twice."
   - to: dax
     text: "For DynamoDB, DAX is usually the better cache because it invalidates itself. For anything else, this is the cache."
+lead: "Two engines, and with Redis two cluster shapes. The shape decides what survives a failure."
+parts:
+  - name: "Redis or Valkey"
+    kind: core
+    text: "Data structures, persistence, replication, transactions, pub/sub and Lua. The default choice for almost everything."
+  - name: "Memcached"
+    kind: chips
+    text: "Multi-threaded, simple key-value, no persistence and no replication. For a pure cache where a lost node means a few cache misses."
+  - name: "Cluster mode disabled"
+    kind: orbit
+    text: "One shard: a primary and up to five replicas. Everything fits in one node's memory, and failover promotes a replica."
+  - name: "Cluster mode enabled"
+    kind: satellites
+    text: "Up to 500 shards, the keyspace split across them, each with its own replicas. How it scales past one node's memory."
+  - name: "Serverless"
+    kind: loop
+    text: "No nodes to size at all: it scales capacity automatically and charges for data stored and requests served."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Managed Redis or Valkey and Memcached for sessions, hot keys, leaderboards and rate limits. Redis adds replication, persistence and cluster mode.
+The cheapest way to take read load off a database is to stop asking it the same question twice.
+ElastiCache is the managed place to put the answer, and the engine choice is mostly settled:
+**Redis** (or its fork Valkey) unless you specifically want Memcached's multi-threaded
+simplicity, because Redis brings replication, automatic failover, persistence, sorted sets,
+pub/sub and transactions.
+
+The patterns are worth naming because exam questions describe them rather than name them. **Lazy
+loading** (cache-aside): read the cache, miss, read the database, write the cache. Only
+requested data is cached, and every miss pays a round trip; stale data lives until it is
+evicted. **Write-through**: write the cache whenever you write the database. Reads are never
+stale, writes cost more, and data that is never read is cached anyway. Most systems do both,
+with a **TTL** on everything as the safety net -- a TTL is what stops a missed invalidation
+being permanent.
+
+Beyond caching, Redis is used for things that are awkward elsewhere: **session stores** for a
+stateless web tier, **rate limiting** with counters and expiries, **leaderboards** with sorted
+sets, and a simple **pub/sub** bus.
+
+For availability, cluster mode disabled gives you one shard with replicas and a **Multi-AZ**
+option with automatic failover; cluster mode enabled splits the keyspace across shards so you
+can exceed one node's memory and spread the write load. Serverless removes the sizing question
+entirely and is the sensible starting point for a new workload.
+
+The thing to remember from an exam's point of view: ElastiCache is **in front of** a database,
+not instead of it, it does nothing for availability of the data itself, and against DynamoDB
+specifically **DAX** is usually the better cache because it invalidates itself.

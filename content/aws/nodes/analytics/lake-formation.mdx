@@ -16,4 +16,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Column-, row- and tag-level permissions over a data lake, granted in the catalogue instead of in every bucket policy.
+Lake Formation is permissions for a data lake. Without it, access to data in S3 is controlled by
+**bucket policies and IAM**, which operate on prefixes and objects -- there is no way to say
+"this analyst may see the orders table but not the `customer_email` column".
+
+Lake Formation moves the grant to the **catalogue**. You register the S3 locations with it, and
+from then on it brokers access: permissions are granted on databases, tables, **columns**,
+**rows** and **cells**, and the engines that read the Glue catalogue -- Athena, Redshift
+Spectrum, EMR, Glue, QuickSight -- all honour them. The same `SELECT` returns different columns
+to different people, which is exactly what a data-protection requirement asks for and what
+bucket policies cannot express.
+
+**LF-Tags** are what make it scale. Rather than granting on each table, you tag catalogue
+resources (`classification=pii`, `domain=finance`) and grant on the tags. A new table tagged
+`pii` inherits the policy that already exists, so permissions stop being a per-table backlog.
+
+**Cross-account sharing** is the other reason it appears in Professional scenarios: a central
+data lake account shares specific tables, columns or rows with consumer accounts through Lake
+Formation and RAM, with no bucket policies and no copying of data.
+
+The honest caveat is that adopting it on an existing lake is a migration: it changes how access
+is evaluated, and the hybrid mode where IAM permissions still apply exists precisely because
+cutting over in one step is disruptive.

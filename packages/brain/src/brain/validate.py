@@ -130,6 +130,11 @@ def _check_node(
     if meta.lab and not meta.parts:
         issues.append(Issue(path, f"lab '{meta.lab}' requires non-empty parts"))
 
+    # `lead` is the sentence that introduces a teardown, so it only means something when there
+    # is something to take apart.
+    if meta.lead and not meta.parts:
+        issues.append(Issue(path, "lead without parts: there is nothing for it to introduce"))
+
     rule = meta.planner
     if (
         rule is not None

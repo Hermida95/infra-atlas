@@ -19,4 +19,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Snapshots and object copies in a second region, with nothing running there. The cheapest strategy, and hours of recovery time.
+The cheapest strategy, and for a great many workloads the correct one. Data is backed up and
+copied to another region; nothing runs there until it is needed. Recovery means provisioning the
+infrastructure and restoring the data.
+
+**RPO** is the backup interval -- hours, typically. **RTO** is the restore plus the deploy, and
+it is usually measured in hours too, dominated by how long it takes to restore a large database
+rather than by anything else.
+
+What makes it work is that the infrastructure is **code**. A disaster recovery plan whose first
+step is "rebuild the VPC" is not a plan; one whose first step is "deploy the stack in the second
+region" is. CloudFormation or Terraform, with StackSets for multi-account, plus AMIs and
+container images already replicated, is the difference between hours and days.
+
+The implementation is **AWS Backup** with cross-region and, importantly, **cross-account**
+copies. The second of those is what makes it a security control as well as a DR one: a vault in
+an account that no workload administrator can reach, with **Vault Lock in compliance mode**,
+holds copies that an attacker with full admin in the source account cannot delete. That is the
+honest answer to a ransomware requirement, and it is the only configuration where the answer is
+genuinely "they cannot".
+
+What it does not cover: an RTO in minutes, or an RPO in seconds. If the requirement states
+either, this is the wrong row of the table and the question is testing whether you know that.
+And the usual failure mode is never having tried it -- schedule restore tests, because a restore
+that has never been performed is a hypothesis.

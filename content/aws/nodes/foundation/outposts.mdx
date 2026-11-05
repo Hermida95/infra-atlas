@@ -18,4 +18,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-AWS-owned racks installed in your own data centre, running EC2, EBS, S3 and EKS against the same APIs as the region.
+Outposts are racks of AWS-designed hardware installed in your own data centre, running the same
+APIs, the same services and the same tooling as a region. AWS owns, monitors, patches and
+replaces the hardware; you provide space, power, cooling and network.
+
+Two forms: full **42U racks** for substantial capacity, and **1U/2U servers** for small sites,
+retail branches and factory floors. They run EC2, EBS, S3 on Outposts, ECS, EKS, RDS and
+ElastiCache -- a subset, chosen for the workloads people actually need on premises.
+
+Three requirements lead here, and they are the ones an exam will describe rather than name.
+**Latency** to equipment or users in the building, measured in single-digit milliseconds, where
+even a Local Zone is too far. **Data residency**, where regulation or contract says the data
+must physically remain on your premises. And **local processing of large data** -- a factory or
+a research facility generating more than the link to a region can carry.
+
+The dependency to understand is the **service link**: a connection back to the parent region
+that carries the control plane. The Outpost keeps running local workloads if it drops, but you
+cannot launch, modify or manage anything until it returns, so the link is usually a Direct
+Connect, often redundant. Capacity is also fixed -- you ordered a certain number of instance
+slots, and there is no elastic scaling beyond them.
+
+Against the neighbours: **Local Zones** are AWS facilities in a city with nothing to install;
+**Outposts** is hardware on your floor; **Snowball Edge Compute** is the ruggedised, temporary,
+disconnected option for a ship or a remote site.

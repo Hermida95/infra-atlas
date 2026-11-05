@@ -18,4 +18,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-An alert, or an automated action, when actual or forecast spend or usage crosses a line you set.
+A budget is a threshold with an action. It can watch **cost**, **usage**, **Reserved Instance or
+Savings Plans utilisation and coverage**, and it can alert on **actual** spend or on
+**forecast** spend -- the second being the more useful of the two, because it fires while there
+is still time to do something.
+
+Alerts go to email or, better, to **SNS**, which means the same threshold can notify a channel
+and trigger a function. **Budget actions** go further: when a threshold is crossed, apply a
+restrictive IAM policy or SCP, stop EC2 instances, or stop RDS instances -- automatically or
+after approval. That is the mechanism behind a sandbox account that cannot run away with the
+bill.
+
+The patterns worth setting up once: a monthly budget per account or per team tag with alerts at
+80% of forecast; a budget on **untagged** spend, which makes tagging compliance visible without
+a separate process; and for non-production accounts, an action that stops instances at a hard
+ceiling.
+
+A single alert on the whole organization's spend is nearly useless -- by the time it fires,
+nobody can tell what caused it. Budgets scoped per account, per service or per tag are what make
+the alert actionable.
+
+**Cost Anomaly Detection** is the complement and is often better than a threshold: it learns
+each service's normal pattern and flags departures, so a new $400-a-day line item in a $50,000
+account is caught even though no budget was crossed.

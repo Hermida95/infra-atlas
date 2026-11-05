@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { edgeTextBetween, type GraphNode, MAP, type World } from "@/lib/graph";
 import { Mark } from "../brain/Mark";
+import { inline } from "../Prose";
 import { DockerLab, freshDockerLab } from "./labs/DockerLab";
 import type { TeardownStore } from "./TeardownScene";
 
@@ -89,13 +90,13 @@ export function Teardown({ node, onClose, onSelect, world = MAP, backLabel = "Ba
             <Mark node={node} size={64} />
             <p className="tag">{world.domainById.get(node.domain)?.name}</p>
             <h2>{node.title}</h2>
-            <p>{node.lead ?? node.summary}</p>
+            <p>{inline(node.lead ?? node.summary)}</p>
             <p className="td-hint">Scroll to take it apart</p>
           </section>
           {node.parts.map((p, i) => (
             <section key={p.name} className="td-sec" data-part={i} ref={i === 0 ? firstPart : undefined}>
               <h3>{p.name}</h3>
-              <p>{p.text}</p>
+              <p>{inline(p.text)}</p>
             </section>
           ))}
           {Lab && (
@@ -114,7 +115,7 @@ export function Teardown({ node, onClose, onSelect, world = MAP, backLabel = "Ba
                     <button type="button" className="chip" onClick={() => onSelect(n)}>
                       {n.title}
                     </button>
-                    {text && <span>{text}</span>}
+                    {text && <span>{inline(text)}</span>}
                   </li>
                 );
               })}

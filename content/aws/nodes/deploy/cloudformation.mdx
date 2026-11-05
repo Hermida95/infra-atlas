@@ -41,4 +41,32 @@ layout: stack
 reviewed: 2026-11-05
 ---
 
-Declarative templates AWS applies as a stack, with change sets, drift detection, automatic rollback and no state file to look after.
+CloudFormation is the native infrastructure-as-code service: a template describing resources,
+applied as a **stack** that AWS creates, updates and deletes as a unit. There is no state file
+to store or lock -- the stack *is* the state, held by the service -- which removes a whole class
+of problem that Terraform users manage carefully.
+
+A template has **Parameters** (inputs, which should use `AWS::SSM::Parameter` types or `NoEcho`
+for anything sensitive), **Mappings** (lookup tables, classically AMI ids per region),
+**Conditions** (resources created only in some environments), **Resources** and **Outputs**.
+`!Ref`, `!GetAtt`, `!Sub` and `!ImportValue` are the functions that wire them together.
+
+The habit that prevents incidents is the **change set**: a dry run showing what would be
+created, modified or **replaced**. That last word is the one to read carefully, because
+"replacement" means the resource is deleted and recreated -- a new RDS instance, an empty
+volume, a different endpoint. Many properties are immutable and changing them silently implies
+replacement.
+
+**Deletion and update policies** are the protection: `DeletionPolicy: Retain` or `Snapshot` on
+databases and buckets, `UpdateReplacePolicy` for the same during a replacement, and stack-level
+**termination protection**. Without them, deleting a stack deletes its data.
+
+For structure, **nested stacks** break a large template into reusable components with a parent
+passing parameters, and **cross-stack references** share outputs between separately managed
+stacks -- useful, and sticky, because an exported value cannot change while something imports
+it. **StackSets** extend the same template to many accounts and regions.
+
+Two more pieces worth knowing: **drift detection** reports what has been changed by hand outside
+the template, and **CloudFormation Hooks** run checks before a resource is created, which is the
+mechanism behind Control Tower's proactive controls. **CDK** and **SAM** both produce
+CloudFormation, so everything here applies to them too.

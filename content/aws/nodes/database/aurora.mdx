@@ -18,7 +18,52 @@ connects:
     text: "The cross-region story is built in, with sub-second replication and failover in about a minute."
   - to: rds
     text: "Compatible enough to migrate into with a snapshot or a replica, and cheaper per transaction at scale."
+lead: "A storage layer that pretends to be a disk, with database engines bolted on top. Every Aurora feature comes from that split."
+parts:
+  - name: "The storage layer"
+    kind: cylinder
+    text: "Six copies of every 10 GB segment across three zones. It grows to 128 TB on its own and survives losing two copies for writes, three for reads."
+  - name: "Writer and readers"
+    kind: orbit
+    text: "One writer, up to fifteen readers, all reading the same storage -- so replica lag is milliseconds rather than a log being replayed."
+  - name: "Endpoints"
+    kind: bus
+    text: "A writer endpoint, a reader endpoint that load-balances, and custom endpoints for a subset -- so reporting hits the big instances."
+  - name: "Backtrack and clones"
+    kind: loop
+    text: "Rewind the cluster in place to a point in time without a restore, and create a copy-on-write clone of a terabyte in minutes."
+  - name: "Global Database"
+    kind: satellites
+    text: "Replication to five secondary regions in typically under a second, with promotion in about a minute."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-A MySQL- and PostgreSQL-compatible engine on a shared storage layer that keeps six copies across three zones and grows to 128 TB by itself.
+Aurora is a MySQL- and PostgreSQL-compatible engine on top of a storage layer AWS wrote. The
+storage is the product. It keeps **six copies of each 10 GB segment across three Availability
+Zones**, grows to 128 TB without anyone resizing anything, and is self-healing -- it can lose
+two copies and still take writes, three and still serve reads. Because the storage is shared,
+the database instances in front of it are nearly stateless, and that is where the features come
+from.
+
+Replicas read the same storage instead of replaying a replication log, so lag is typically
+**under 100 milliseconds** and adding a replica does not add write load to the writer. Failover
+is seconds, not minutes, because the new writer does not need to load anything. A **clone** of a
+10 TB cluster takes minutes and almost no space, because it is copy-on-write -- which makes "a
+full-size copy of production for this test" a reasonable request instead of a project.
+**Backtrack** rewinds the whole cluster to a point in time in place, without a restore, which
+turns a bad migration from an outage into a few minutes.
+
+The endpoints matter in the application. The **writer endpoint** follows the current writer
+through a failover. The **reader endpoint** round-robins across replicas. **Custom endpoints**
+let you point reporting at the two large instances and the API at the small ones. Pointing
+everything at the writer endpoint is the most common way to under-use an Aurora cluster.
+
+Costs are instance hours, storage and **I/O**, and the I/O line surprises people on write-heavy
+workloads -- **Aurora I/O-Optimized** swaps it for a higher instance price and is cheaper past
+roughly 25% of the bill being I/O.
+
+Against RDS: Aurora is faster, more available and usually cheaper per transaction at scale, at
+the price of being AWS-specific and having a floor on cost. Against DynamoDB: Aurora is the
+answer when you need joins, transactions across tables and SQL; DynamoDB is the answer when you
+need single-digit milliseconds at any scale and can design around the access patterns.

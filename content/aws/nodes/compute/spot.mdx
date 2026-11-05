@@ -15,7 +15,57 @@ connects:
     text: "The shape most accounts land on: a committed baseline, Spot for the elastic peak, on-demand for what can be neither."
   - to: auto-scaling
     text: "A mixed-instances policy puts both in one group, with a floor of on-demand capacity you are not willing to lose."
+lead: "Three ways to pay for the same instance. The choice is a design decision, not a billing one."
+parts:
+  - name: "On-demand"
+    kind: disc
+    text: "Per second, no commitment, no interruption. The baseline price and the default for anything you cannot predict or interrupt."
+  - name: "Savings Plans and Reserved"
+    kind: core
+    text: "A one- or three-year commitment for 30-70% off. Compute Savings Plans are flexible across family, size, region, Fargate and Lambda."
+  - name: "Spot"
+    kind: chips
+    text: "Up to 90% off spare capacity, reclaimed with a two-minute warning. Price is set by supply, not by a bid, and varies per type per zone."
+  - name: "Capacity Reservations"
+    kind: gate
+    text: "Pay on-demand but guarantee the capacity exists in a zone. For a failover that must be able to launch."
+  - name: "Dedicated hosts"
+    kind: machine
+    text: "A physical server of your own, for per-socket licensing and compliance that forbids shared tenancy."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Spare capacity at up to 90% off, reclaimed with a two-minute warning. The purchase model is a design decision, not a billing detail.
+The same instance has three prices, and picking the mix is an architecture decision. The shape
+most mature accounts land on: a **committed baseline** covering the capacity that is always
+running, **Spot** for the elastic and interruptible portion, and **on-demand** for what can be
+neither.
+
+**Spot** is spare capacity at up to 90% off. The price moves with supply and demand per instance
+type per zone, you do not bid, and AWS reclaims the instance with a **two-minute warning**
+delivered through instance metadata and an EventBridge event. The rules for using it well are
+few and they all point the same way: be **flexible** -- accept many instance types and sizes
+across several zones, because interruption risk is per pool and a request pinned to one type is
+a request that gets interrupted; **handle the notice** by draining, checkpointing and
+deregistering; and **keep state off the instance**. Use the `capacity-optimized` allocation
+strategy, which picks the deepest pools rather than the cheapest, because an interruption costs
+more than the few percent saved.
+
+What suits it: CI runners, batch and data processing, rendering, stateless web tiers behind a
+load balancer with an on-demand floor, EMR task nodes, ECS and EKS worker nodes. What does not:
+a database, anything with a long non-resumable job, or a licence that charges per launch. **AWS
+Batch** and **Fargate Spot** exist to make this easy, because in Batch every job is retryable by
+definition.
+
+**Savings Plans** are the commitment side, and the flexible kind is almost always right. A
+*Compute* Savings Plan commits to an hourly spend and applies to EC2 in any family, size or
+region, plus Fargate and Lambda -- so a migration to containers does not strand it. An *EC2
+Instance* Savings Plan is cheaper and locks the family and region. Classic Reserved Instances
+are mostly a legacy of the same idea, though they remain the way to reserve capacity in a
+specific zone. One year of no-upfront is the low-risk starting point; three years all-upfront is
+the maximum discount and the maximum bet.
+
+**Capacity Reservations** are the piece people forget: they are not a discount, they guarantee
+that capacity exists. For a disaster-recovery region where a failover has to be able to launch
+two hundred instances at once, a reservation is the only thing that makes that a fact rather
+than a hope.

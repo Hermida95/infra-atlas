@@ -17,7 +17,51 @@ connects:
     text: "Session Manager into a private subnet with no NAT needs the ssm, ssmmessages and ec2messages endpoints."
   - to: ec2
     text: "The agent plus an instance profile replaces the bastion host, the SSH key and the inbound rule for port 22."
+lead: "A dozen capabilities under one name. Four of them are why it is on every instance."
+parts:
+  - name: "The agent"
+    kind: core
+    text: "Preinstalled on current AMIs, needs an instance profile and either internet or three VPC endpoints. Everything else here depends on it."
+  - name: "Session Manager"
+    kind: gate
+    text: "A browser or CLI shell with no SSH, no key pair, no bastion and no inbound port. Logged to S3 or CloudWatch, and controlled by IAM."
+  - name: "Patch Manager"
+    kind: loop
+    text: "Patch baselines, maintenance windows and compliance reporting across a fleet, including on-premises servers."
+  - name: "Run Command and Automation"
+    kind: trigger
+    text: "A command or a multi-step runbook across thousands of targets with rate control, approvals and rollback."
+  - name: "Inventory, State Manager, Parameter Store"
+    kind: modules
+    text: "What is installed, keeping configuration enforced over time, and the configuration store itself."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Patching, Run Command, Session Manager shell access with no SSH or bastion, inventory, automation runbooks and Parameter Store.
+Systems Manager is the operations layer for instances -- EC2, on-premises servers, and VMs in
+other clouds through hybrid activations. Everything it does depends on the **SSM agent** plus an
+**instance profile** that allows it, which is why "the instance does not appear in Systems
+Manager" is nearly always one of those two, or a missing network path.
+
+**Session Manager** is the capability that changes architecture. It gives a shell through IAM,
+with no SSH daemon exposed, no key pairs to distribute, no bastion host to run and patch, and
+**no inbound security group rule at all** -- the agent makes an outbound connection. Sessions
+are authorised by IAM policy, can be logged in full to S3 or CloudWatch, and support port
+forwarding, which is how you reach a private RDS instance from a laptop without a VPN. If an
+exam scenario asks how to administer instances in private subnets without a bastion, this is the
+answer. In a private subnet with no NAT it needs three interface endpoints: `ssm`, `ssmmessages`
+and `ec2messages`.
+
+**Patch Manager** handles the half of the shared responsibility model that is yours on EC2:
+baselines per operating system with auto-approval delays, maintenance windows, and compliance
+reporting that says which instances are missing which patches.
+
+**Run Command** executes a document across a fleet with concurrency and error thresholds --
+useful, and better still as the thing an **Automation** runbook calls. Automation documents are
+multi-step runbooks with branching, approvals and rollback, and they are what Config
+remediation, Incident Manager and most "fix it automatically" patterns actually run.
+
+The rest earns its place quietly: **Inventory** for what is installed where, **State Manager**
+for configuration that is re-applied rather than set once, **Parameter Store** for configuration
+and secrets, **Fleet Manager** for a console view of a fleet, and **OpsCenter** for operational
+items raised from alarms and events.

@@ -19,4 +19,29 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Both regions serving real traffic. Near-zero recovery time, and the only strategy where write conflicts become your problem.
+Both regions serve real production traffic all the time. There is no failover, only the removal
+of a region, so RTO approaches zero and the capacity you have been paying for is capacity you
+are using.
+
+It is also the hardest of the four to get right, and the difficulty is entirely in the data. The
+moment two regions accept writes, **conflicts** become an application concern. DynamoDB **global
+tables** resolve them last-writer-wins, which silently discards one update when two land in the
+replication window -- fine when each item belongs to one user served by one region, wrong for a
+shared counter or an inventory level. Aurora Global Database keeps a single writer, so one
+region's writes cross the ocean, which bounds how active/active it really is. The designs that
+work usually **partition ownership**: each user, tenant or shard has a home region that owns its
+writes, and the others read.
+
+Traffic is distributed by Route 53 **latency** or **weighted** records, or by Global Accelerator
+with traffic dials. Health checks remove an unhealthy region automatically, and because both are
+already live there is no promotion step.
+
+Second-order problems worth knowing about: a **cell-based** design keeps one bad tenant inside
+one cell rather than taking down a region; **idempotency** matters more because retries can land
+in a different region; deployments have to be region-by-region with the ability to stop halfway;
+and observability has to be aggregated or you are reading two of everything.
+
+Choose it when the business genuinely cannot tolerate minutes of downtime, or when the latency
+requirement already demands serving from several regions. Choose warm standby when it does not,
+because active/active's real cost is not the second estate -- it is the permanent engineering
+discipline required to keep two live regions consistent.

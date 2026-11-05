@@ -16,4 +16,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Managed SFTP, FTPS, FTP and AS2 endpoints in front of S3 or EFS, for partners who are not going to change their client.
+AWS Transfer Family provides managed **SFTP, FTPS, FTP, AS2 and web app** endpoints in front of
+S3 or EFS. The point is that your partners keep the client and the workflow they already have,
+and you stop running an FTP server.
+
+Each user maps to an S3 prefix or an EFS path with a **scope-down policy**, so a partner sees
+only their own folder and cannot list the bucket. Identity comes from the service's own store,
+from a **custom identity provider** -- a Lambda function or an API Gateway endpoint, which is
+how an existing customer database becomes the authentication source -- or from Directory
+Service.
+
+The piece that makes it more than a landing zone is **managed workflows**: on upload, run a
+sequence of steps -- validate, decrypt with PGP, tag, copy, call a Lambda -- with a failure
+path. A partner dropping a file then triggers processing immediately, rather than a cron job
+discovering it twenty minutes later.
+
+**AS2** is the one that surprises people: it is the EDI transport protocol used across retail
+and logistics, with signing, encryption and MDN receipts, and having it managed removes a
+category of specialist software.
+
+The pricing shape matters: an hourly charge per enabled protocol endpoint plus a per-gigabyte
+transfer charge. It is not cheap for a trickle of files, and it is far cheaper than operating a
+highly available SFTP cluster with its own patching and audit story.

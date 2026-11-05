@@ -274,3 +274,13 @@ def test_an_option_cannot_light_a_service_the_case_does_not_name(
 
     assert not report.ok
     assert "'image' is not in the case's own nodes" in report.errors[0].message
+
+
+def test_a_lead_without_parts_is_an_error(content_dir: Path, write_node) -> None:
+    """`lead` introduces the teardown, so it means nothing when there is nothing to take apart."""
+    write_node("docker", lead="Here is what it is made of.")
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "lead" in report.errors[0].message

@@ -18,4 +18,25 @@ connects:
 reviewed: 2026-11-05
 ---
 
-An ordered, 24-hour change log per partition. The usual trigger for a function, and the mechanism behind global tables.
+A stream is an ordered log of every change to a table: inserts, updates and deletes, kept for 24
+hours, ordered within each partition key. Turning it on is a single setting, and it is what
+makes DynamoDB event-driven.
+
+The **view type** decides what each record carries: keys only, the new image, the old image, or
+both -- and "both" is what you want for anything that needs to know what changed, such as an
+audit log or a conditional downstream update.
+
+The usual consumer is **Lambda**, through an event source mapping that polls the shards for you,
+delivers batches, and retries. The retry behaviour is the part to configure: by default a
+failing batch is retried until it succeeds or the record expires, which **blocks that shard** --
+one poison message stops the partition. Set `MaximumRetryAttempts`, `BisectBatchOnFunctionError`
+and an `OnFailure` destination so bad records land in a dead-letter queue instead of halting the
+stream.
+
+What it is used for: keeping a search index or a cache in step with the table, fanning out to
+other services, maintaining aggregate counts, writing an audit trail, and -- internally --
+**global tables**, which are built on exactly this mechanism.
+
+There is a second option, **Kinesis Data Streams for DynamoDB**, which sends the same change
+feed to a Kinesis stream instead: longer retention (up to a year), more concurrent consumers,
+and the Kinesis tooling. Choose it when one consumer is not enough or 24 hours is not enough.

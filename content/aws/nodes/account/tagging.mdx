@@ -18,4 +18,27 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Cost allocation, automation and access control all read tags. A resource with no tags is invisible to all three.
+Tags are key-value pairs on resources, and three separate systems read them: **cost
+allocation**, **automation**, and **access control**. A resource with no tags is invisible to
+all three, which is why tagging is an engineering concern rather than a tidiness one.
+
+A workable minimum set: `Environment`, `Owner` or `Team`, `CostCenter`, `Application`, and
+`DataClassification`. Agree the keys and their allowed values first -- `prod` versus
+`Production` versus `PROD` is three different tags to every system that reads them.
+
+Enforcement, in increasing order of strength. **Tag policies** in Organizations define the
+allowed keys and values and report non-compliance. **Config rules** (`required-tags`) detect
+missing tags, with **SSM Automation remediation** to apply or quarantine. **SCPs** with an
+`aws:RequestTag` condition refuse creation outright for the resource types that support it.
+**IaC** is where it should mostly happen: default tags at the provider or stack level mean
+nothing is created untagged in the first place.
+
+For cost, tags must be **activated as cost allocation tags** in the management account, and they
+only populate reports from that date forward -- the single most common disappointment in a new
+tagging project.
+
+For access control, `aws:PrincipalTag` matched against `aws:ResourceTag` is **attribute-based
+access control**: one policy saying "you may act on resources whose Team tag matches yours"
+replaces a policy per team, and it keeps working as teams are added. For automation, tags are
+how AWS Backup selects what to back up, how Systems Manager targets a fleet, and how a scheduled
+stop-start script knows which non-production instances to shut down at night.

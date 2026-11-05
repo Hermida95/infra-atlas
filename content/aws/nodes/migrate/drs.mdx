@@ -18,4 +18,24 @@ connects:
 reviewed: 2026-11-05
 ---
 
-The same block-level replication as a rehost, kept running continuously, so a data centre can fail over into EC2 in minutes.
+Elastic Disaster Recovery is MGN's replication engine kept running permanently. An agent on each
+source server -- on-premises, in another cloud, or in another AWS region -- replicates disks
+continuously into a low-cost staging area in your recovery account, using small staging
+instances and cheap storage. Nothing is running as a full-size instance until you need it.
+
+That gives an **RPO measured in seconds** and an **RTO of minutes**, for servers you have not
+rebuilt as infrastructure-as-code. That last clause is the point: the cloud-native answer to
+disaster recovery is templates plus replicated data, but a lifted-and-shifted estate of two
+hundred Windows and Linux servers is not described in templates, and will not be for years. DRS
+covers exactly that gap.
+
+Recovery launches real EC2 instances from the replicated volumes, with launch templates deciding
+type, subnet and security groups. Crucially, you can run a **drill** at any time into an
+isolated subnet without affecting replication or the source -- which makes a tested DR plan
+practical rather than theoretical. **Point-in-time recovery** from the staging snapshots also
+means it covers ransomware and corruption, not just infrastructure failure.
+
+Where it sits: it is the **pilot light** strategy, implemented for servers. Against MGN, the
+engine is the same and the intent is opposite -- MGN is a one-way move with a cutover, DRS is a
+standing capability you hope never to use. Against AWS Backup, DRS gives seconds of RPO and
+minutes of RTO, where backup and restore gives hours of both.

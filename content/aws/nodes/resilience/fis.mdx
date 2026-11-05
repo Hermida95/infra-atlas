@@ -16,4 +16,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-Breaks things on purpose and on a schedule: stops instances, adds latency, fails a zone, so the failover you designed is one you have watched work.
+Fault Injection Service breaks things on purpose, in a controlled way, so that the failure modes
+you designed for are ones you have watched happen.
+
+The actions are real faults, not simulations: stop or terminate instances, fail over an RDS
+cluster, throttle API calls to a service, inject latency or packet loss on an instance, exhaust
+CPU or memory, interrupt a Spot instance, disrupt connectivity to a subnet or an Availability
+Zone, kill ECS tasks or EKS pods.
+
+The safety mechanism is what makes it usable in production. An experiment template has
+**targets** selected by tag or resource id, **stop conditions** bound to CloudWatch alarms, and
+an IAM role scoping what it may touch. If an alarm trips -- error rate, latency, a business
+metric -- the experiment halts and rolls back automatically. That is what turns a game day into
+something that can be scheduled rather than something that requires a meeting.
+
+The questions worth running an experiment against are the ones every design claims to have
+answered. Does the Auto Scaling group actually replace a terminated instance fast enough? Does
+the RDS failover complete inside the window, and does the connection pool recover or sit on a
+cached DNS entry? Does losing a zone cost a third of capacity or all of it? Does the Spot
+interruption handler drain properly? Does the cross-region failover runbook work when the person
+who wrote it is on holiday?
+
+Run them on a schedule, in production or in an environment that is genuinely like it, and record
+the measured RTO -- because that number, not the one in the plan, is the real one.

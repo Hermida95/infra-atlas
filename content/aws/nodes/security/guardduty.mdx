@@ -17,7 +17,48 @@ connects:
     text: "Detective is the next click: the graph of what that principal did before and after the finding."
   - to: organizations
     text: "Enabled for the whole organization from a delegated administrator account, or it covers one account and misses the rest."
+lead: "Detection with nothing to deploy. It reads logs you already have and tells you what looks wrong."
+parts:
+  - name: "Data sources"
+    kind: bus
+    text: "CloudTrail management and S3 data events, VPC flow logs, DNS query logs, EKS audit logs, RDS login activity. No agent, and it does not touch your log configuration."
+  - name: "Findings"
+    kind: bell
+    text: "Typed and severity-scored: credential exfiltration, cryptocurrency mining, reconnaissance, impossible travel, communication with known-bad infrastructure."
+  - name: "Protection plans"
+    kind: modules
+    text: "Optional add-ons: S3, EKS runtime, malware scanning on EBS, RDS, Lambda network activity. Each priced separately."
+  - name: "Delegated administrator"
+    kind: shell
+    text: "Enabled once for the organization from a security account, including accounts created later. The only correct way to run it."
+  - name: "What to do with them"
+    kind: trigger
+    text: "Findings are EventBridge events, so a high-severity one can open a ticket, isolate an instance or revoke a session automatically."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Continuous threat detection from CloudTrail, DNS, VPC flow logs, EKS audit logs and S3 data events, with nothing to deploy or tune.
+GuardDuty is the easiest security win on AWS: turn it on and it starts analysing logs it reads
+itself. There is no agent, no log configuration, no cost for the logs it consumes, and no effect
+on your own CloudTrail or flow log settings.
+
+What it actually does is correlate those sources against threat intelligence and behavioural
+models. The findings are the interesting part because they describe things no rule would have
+caught: an instance's credentials being used from an IP address outside AWS
+(`UnauthorizedAccess:EC2/InstanceCredentialExfiltration` -- almost always an SSRF against
+IMDSv1), DNS queries to a cryptomining pool, an API call from an anonymising proxy, a previously
+unseen principal enumerating IAM, or a sudden burst of S3 reads by a role that never reads S3.
+
+Getting it right organisationally is one decision: enable it from a **delegated administrator**
+account for the whole organization with auto-enable for new accounts. Enabled per account by
+hand, it will cover some and miss the one that matters.
+
+Findings are **EventBridge events**, which is where the value compounds. A high-severity finding
+can create a ticket, page someone, snapshot and isolate an instance by swapping its security
+group, or revoke the role's sessions -- automatically, in seconds. Severity-based routing avoids
+alert fatigue: the low-severity stream is large and mostly informational.
+
+Around it: findings aggregate into **Security Hub**, **Detective** builds the graph for the
+investigation that follows, and the optional protection plans (S3, EKS runtime, malware
+scanning, RDS, Lambda) each add cost and coverage. Suppression rules exist for the findings your
+architecture produces on purpose, such as a legitimate scanner.

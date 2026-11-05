@@ -18,4 +18,26 @@ connects:
 reviewed: 2026-11-05
 ---
 
-A private physical circuit into AWS, from 50 Mbps to 100 Gbps. Predictable bandwidth and latency, and weeks to provision.
+Direct Connect is a physical circuit from your network into AWS, through a partner or a
+colocation facility. What you buy is predictability: consistent latency, a bandwidth number that
+is actually yours, and a lower per-gigabyte data transfer rate than the internet. What it costs
+is time -- weeks to months to provision, because someone runs a cable.
+
+The pieces: a **connection** is the port, dedicated (1, 10 or 100 Gbps) or hosted through a
+partner (50 Mbps upward). On it you create **virtual interfaces**. A *private* VIF reaches one
+VPC. A *transit* VIF reaches a Transit Gateway, and therefore every VPC behind it. A *public*
+VIF reaches AWS public endpoints -- S3, DynamoDB -- over the circuit instead of the internet. A
+**Direct Connect gateway** sits above them and lets one circuit reach VPCs in any region, which
+is how a single connection serves a global estate.
+
+Two things the exam always checks. First, a single connection is a **single point of failure**,
+and the circuit is the part most likely to break. The standard answer is Direct Connect plus a
+**Site-to-Site VPN** as backup -- cheap, up in minutes, and lower bandwidth, which is usually
+acceptable for the hours it is needed. Higher resilience means two connections at two separate
+locations. Second, Direct Connect is **not encrypted** on its own: it is private, which is not
+the same thing. When the requirement says encryption in transit, the answer is a VPN over the
+Direct Connect, or MACsec on supported ports.
+
+For a migration, **Direct Connect plus DataSync** is the usual pairing, and the arithmetic
+decides whether you need it at all: work out the days a transfer takes over the link you have
+before ordering anything, and compare it with a Snowball arriving by courier.

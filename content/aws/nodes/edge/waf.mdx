@@ -15,7 +15,49 @@ connects:
     text: "Shield Advanced includes WAF and a response team; WAF alone handles the application-layer half."
   - to: cloudfront
     text: "Attached to a distribution it filters at the edge, which is both faster and cheaper than filtering at the origin."
+lead: "Rules evaluated in order against the request, attached in front of something. Where it attaches decides what it protects."
+parts:
+  - name: "Web ACL"
+    kind: shell
+    text: "The container, attached to CloudFront, an ALB, API Gateway, AppSync, Cognito or App Runner. One default action: allow or block."
+  - name: "Managed rule groups"
+    kind: modules
+    text: "AWS and marketplace rulesets: core protections, known bad inputs, SQL injection, Linux and PHP, IP reputation, anonymous proxies."
+  - name: "Rate-based rules"
+    kind: bars
+    text: "Requests per five minutes from one IP, or per a header, cookie or JSON field -- so a per-tenant limit is possible."
+  - name: "Custom rules"
+    kind: lanes
+    text: "Match on URI, header, body, country, IP set or a regex set, combined with AND/OR/NOT. Count, allow, block, CAPTCHA or challenge."
+  - name: "Bot Control and Fraud Control"
+    kind: chips
+    text: "Managed detection for scrapers and crawlers, plus account-takeover and fake-account-creation protection on sign-in and sign-up paths."
+layout: stack
 reviewed: 2026-11-05
 ---
 
-Layer-7 rules on CloudFront, ALB, API Gateway or AppSync: managed rule groups, SQL injection and XSS, bot control and rate limiting per IP.
+WAF inspects HTTP requests and decides what to do with them, at layer 7. It attaches to
+CloudFront, an ALB, API Gateway, AppSync, Cognito user pools or App Runner, and *where* it
+attaches is a real decision: on CloudFront the filtering happens at the edge, so blocked
+requests never reach your region or consume origin capacity, and the Web ACL must then be
+created in **us-east-1**. On an ALB it is regional and protects an origin with no CDN in front.
+
+The practical way to build one is managed first. The **AWS Managed Rules** core rule set, known
+bad inputs and the technology-specific groups cover most of OWASP's top ten with no rule
+writing. Add **rate-based rules** for brute force and scraping -- and note they can key on
+something other than IP, such as a header or a JSON field, which is how you rate-limit per
+tenant rather than per address behind a shared NAT.
+
+The deployment discipline that avoids outages: put every new rule in **Count** mode first, watch
+the sampled requests and CloudWatch metrics for a few days, and only then switch to Block. A
+managed rule group turned straight on in production will block something legitimate, usually a
+file upload or an admin path with unusual query strings.
+
+Two other pieces. **CAPTCHA and Challenge** actions are better than blocking for borderline
+traffic, since they let a real user through. And **logging** to S3, CloudWatch Logs or Firehose
+is what makes tuning possible at all -- without it you are guessing at which rule fired.
+
+Where WAF sits among the neighbours: **Shield** handles layers 3 and 4 (volumetric DDoS) and is
+always on, with Advanced adding a response team and cost protection; **WAF** handles layer 7;
+**network ACLs** and **security groups** handle addresses and ports and know nothing above them.
+A question about SQL injection or bad bots is WAF; a question about a UDP flood is Shield.
