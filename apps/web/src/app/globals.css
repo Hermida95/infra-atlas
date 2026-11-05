@@ -154,6 +154,20 @@ body::after {
   text-transform: uppercase;
   color: var(--holo);
 }
+/* How many connections this node has that the current view is not drawing: the logo saying
+   how much more is inside it, so the overview reads as a summary rather than as the whole map. */
+.lb[data-more]:not([data-more=""])::after {
+  content: attr(data-more);
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--holo-line);
+  border-radius: 999px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--faint);
+  vertical-align: 1px;
+}
 .booting {
   position: fixed;
   inset: 50% auto auto 50%;
@@ -1603,16 +1617,27 @@ a.btn {
   justify-self: start;
 }
 
-.browse {
+/* How much of the map is drawn, and the catalogue. Together at the bottom, because they are
+   the two ways out of whatever the reader is currently looking at. */
+.levels {
   position: fixed;
   left: 50%;
   bottom: 44px;
   transform: translateX(-50%);
   z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+.levels .btn {
   height: 30px;
   padding: 0 14px;
   font-size: 12px;
   background: rgba(6, 17, 26, 0.8);
+  white-space: nowrap;
+}
+.levels .btn.on {
+  border-color: var(--holo);
+  color: var(--holo);
 }
 
 /* The whole catalogue, for reading rather than being asked a question. */

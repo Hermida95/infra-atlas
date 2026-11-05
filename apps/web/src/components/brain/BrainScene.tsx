@@ -13,9 +13,25 @@ import type { Lit } from "@/lib/lit";
 import { hasMark } from "@/lib/logos";
 import { glowTexture, markCanvas } from "@/lib/textures";
 
+/**
+ * What the hologram draws right now. `null` means the whole graph, which is what a world small
+ * enough to read whole uses. An atlas narrows it: the overview is the major nodes and the links
+ * between them, opening a node is that node and its neighbours, opening a case is its own set.
+ * Nothing is removed from the graph -- this only decides what is on screen.
+ */
+export type MapView = {
+  nodes: Set<string>;
+  /** Every link between the visible nodes, or only the ones the overview draws. */
+  links: "all" | "primary";
+};
+
 export type MapStore = {
   hover: GraphNode | null;
   selected: GraphNode | null;
+  /** What is drawn. See MapView; null draws everything. */
+  view: MapView | null;
+  /** How many links each node has that the current view is not drawing. */
+  hidden: Map<string, number> | null;
   /** What is currently lit, and when it was lit (for the staggered reveal). */
   lit: Lit | null;
   litAt: number;
@@ -38,6 +54,8 @@ type Props = {
 THREE.ColorManagement.enabled = false;
 
 const RAD = 240;
+// Label box height for the collision test: 11-12px type plus a little breathing room.
+const LABEL_H = 15;
 const CYAN = new THREE.Color(0x7fe3ff);
 const WHITE = new THREE.Color(1, 1, 1);
 const GOLD = new THREE.Color(0xffc46b);
@@ -74,6 +92,10 @@ type Item = {
   color: THREE.Color;
   base: number;
   delay: number;
+  /** Last rendered count of undrawn links, so the label is only written when it changes. */
+  more: number;
+  /** Label width in px, measured when the text changes rather than every frame. */
+  w: number;
   a: number;
   ta: number;
   el: HTMLDivElement | null;
@@ -102,12 +124,22 @@ function buildScene(world: World) {
       brain.add(mark);
     }
     const base = node.hub ? 52 : 26;
-    return { node, sprite, mark, color, base, delay: ((pos.x + RAD * 1.4) / (RAD * 2.8)) * 0.6, a: 0, ta: 0.9, el: null };
+    return {
+      node, sprite, mark, color, base,
+      delay: ((pos.x + RAD * 1.4) / (RAD * 2.8)) * 0.6,
+      a: 0, ta: 0.9, el: null, more: -1, w: 0,
+    };
   });
   const byId = new Map(items.map((i) => [i.node.id, i]));
 
   const links = world.graph.links
-    .map((l) => ({ s: byId.get(l.source)!, t: byId.get(l.target)!, cur: [0, 0, 0], tgt: [0, 0, 0] }))
+    .map((l) => ({
+      s: byId.get(l.source)!,
+      t: byId.get(l.target)!,
+      primary: l.primary !== false,
+      cur: [0, 0, 0],
+      tgt: [0, 0, 0],
+    }))
     .filter((l) => l.s && l.t);
   const lPos = new Float32Array(links.length * 6);
   const lCol = new Float32Array(links.length * 6);
@@ -235,6 +267,7 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
       el.textContent = it.node.title;
       host.appendChild(el);
       it.el = el;
+      it.w = el.offsetWidth;
     }
     return () => {
       for (const it of scene.items) it.el?.remove();
@@ -248,7 +281,10 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
     let moved = 0, lastX = 0, lastY = 0;
     const pick = (x: number, y: number) => {
       let best: GraphNode | null = null, bd = Infinity;
+      const view = store.current.view;
       for (const it of scene.items) {
+        // A node that is not drawn is not clickable, or the map would answer a click nobody made.
+        if (view && !view.nodes.has(it.node.id)) continue;
         it.sprite.getWorldPosition(tmp).project(camera);
         if (tmp.z > 1) continue;
         const sx = ((tmp.x + 1) / 2) * size.width, sy = ((1 - tmp.y) / 2) * size.height;
@@ -305,11 +341,14 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
   // `world` is captured by buildScene once: a different graph means a different <BrainScene key>.
 
   const tmp = useMemo(() => new THREE.Vector3(), []);
+  // Placed label boxes, as flat x,y,x2,y2 quads. Reused every frame so the loop allocates nothing.
+  const taken = useMemo<number[]>(() => [], []);
   useFrame((_, delta) => {
     const v = view.current;
     const now = performance.now();
     const dt = Math.min(50, delta * 1000);
-    const { hover, selected, lit: show, litAt, shiftX } = store.current;
+    const { hover, selected, lit: show, litAt, shiftX, view: onScreen } = store.current;
+    const drawn = (id: string) => !onScreen || onScreen.nodes.has(id);
     const lit = (id: string) => show?.order.has(id) ?? false;
     // GOLD stays as the fallback for a lit node whose colour is somehow missing -- better one
     // wrong hue than a black sprite.
@@ -361,7 +400,8 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
     const zoomK = 0.5 + 0.5 * Math.min(1, v.dist / 760);
     for (const it of scene.items) {
       const gold = lit(it.node.id);
-      if (show) {
+      if (!drawn(it.node.id)) it.ta = 0;
+      else if (show) {
         const revealed = v.reduce || now - litAt > show.order.get(it.node.id)! * 55;
         it.ta = gold ? (revealed ? 1 : 0.15) : 0.1;
       } else it.ta = focus ? (it.node === focus || near!.has(it.node.id) ? 1 : 0.15) : 0.85;
@@ -379,7 +419,13 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
       }
     }
     scene.links.forEach((l, i) => {
-      if (show) {
+      const visible =
+        drawn(l.s.node.id) &&
+        drawn(l.t.node.id) &&
+        (!onScreen || onScreen.links === "all" || l.primary);
+      if (!visible) {
+        l.tgt = [0, 0, 0];
+      } else if (show) {
         const both = lit(l.s.node.id) && lit(l.t.node.id);
         const kk = both ? (Math.min(l.s.ta, l.t.ta) > 0.5 ? 1.1 : 0.1) : 0.04;
         l.tgt = both ? [kk, 0.77 * kk, 0.42 * kk] : [0.5 * kk, 0.89 * kk, kk];
@@ -410,25 +456,69 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
     scene.pGeo.setDrawRange(0, pulses);
     scene.pGeo.attributes.position.needsUpdate = true;
 
+    const hidden = store.current.hidden;
+    const wanted: { it: Item; x: number; y: number; depth: number; rank: number }[] = [];
     for (const it of scene.items) {
       const el = it.el;
       if (!el) continue;
       const gold = lit(it.node.id);
-      const show = v.boot > 0.9 && (it.node.hub || it.node === focus || near?.has(it.node.id) || (gold && it.a > 0.5) || v.dist < 480);
+      // On a narrowed view everything drawn gets its name: there are few enough nodes on screen
+      // for that to read, and naming them is most of what makes the overview useful.
+      const show =
+        drawn(it.node.id) &&
+        v.boot > 0.9 &&
+        (onScreen || it.node.hub || it.node === focus || near?.has(it.node.id) || (gold && it.a > 0.5) || v.dist < 480);
       if (!show) { el.style.opacity = "0"; continue; }
+      // The count of links this view is not drawing. It is the node saying how much more is
+      // inside it, which is the whole promise of clicking one.
+      const more = hidden?.get(it.node.id) ?? 0;
+      if (more !== it.more) {
+        it.more = more;
+        el.dataset.more = more > 0 ? `+${more}` : "";
+        it.w = el.offsetWidth;
+      }
       it.sprite.getWorldPosition(tmp);
       const z = tmp.z;
       tmp.project(camera);
       if (tmp.z > 1) { el.style.opacity = "0"; continue; }
-      const sx = ((tmp.x + 1) / 2) * size.width, sy = ((1 - tmp.y) / 2) * size.height;
-      const depth = Math.max(0.55, Math.min(1, (z + RAD) / (RAD * 2)));
-      el.style.transform = `translate(${(sx + it.base * 0.32 + (it.mark ? 10 : 0)).toFixed(1)}px,${(sy - 7).toFixed(1)}px)`;
-      el.style.opacity = (Math.min(1, it.a * 1.2) * depth).toFixed(2);
+      // Lower rank wins the space: whatever the reader is looking at, then the lit set, then the
+      // hubs, then the nodes with most behind them. It does not depend on where the map happens
+      // to be rotated to, so turning it does not make labels flicker.
+      const rank = it.node === focus ? 0 : gold ? 1 : it.node.hub ? 2 : 3 + 1 / (1 + more);
+      wanted.push({
+        it,
+        x: ((tmp.x + 1) / 2) * size.width + it.base * 0.32 + (it.mark ? 10 : 0),
+        y: ((1 - tmp.y) / 2) * size.height - 7,
+        depth: Math.max(0.55, Math.min(1, (z + RAD) / (RAD * 2))),
+        rank,
+      });
       el.classList.toggle("on", gold);
       // The label is HTML, not WebGL: it takes the same colour through a custom property so
       // the key in the planner panel and the map always agree.
       if (gold) el.style.setProperty("--lit", `#${litColor(it.node.id).getHexString()}`);
       else el.style.removeProperty("--lit");
+    }
+
+    // Names that would sit on top of each other are dropped rather than stacked. A label nobody
+    // can read is worse than no label, and overlapping ones were the reason a dense map looked
+    // like a mess. The node itself stays on screen either way.
+    wanted.sort((a, b) => a.rank - b.rank || (a.it.node.id < b.it.node.id ? -1 : 1));
+    taken.length = 0;
+    for (const { it, x, y, depth } of wanted) {
+      const el = it.el!;
+      // A little slack, so a measurement taken a frame earlier cannot let two names touch.
+      const w = (it.w || 60) + 8;
+      let clear = true;
+      for (let i = 0; i < taken.length; i += 4) {
+        if (x < taken[i + 2] && x + w > taken[i] && y < taken[i + 3] + LABEL_H && y + LABEL_H > taken[i + 1]) {
+          clear = false;
+          break;
+        }
+      }
+      if (!clear) { el.style.opacity = "0"; continue; }
+      taken.push(x, y, x + w, y + LABEL_H);
+      el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+      el.style.opacity = (Math.min(1, it.a * 1.2) * depth).toFixed(2);
     }
   });
 

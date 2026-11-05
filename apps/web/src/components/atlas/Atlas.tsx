@@ -13,7 +13,7 @@ import {
 import { type Case, type CaseOption, edgeTextBetween, type GraphNode } from "@/lib/graph";
 import { caseLit, optionLit } from "@/lib/lit";
 import { doorway } from "@/lib/worlds";
-import type { MapStore } from "../brain/BrainScene";
+import type { MapStore, MapView } from "../brain/BrainScene";
 import { Mark } from "../brain/Mark";
 import { Header } from "../Header";
 import { inline } from "../Prose";
@@ -34,7 +34,9 @@ const BrainScene = dynamic(() => import("../brain/BrainScene"), { ssr: false });
  */
 export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
   const world = atlas.world;
-  const store = useRef<MapStore>({ hover: null, selected: null, lit: null, litAt: 0, shiftX: 0 });
+  const store = useRef<MapStore>({
+    hover: null, selected: null, lit: null, litAt: 0, shiftX: 0, view: null, hidden: null,
+  });
   const labels = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [study, setStudy] = useState<Case | null>(null);
@@ -42,6 +44,7 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
   const [filter, setFilter] = useState<ExamFilter>(null);
   const [teardown, setTeardown] = useState<GraphNode | null>(null);
   const [browsing, setBrowsing] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const revealMap = useCallback(() => {
     if (!matchMedia("(max-width: 767px)").matches) return;
@@ -97,6 +100,54 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+
+  /*
+   * How much of the graph is drawn, from general to specific. An atlas of 156 services with 385
+   * links between them is unreadable all at once -- the lines cross everything and the logos sit
+   * on top of each other -- so the map opens on the few nodes per area that carry its shape and
+   * the links between those, and the rest arrives when the reader asks for it.
+   *
+   *   nothing chosen   the overview: major nodes, primary links
+   *   a node chosen    that node and everyone it touches, with all their links -- its own brain
+   *   a case chosen    the services the case touches, which the case already decided
+   *
+   * Nothing is lost: the detail panel lists every connection at every level, "Show everything"
+   * turns the filter off, and a world that reads well whole is never narrowed at all.
+   */
+  const view = useMemo<MapView | null>(() => {
+    if (showAll || !world.tiered) return null;
+    if (study) return { nodes: new Set((option ?? study).nodes), links: "all" };
+    if (selected) {
+      const near = world.neighbours.get(selected.id) ?? new Set<string>();
+      return { nodes: new Set([selected.id, ...near]), links: "all" };
+    }
+    return { nodes: world.majors, links: "primary" };
+  }, [showAll, world, study, option, selected]);
+
+  // Per visible node, how many of its links this view is not drawing. The map shows it next to
+  // the node, so a logo says how much more is inside it before you click.
+  const hidden = useMemo(() => {
+    if (!view) return null;
+    const counts = new Map<string, number>();
+    for (const id of view.nodes) counts.set(id, 0);
+    for (const link of world.graph.links) {
+      const shown =
+        view.nodes.has(link.source) &&
+        view.nodes.has(link.target) &&
+        (view.links === "all" || link.primary !== false);
+      if (shown) continue;
+      for (const end of [link.source, link.target]) {
+        if (counts.has(end)) counts.set(end, counts.get(end)! + 1);
+      }
+    }
+    return counts;
+  }, [view, world]);
+
+  useEffect(() => {
+    store.current.view = view;
+    store.current.hidden = hidden;
+  }, [view, hidden]);
 
   const select = useCallback((node: GraphNode | null) => {
     store.current.selected = node;
@@ -213,9 +264,26 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
         )}
       </aside>
 
-      <button type="button" className="btn browse" onClick={() => setBrowsing(true)}>
-        Browse the structure
-      </button>
+      <div className="levels">
+        {world.tiered && (
+          <button
+            type="button"
+            className={`btn${showAll ? " on" : ""}`}
+            aria-pressed={showAll}
+            onClick={() => setShowAll((on) => !on)}
+            title={
+              showAll
+                ? "Back to the few per area that carry the shape of the map"
+                : "Draw every node and every link at once"
+            }
+          >
+            {showAll ? "Show the overview" : "Show everything"}
+          </button>
+        )}
+        <button type="button" className="btn" onClick={() => setBrowsing(true)}>
+          Browse the structure
+        </button>
+      </div>
 
       {browsing && (
         <Structure
@@ -230,9 +298,15 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
       )}
 
       <div className="hud" aria-hidden="true">
-        {atlas.copy.nouns} <b>{visible}</b>
+        {atlas.copy.nouns} <b>{view ? `${view.nodes.size} of ${visible}` : visible}</b>
         <br />
         Links <b>{world.graph.links.length}</b>
+        {view && !study && !selected && (
+          <>
+            <br />
+            Overview <span className="gold">{world.majors.size} of {world.graph.nodes.length}</span>
+          </>
+        )}
         {study && (
           <>
             <br />
@@ -265,7 +339,11 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
       )}
 
       <div className="hint" aria-hidden="true">
-        Drag to rotate · scroll to zoom · click {atlas.copy.one}
+        {selected && !study
+          ? `${selected.title} and everything it touches · close it to go back`
+          : view
+            ? `The shape of it first · click ${atlas.copy.one} to open its own map`
+            : `Drag to rotate · scroll to zoom · click ${atlas.copy.one}`}
       </div>
     </>
   );

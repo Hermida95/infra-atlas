@@ -55,6 +55,13 @@ route, graph, cases, exams and the words that differ. `/aws` and `/k8s` are nine
 over the same components, so a fourth world is a content directory and a descriptor rather than a
 copy of the renderer.
 
+A world too dense to read whole opens on an overview instead: a few nodes per area and the
+links between them, with each node showing how many connections it is not drawing (`EC2 +8`).
+Open one and the map becomes that node and everything it touches -- its own brain -- and "Take
+it apart" still opens its internals. Nothing is removed: every link stays in `graph.json`,
+everything is one click from the first screen, and "Show everything" turns the filter off
+(decision 15). The journey map is under the density threshold, so it is drawn whole.
+
 A case is a real situation with two to four ways to solve it. Picking the case lights every
 object it touches; picking an option narrows that to its own, painted by its verdict, so
 comparing two approaches is a diff you can see. `brain validate` refuses a case that does not

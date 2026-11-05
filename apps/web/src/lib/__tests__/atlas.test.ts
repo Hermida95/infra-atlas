@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { categories, examLabel, inScope } from "@/lib/atlas";
+import { MAP } from "@/lib/graph";
 import { ATLASES } from "@/lib/worlds";
 
 /*
@@ -7,6 +8,13 @@ import { ATLASES } from "@/lib/worlds";
  * AWS atlas; now they run against every atlas in the registry, so a new world cannot be merged
  * with shallower content than the one before it.
  */
+
+describe("the journey map", () => {
+  it("is drawn whole, because it already reads at a glance", () => {
+    expect(MAP.tiered).toBe(false);
+    expect(MAP.majors.size).toBe(MAP.graph.nodes.length);
+  });
+});
 
 describe("the atlas registry", () => {
   it("has a descriptor per world, with its route taken from the content's own id", () => {
@@ -103,6 +111,34 @@ describe.each(ATLASES.map((atlas) => [atlas.id, atlas] as const))("%s", (_id, at
   it("explains at least a third of its nodes part by part", () => {
     const withParts = atlas.world.graph.nodes.filter((n) => n.parts.length).length;
     expect(withParts / atlas.world.graph.nodes.length).toBeGreaterThan(0.33);
+  });
+
+  it("opens on a map that reads at a glance, not on all of it at once", () => {
+    const { nodes, links } = atlas.world.graph;
+    const shown = atlas.world.majors;
+    const drawn = links.filter(
+      (l) => shown.has(l.source) && shown.has(l.target) && l.primary !== false,
+    );
+    expect(atlas.world.tiered, `${atlas.id} is dense enough to need an overview`).toBe(true);
+    expect(shown.size).toBeLessThan(nodes.length / 2);
+    // The journey map reads well at 1.75 links per node; an overview has to get back under that.
+    expect(drawn.length / shown.size).toBeLessThan(2);
+  });
+
+  it("shows every area in the overview, so the map still reads as the whole world", () => {
+    const areas = new Set(
+      atlas.world.graph.nodes.filter((n) => atlas.world.majors.has(n.id)).map((n) => n.domain),
+    );
+    expect(areas.size).toBe(atlas.world.graph.domains.length);
+  });
+
+  it("keeps every node one click from the overview, so nothing is hidden by it", () => {
+    const { majors, neighbours } = atlas.world;
+    for (const node of atlas.world.graph.nodes) {
+      const reached =
+        majors.has(node.id) || [...(neighbours.get(node.id) ?? [])].some((id) => majors.has(id));
+      expect(reached, `${node.id} is more than one click from the overview`).toBe(true);
+    }
   });
 
   it("puts every node in an area the structure browser shows", () => {

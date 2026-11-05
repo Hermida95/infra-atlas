@@ -10,8 +10,9 @@ from typing import Any
 
 from brain.layout import compute_layout
 from brain.models import Case, CaseOption, Domain, Node, Planner, Requirement, WorldManifest
+from brain.tiers import Tiers, compute_tiers
 
-GRAPH_VERSION = 2
+GRAPH_VERSION = 3
 
 # (source, target, text): `text` is the sentence that says what crosses the edge, empty for
 # a plain `related` line.
@@ -61,7 +62,10 @@ def build_graph(
     # this set; `alternatives` has to drop the same ones, or a `pro` node is named in a
     # graph.json that does not contain it.
     present = {node.id for node in published}
-    positions = compute_layout(published, {d.id: d for d in domains}, [(s, t) for s, t, _ in links])
+    edges = [(s, t) for s, t, _ in links]
+    positions = compute_layout(published, {d.id: d for d in domains}, edges)
+    # Which of them the map draws before the reader has asked for anything (see brain/tiers.py).
+    tiers = compute_tiers(published, domains, edges)
     timestamp = (generated_at or datetime.now(UTC)).astimezone(UTC)
 
     return {
@@ -75,8 +79,8 @@ def build_graph(
         # A case only offers options the published graph can draw, so a `pro` service never
         # shows up as a choice in a free build.
         "cases": [_case_json(case, present) for case in cases],
-        "nodes": [_node_json(node, positions[node.id], present) for node in published],
-        "links": [_link_json(source, target, text) for source, target, text in links],
+        "nodes": [_node_json(node, positions[node.id], present, tiers) for node in published],
+        "links": [_link_json(source, target, text, tiers) for source, target, text in links],
     }
 
 
@@ -91,10 +95,12 @@ def write_graph(graph: dict[str, Any], out: Path) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def _link_json(source: str, target: str, text: str) -> dict[str, Any]:
+def _link_json(source: str, target: str, text: str, tiers: Tiers) -> dict[str, Any]:
     link: dict[str, Any] = {"source": source, "target": target, "type": "related"}
     if text:
         link["text"] = text
+    # Drawn in the overview. On a world that reads well whole, every link is primary.
+    link["primary"] = tiers.is_primary(source, target)
     return link
 
 
@@ -144,7 +150,7 @@ def _domain_json(domain: Domain) -> dict[str, Any]:
 
 
 def _node_json(
-    node: Node, position: tuple[float, float, float], present: Container[str]
+    node: Node, position: tuple[float, float, float], present: Container[str], tiers: Tiers
 ) -> dict[str, Any]:
     meta = node.meta
     return {
@@ -153,6 +159,8 @@ def _node_json(
         "type": meta.type,
         "domain": meta.domain,
         "hub": meta.hub,
+        # Shown before the reader has asked for anything. Everything else arrives on a click.
+        "major": meta.id in tiers.major,
         "summary": meta.summary,
         "logo": meta.logo,
         "monogram": meta.monogram,

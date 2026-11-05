@@ -22,7 +22,9 @@ def test_excludes_pro_nodes_and_their_links(content_dir: Path, write_node) -> No
     graph = make_graph(content_dir)
 
     assert [n["id"] for n in graph["nodes"]] == ["docker", "image"]
-    assert graph["links"] == [{"source": "docker", "target": "image", "type": "related"}]
+    assert graph["links"] == [
+        {"source": "docker", "target": "image", "type": "related", "primary": True}
+    ]
 
 
 def test_pro_nodes_are_not_named_as_alternatives(content_dir: Path, write_node) -> None:
@@ -56,7 +58,7 @@ def test_shape_and_ordering(content_dir: Path, write_node, tmp_path: Path) -> No
     write_graph(graph, out)
     written = json.loads(out.read_text())
 
-    assert written["version"] == 2
+    assert written["version"] == 3
     assert written["generatedAt"] == "2026-10-20T12:00:00Z"
     assert [d["id"] for d in written["domains"]] == ["local", "containers"]
     assert [n["id"] for n in written["nodes"]] == ["beta", "zeta", "alpha"]
@@ -67,6 +69,7 @@ def test_shape_and_ordering(content_dir: Path, write_node, tmp_path: Path) -> No
         "type",
         "domain",
         "hub",
+        "major",
         "summary",
         "logo",
         "monogram",
@@ -124,7 +127,13 @@ def test_connects_adds_the_sentence_to_the_link(content_dir: Path, write_node) -
     graph = make_graph(content_dir)
 
     assert graph["links"] == [
-        {"source": "docker", "target": "image", "type": "related", "text": "A build produces one."}
+        {
+            "source": "docker",
+            "target": "image",
+            "type": "related",
+            "text": "A build produces one.",
+            "primary": True,
+        }
     ]
 
 

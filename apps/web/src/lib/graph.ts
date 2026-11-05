@@ -40,6 +40,11 @@ export type GraphNode = {
   type: string;
   domain: string;
   hub: boolean;
+  /**
+   * Drawn before the reader has asked for anything. `brain graph` picks a few nodes per area on
+   * a world too dense to read whole, and marks every node on one that reads fine (lib/tiers.py).
+   */
+  major: boolean;
   summary: string;
   logo: string | null;
   monogram: string | null;
@@ -59,7 +64,14 @@ export type GraphNode = {
 
 export type Domain = { id: string; name: string; order: number; position: Vec3; hue: number };
 /** `text` is the sentence that says what crosses the edge, absent on a plain `related` line. */
-export type Link = { source: string; target: string; type: string; text?: string };
+export type Link = {
+  source: string;
+  target: string;
+  type: string;
+  text?: string;
+  /** Drawn in the overview: both ends are major. Every link is primary on an untiered world. */
+  primary?: boolean;
+};
 
 export type Verdict = "best" | "works" | "avoid";
 export type CaseOption = {
@@ -109,6 +121,10 @@ export type World = {
   neighbours: Map<string, Set<string>>;
   /** "a|b" with the ids sorted -> the sentence explaining that edge, when it has one. */
   edgeText: Map<string, string>;
+  /** The nodes the overview draws. Everything else is one click away (lib/tiers.py). */
+  majors: Set<string>;
+  /** True when the overview is a real subset, so the map has somewhere to drill into. */
+  tiered: boolean;
 };
 
 const edgeKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -121,12 +137,18 @@ export function buildWorld(graph: Graph): World {
     neighbours.get(l.target)?.add(l.source);
     if (l.text) edgeText.set(edgeKey(l.source, l.target), l.text);
   }
+  // A graph.json generated before tiers existed marks nothing: fall back to drawing it whole
+  // rather than to an empty map.
+  const flagged = graph.nodes.filter((n) => n.major);
+  const majors = new Set((flagged.length ? flagged : graph.nodes).map((n) => n.id));
   return {
     graph,
     nodeById: new Map(graph.nodes.map((n) => [n.id, n])),
     domainById: new Map(graph.domains.map((d) => [d.id, d])),
     neighbours,
     edgeText,
+    majors,
+    tiered: majors.size < graph.nodes.length,
   };
 }
 

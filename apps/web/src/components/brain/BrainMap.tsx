@@ -13,7 +13,7 @@ import { routeLit } from "@/lib/lit";
 import { doorway, JOURNEY } from "@/lib/worlds";
 
 export default function BrainMap() {
-  const store = useRef<MapStore>({ hover: null, selected: null, lit: null, litAt: 0, shiftX: 0 });
+  const store = useRef<MapStore>({ hover: null, selected: null, lit: null, litAt: 0, shiftX: 0, view: null, hidden: null });
   const labels = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
