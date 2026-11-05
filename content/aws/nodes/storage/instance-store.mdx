@@ -1,0 +1,19 @@
+---
+id: instance-store
+title: "Instance store"
+type: service
+domain: storage
+summary: "NVMe physically attached to the host. The fastest storage available and free with the instance, and gone the moment it stops."
+monogram: IS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: ebs
+    text: "Use it for scratch, cache and shuffle space; keep anything you would miss on EBS."
+  - to: ec2
+    text: "A stop or a host failure loses it. A reboot does not. That distinction is the whole exam question."
+reviewed: 2026-11-05
+---
+
+NVMe physically attached to the host. The fastest storage available and free with the instance, and gone the moment it stops.

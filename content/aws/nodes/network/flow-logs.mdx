@@ -1,0 +1,21 @@
+---
+id: flow-logs
+title: "VPC Flow Logs"
+type: service
+domain: network
+summary: "A record of who talked to whom, on which port, accepted or rejected, per interface, subnet or VPC. Delivered to S3, CloudWatch Logs or Firehose."
+monogram: VPC
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [security-group, cloudwatch-logs]
+connects:
+  - to: athena
+    text: "Flow logs in S3, partitioned, queried with Athena is the cheap way to answer 'what talked to this host last Tuesday'."
+  - to: guardduty
+    text: "GuardDuty reads them, along with CloudTrail and DNS logs, and turns them into findings instead of lines."
+reviewed: 2026-11-05
+---
+
+A record of who talked to whom, on which port, accepted or rejected, per interface, subnet or VPC. Delivered to S3, CloudWatch Logs or Firehose.

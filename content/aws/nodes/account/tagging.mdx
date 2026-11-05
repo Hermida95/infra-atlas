@@ -1,0 +1,21 @@
+---
+id: tagging
+title: "Tagging strategy"
+type: pattern
+domain: account
+summary: "Cost allocation, automation and access control all read tags. A resource with no tags is invisible to all three."
+monogram: TS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cost-explorer
+    text: "Only activated cost allocation tags show up in the bill, and only from the day they are activated."
+  - to: aws-config
+    text: "A Config rule that requires tags, with remediation, is how a tagging policy survives contact with reality."
+  - to: iam-policy
+    text: "Tag-based conditions let one policy say 'only resources whose Team tag matches yours', instead of one policy per team."
+reviewed: 2026-11-05
+---
+
+Cost allocation, automation and access control all read tags. A resource with no tags is invisible to all three.

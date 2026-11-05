@@ -1,0 +1,21 @@
+---
+id: spot
+title: "Spot, On-Demand & Reserved"
+type: comparison
+domain: compute
+summary: "Spare capacity at up to 90% off, reclaimed with a two-minute warning. The purchase model is a design decision, not a billing detail."
+monogram: SOD
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: batch
+    text: "Batch exists to make Spot easy: queue the jobs, let it find capacity, and retry whatever gets interrupted."
+  - to: savings-plans
+    text: "The shape most accounts land on: a committed baseline, Spot for the elastic peak, on-demand for what can be neither."
+  - to: auto-scaling
+    text: "A mixed-instances policy puts both in one group, with a floor of on-demand capacity you are not willing to lose."
+reviewed: 2026-11-05
+---
+
+Spare capacity at up to 90% off, reclaimed with a two-minute warning. The purchase model is a design decision, not a billing detail.

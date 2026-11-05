@@ -1,0 +1,21 @@
+---
+id: sts
+title: "STS & AssumeRole"
+type: service
+domain: identity
+summary: "The token service behind every role. Cross-account access, federation and instance credentials are all one AssumeRole call."
+monogram: STS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-identity-center, cognito]
+connects:
+  - to: iam-role
+    text: "A role's trust policy says who may assume it; STS is what they call to do so."
+  - to: organizations
+    text: "The cross-account pattern: one identity account where people sign in, a role in every workload account."
+reviewed: 2026-11-05
+---
+
+The token service behind every role. Cross-account access, federation and instance credentials are all one AssumeRole call.

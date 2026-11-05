@@ -1,0 +1,22 @@
+---
+id: network-firewall
+title: "Network Firewall"
+type: service
+domain: security
+summary: "A managed, stateful IPS at the VPC edge with Suricata-compatible rules, usually in an inspection VPC behind a Transit Gateway."
+monogram: NF
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [nacl, waf]
+  alternative_to: [gwlb]
+connects:
+  - to: transit-gateway
+    text: "Spoke VPC routes point at the Transit Gateway, which sends traffic through the inspection VPC and back out."
+  - to: gwlb
+    text: "Network Firewall is the AWS engine; a Gateway Load Balancer is how you put a vendor's engine in the same place."
+reviewed: 2026-11-05
+---
+
+A managed, stateful IPS at the VPC edge with Suricata-compatible rules, usually in an inspection VPC behind a Transit Gateway.

@@ -1,0 +1,22 @@
+---
+id: global-accelerator
+title: "Global Accelerator"
+type: service
+domain: edge
+summary: "Two static anycast IP addresses, entry at the nearest edge and the rest of the journey on the AWS backbone. For TCP and UDP, including non-HTTP."
+monogram: GA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudfront, multi-region]
+  alternative_to: [cloudfront]
+connects:
+  - to: nlb
+    text: "The usual endpoint: an NLB or ALB per region, with traffic dials and health checks deciding the split."
+  - to: route53
+    text: "Failover without DNS: the client's IP address never changes, so a cached record cannot send anyone to a dead region."
+reviewed: 2026-11-05
+---
+
+Two static anycast IP addresses, entry at the nearest edge and the rest of the journey on the AWS backbone. For TCP and UDP, including non-HTTP.

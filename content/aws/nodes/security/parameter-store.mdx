@@ -1,0 +1,21 @@
+---
+id: parameter-store
+title: "Parameter Store"
+type: service
+domain: security
+summary: "Configuration and secrets inside Systems Manager, free at standard tier, encrypted with KMS as SecureString, versioned and hierarchical."
+monogram: PS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [secrets-manager]
+connects:
+  - to: systems-manager
+    text: "It is a Systems Manager capability, so the agent and Run Command read from it with no extra wiring."
+  - to: secrets-manager
+    text: "The right default when nothing needs rotating. Reach for Secrets Manager the moment something does."
+reviewed: 2026-11-05
+---
+
+Configuration and secrets inside Systems Manager, free at standard tier, encrypted with KMS as SecureString, versioned and hierarchical.

@@ -1,0 +1,46 @@
+---
+id: cloudfront
+title: "CloudFront"
+type: service
+domain: edge
+hub: true
+summary: "A CDN of hundreds of edge locations that caches, compresses, terminates TLS and can run code before the request ever reaches a region."
+logo: aws:cloudfront
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [edge-location, route53, shield]
+connects:
+  - to: s3
+    text: "The cheapest highly available website there is: a private bucket, a distribution in front, and no server at all."
+  - to: waf
+    text: "WAF attached to the distribution filters at the edge, so bad requests never consume origin capacity."
+  - to: acm
+    text: "A custom domain needs a certificate, and for CloudFront that certificate must live in us-east-1."
+  - to: alb
+    text: "With a dynamic origin, CloudFront still pays off: TLS at the edge, keep-alive on the backbone, and caching of what can be cached."
+  - to: global-accelerator
+    text: "Both use the edge network. CloudFront caches HTTP; Global Accelerator just moves TCP and UDP faster."
+lead: "CloudFront is usually drawn as a cache, and that is the smallest thing it does. It is the place where your application meets the public internet."
+parts:
+  - name: "Edge locations"
+    kind: satellites
+    text: "Where the user's TLS handshake terminates. One round trip to the city instead of three to the region."
+  - name: "Cache behaviours"
+    kind: lanes
+    text: "Path patterns mapped to origins, with their own cache key, headers, cookies and TTLs. This is where a CDN is actually configured."
+  - name: "Origins"
+    kind: bus
+    text: "S3, an ALB, API Gateway or anything on the internet. Origin Access Control keeps the bucket private while CloudFront reads it."
+  - name: "Functions at the edge"
+    kind: chips
+    text: "CloudFront Functions for header and URL rewrites in microseconds; Lambda@Edge when you need a runtime and network calls."
+  - name: "Security layer"
+    kind: shell
+    text: "WAF, Shield, geo-restriction and signed URLs all attach here, in front of everything, not on each origin."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A CDN of hundreds of edge locations that caches, compresses, terminates TLS and can run code before the request ever reaches a region.

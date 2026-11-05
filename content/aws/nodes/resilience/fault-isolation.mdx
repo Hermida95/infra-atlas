@@ -1,0 +1,21 @@
+---
+id: fault-isolation
+title: "Cells & bulkheads"
+type: pattern
+domain: resilience
+summary: "Partition the workload into independent cells and shuffle-shard tenants across them, so one bad tenant takes down a cell rather than the service."
+monogram: CB
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [active-active]
+connects:
+  - to: placement-group
+    text: "Spread and partition placement groups are the hardware-level version of the same idea."
+  - to: sqs
+    text: "A queue per cell, with its own concurrency limit, keeps one noisy tenant's backlog out of everyone else's."
+reviewed: 2026-11-05
+---
+
+Partition the workload into independent cells and shuffle-shard tenants across them, so one bad tenant takes down a cell rather than the service.

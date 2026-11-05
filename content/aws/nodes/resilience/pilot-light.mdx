@@ -1,0 +1,22 @@
+---
+id: pilot-light
+title: "Pilot light"
+type: pattern
+domain: resilience
+summary: "Data replicating continuously, core services switched off but configured. Tens of minutes to recover, at a fraction of a second region's cost."
+monogram: PL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rto-rpo]
+  alternative_to: [backup-restore, warm-standby, active-active]
+connects:
+  - to: read-replica
+    text: "A cross-region replica or an Aurora global secondary is the light that stays on."
+  - to: auto-scaling
+    text: "Recovery is scaling a group from zero and pointing DNS at it, which is fast only if it has been tested."
+reviewed: 2026-11-05
+---
+
+Data replicating continuously, core services switched off but configured. Tens of minutes to recover, at a fraction of a second region's cost.

@@ -1,0 +1,19 @@
+---
+id: gwlb
+title: "Gateway Load Balancer"
+type: service
+domain: edge
+summary: "Transparently steers traffic through a fleet of third-party firewall or inspection appliances and back out, using GENEVE encapsulation."
+monogram: GLB
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: network-firewall
+    text: "The build-versus-buy choice: Network Firewall is AWS's managed engine, a Gateway Load Balancer fronts the vendor's."
+  - to: transit-gateway
+    text: "Both live in an inspection VPC that the Transit Gateway routes spoke traffic through."
+reviewed: 2026-11-05
+---
+
+Transparently steers traffic through a fleet of third-party firewall or inspection appliances and back out, using GENEVE encapsulation.

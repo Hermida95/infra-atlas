@@ -1,0 +1,19 @@
+---
+id: permission-boundary
+title: "Permission boundaries"
+type: service
+domain: identity
+summary: "A ceiling on what an identity can ever be granted, so you can delegate IAM to a team without delegating the whole account."
+monogram: PB
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: iam-policy
+    text: "The effective permission is the overlap of the boundary and the policy, never the sum."
+  - to: scp
+    text: "Same mechanism at a different scale: SCPs bound an account, boundaries bound a principal."
+reviewed: 2026-11-05
+---
+
+A ceiling on what an identity can ever be granted, so you can delegate IAM to a team without delegating the whole account.

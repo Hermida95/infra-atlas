@@ -1,0 +1,22 @@
+---
+id: warm-standby
+title: "Warm standby"
+type: pattern
+domain: resilience
+summary: "A complete but smaller copy of the stack running in a second region, taking no production traffic, scaled up on failover. Minutes."
+monogram: WS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rto-rpo, fis]
+  alternative_to: [backup-restore, pilot-light, active-active]
+connects:
+  - to: aurora-global
+    text: "The database side: a secondary cluster already serving reads and promotable in about a minute."
+  - to: route53-failover
+    text: "The switch is a health check and a failover record, or a Global Accelerator traffic dial."
+reviewed: 2026-11-05
+---
+
+A complete but smaller copy of the stack running in a second region, taking no production traffic, scaled up on failover. Minutes.

@@ -1,0 +1,21 @@
+---
+id: privatelink
+title: "PrivateLink"
+type: service
+domain: network
+summary: "Exposes one service, not a network, to another VPC or account. No routes, no peering, and overlapping CIDRs stop mattering."
+monogram: PR
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [vpc-endpoint, transit-gateway]
+connects:
+  - to: nlb
+    text: "A provider puts a Network Load Balancer behind an endpoint service; consumers get an ENI that points at it."
+  - to: vpc-peering
+    text: "The alternative when you only need one service: peering joins two networks, PrivateLink joins a consumer to a service."
+reviewed: 2026-11-05
+---
+
+Exposes one service, not a network, to another VPC or account. No routes, no peering, and overlapping CIDRs stop mattering.

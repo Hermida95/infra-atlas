@@ -1,0 +1,19 @@
+---
+id: acm
+title: "Certificate Manager"
+type: service
+domain: edge
+summary: "Free public TLS certificates that renew themselves, plus a private CA when you need one. Regional, except that CloudFront reads only us-east-1."
+monogram: CM
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: route53
+    text: "DNS validation puts one CNAME in the zone and the certificate renews for ever without anyone being paged."
+  - to: alb
+    text: "An ALB, NLB, API Gateway or CloudFront references the certificate; the private key never leaves AWS."
+reviewed: 2026-11-05
+---
+
+Free public TLS certificates that renew themselves, plus a private CA when you need one. Regional, except that CloudFront reads only us-east-1.

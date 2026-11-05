@@ -1,0 +1,25 @@
+---
+id: rto-rpo
+title: "RTO & RPO"
+type: concept
+domain: resilience
+summary: "How long you may be down, and how much data you may lose. Every disaster recovery answer is one of these two numbers in disguise."
+monogram: RTO
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [well-architected, aws-backup]
+connects:
+  - to: backup-restore
+    text: "Hours of RTO and hours of RPO: snapshots copied to another region and nothing running."
+  - to: pilot-light
+    text: "Tens of minutes: the data is replicating and the minimum is switched on."
+  - to: warm-standby
+    text: "Minutes: a smaller but complete copy, taking no traffic, scaled up on failover."
+  - to: active-active
+    text: "Near zero: both regions are serving, and that is the hardest thing in this list to keep correct."
+reviewed: 2026-11-05
+---
+
+How long you may be down, and how much data you may lose. Every disaster recovery answer is one of these two numbers in disguise.

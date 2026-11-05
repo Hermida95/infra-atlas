@@ -1,0 +1,21 @@
+---
+id: cloudwatch-alarms
+title: "CloudWatch alarms"
+type: service
+domain: ops
+summary: "A threshold, anomaly band or composite condition over a metric, with notify, auto scaling, EC2 recovery and Systems Manager actions."
+monogram: CA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudwatch, auto-scaling]
+connects:
+  - to: sns
+    text: "Almost every alarm ends at a topic, which is how one threshold reaches a human and a function at once."
+  - to: codedeploy
+    text: "A deployment that watches an alarm rolls itself back, which is what makes canary releases safe."
+reviewed: 2026-11-05
+---
+
+A threshold, anomaly band or composite condition over a metric, with notify, auto scaling, EC2 recovery and Systems Manager actions.

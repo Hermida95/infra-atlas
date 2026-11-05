@@ -1,0 +1,22 @@
+---
+id: sns
+title: "SNS"
+type: service
+domain: integration
+summary: "Publish once, deliver to many: SQS queues, Lambda functions, HTTPS endpoints, email, SMS and mobile push. FIFO topics for ordered fan-out."
+monogram: SNS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [eventbridge]
+  alternative_to: [eventbridge]
+connects:
+  - to: sqs
+    text: "The fan-out pattern: a topic in front of queues, so adding a consumer never touches the producer."
+  - to: cloudwatch-alarms
+    text: "Almost every alarm, budget and pipeline approval notifies through a topic."
+reviewed: 2026-11-05
+---
+
+Publish once, deliver to many: SQS queues, Lambda functions, HTTPS endpoints, email, SMS and mobile push. FIFO topics for ordered fan-out.

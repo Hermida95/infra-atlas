@@ -1,0 +1,23 @@
+---
+id: cloudwatch-logs
+title: "CloudWatch Logs"
+type: service
+domain: ops
+summary: "Log groups with retention, metric filters that turn a line into a metric, Logs Insights queries, and subscriptions to ship them elsewhere."
+monogram: CL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudwatch, flow-logs]
+connects:
+  - to: firehose
+    text: "A subscription filter into Firehose is the standard route to S3 for long retention at a tenth of the price."
+  - to: opensearch
+    text: "When the requirement is full-text search and dashboards over logs, this is where they go next."
+  - to: cloudwatch-alarms
+    text: "A metric filter plus an alarm is how 'alert me when ERROR appears' is built."
+reviewed: 2026-11-05
+---
+
+Log groups with retention, metric filters that turn a line into a metric, Logs Insights queries, and subscriptions to ship them elsewhere.

@@ -1,0 +1,21 @@
+---
+id: appsync
+title: "AppSync"
+type: service
+domain: integration
+summary: "Managed GraphQL with subscriptions over WebSockets, resolving straight into DynamoDB, Aurora, Lambda or an HTTP source."
+monogram: AP
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [api-gateway]
+connects:
+  - to: cognito
+    text: "Authorisation per type and per field, from a Cognito group or an OIDC claim, rather than in each resolver."
+  - to: dynamodb
+    text: "A resolver can read and write a table with no function in between, which is most of its appeal."
+reviewed: 2026-11-05
+---
+
+Managed GraphQL with subscriptions over WebSockets, resolving straight into DynamoDB, Aurora, Lambda or an HTTP source.

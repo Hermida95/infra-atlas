@@ -1,0 +1,21 @@
+---
+id: dax
+title: "DynamoDB Accelerator"
+type: service
+domain: database
+summary: "An in-VPC, write-through cache in front of DynamoDB that serves cached reads in microseconds. Eventually consistent reads only."
+monogram: DA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [elasticache]
+connects:
+  - to: dynamodb
+    text: "It speaks the DynamoDB API, so adopting it is a client library change rather than an application rewrite."
+  - to: elasticache
+    text: "The difference that matters: DAX understands DynamoDB and invalidates itself; ElastiCache is a cache you have to manage yourself."
+reviewed: 2026-11-05
+---
+
+An in-VPC, write-through cache in front of DynamoDB that serves cached reads in microseconds. Eventually consistent reads only.

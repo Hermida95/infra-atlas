@@ -1,0 +1,44 @@
+---
+id: region
+title: "Region"
+type: service
+domain: foundation
+hub: true
+summary: "A named geographic area with its own isolated data centres, its own prices and its own set of services."
+monogram: RGN
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [outposts, service-quotas]
+connects:
+  - to: az
+    text: "A region is a set of Availability Zones. Picking the region picks how many you have to play with: most have three, a few have six."
+  - to: edge-location
+    text: "Hundreds of edge locations sit outside the regions and in front of them, terminating user connections far closer than any region can."
+  - to: local-zone
+    text: "A Local Zone is a piece of a region parked in a city, for the users a region is still too far from."
+  - to: multi-region
+    text: "Two regions is the next design, not the next setting: data replication and a way to decide which one is live."
+lead: "A region is the first decision of every design, and three things decide it: where the users are, where the data is allowed to live, and what the region costs."
+parts:
+  - name: "Availability Zones"
+    kind: zones
+    text: "Three or more isolated groups of data centres, kilometres apart, on separate power and network. Spanning two of them is what 'highly available' means on AWS."
+  - name: "Regional services"
+    kind: services
+    text: "S3, DynamoDB, SQS and most managed services are regional: they already span the zones for you, and you never see the machines."
+  - name: "Zonal services"
+    kind: disc
+    text: "EC2 instances, EBS volumes and subnets live in one zone. These are the ones you have to place by hand, and replicate yourself."
+  - name: "Global services"
+    kind: ring
+    text: "IAM, Route 53, CloudFront, Organizations and WAF for CloudFront have no region. Their console always talks to us-east-1."
+  - name: "The region boundary"
+    kind: shell
+    text: "Nothing leaves a region unless you move it: no replication, no failover and no backup copy happens by accident."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A named geographic area with its own isolated data centres, its own prices and its own set of services.

@@ -1,0 +1,21 @@
+---
+id: dynamodb-streams
+title: "DynamoDB Streams"
+type: service
+domain: database
+summary: "An ordered, 24-hour change log per partition. The usual trigger for a function, and the mechanism behind global tables."
+monogram: DS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [dynamodb, global-tables]
+connects:
+  - to: lambda
+    text: "An event source mapping reads shards in batches, retries the batch, and can park failures in a dead-letter queue."
+  - to: kinesis-data-streams
+    text: "Kinesis Data Streams for DynamoDB is the same change feed with a longer retention and more consumers."
+reviewed: 2026-11-05
+---
+
+An ordered, 24-hour change log per partition. The usual trigger for a function, and the mechanism behind global tables.

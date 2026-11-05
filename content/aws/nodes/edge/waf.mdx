@@ -1,0 +1,21 @@
+---
+id: waf
+title: "AWS WAF"
+type: service
+domain: edge
+summary: "Layer-7 rules on CloudFront, ALB, API Gateway or AppSync: managed rule groups, SQL injection and XSS, bot control and rate limiting per IP."
+logo: aws:waf
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [nacl, alb]
+connects:
+  - to: shield
+    text: "Shield Advanced includes WAF and a response team; WAF alone handles the application-layer half."
+  - to: cloudfront
+    text: "Attached to a distribution it filters at the edge, which is both faster and cheaper than filtering at the origin."
+reviewed: 2026-11-05
+---
+
+Layer-7 rules on CloudFront, ALB, API Gateway or AppSync: managed rule groups, SQL injection and XSS, bot control and rate limiting per IP.

@@ -1,0 +1,23 @@
+---
+id: systems-manager
+title: "Systems Manager"
+type: service
+domain: ops
+summary: "Patching, Run Command, Session Manager shell access with no SSH or bastion, inventory, automation runbooks and Parameter Store."
+monogram: SM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ami, inspector]
+connects:
+  - to: parameter-store
+    text: "Parameter Store is part of it, which is why configuration and fleet management share one agent and one role."
+  - to: vpc-endpoint
+    text: "Session Manager into a private subnet with no NAT needs the ssm, ssmmessages and ec2messages endpoints."
+  - to: ec2
+    text: "The agent plus an instance profile replaces the bastion host, the SSH key and the inbound rule for port 22."
+reviewed: 2026-11-05
+---
+
+Patching, Run Command, Session Manager shell access with no SSH or bastion, inventory, automation runbooks and Parameter Store.

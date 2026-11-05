@@ -1,0 +1,21 @@
+---
+id: emr
+title: "EMR"
+type: service
+domain: analytics
+summary: "Managed Hadoop, Spark, Hive and Presto clusters, usually with Spot task nodes, for jobs too large or too custom for Glue."
+monogram: EMR
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [glue]
+connects:
+  - to: spot
+    text: "Core nodes on-demand and task nodes on Spot is the standard shape, and most of the saving."
+  - to: s3
+    text: "EMRFS reads and writes S3 directly, so the cluster is disposable and the data is not."
+reviewed: 2026-11-05
+---
+
+Managed Hadoop, Spark, Hive and Presto clusters, usually with Spot task nodes, for jobs too large or too custom for Glue.

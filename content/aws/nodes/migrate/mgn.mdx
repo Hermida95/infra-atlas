@@ -1,0 +1,21 @@
+---
+id: mgn
+title: "Application Migration Service"
+type: service
+domain: migrate
+summary: "Continuous block-level replication of a running server into a staging area, then a short cutover into EC2. The default rehost."
+monogram: AMS
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [migration-hub, drs]
+connects:
+  - to: ec2
+    text: "The output is an EC2 instance from a replicated disk, with the same operating system and the same software on it."
+  - to: site-to-site-vpn
+    text: "Replication needs a path out of the data centre, which is usually a VPN or a Direct Connect."
+reviewed: 2026-11-05
+---
+
+Continuous block-level replication of a running server into a staging area, then a short cutover into EC2. The default rehost.

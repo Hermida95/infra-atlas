@@ -1,0 +1,22 @@
+---
+id: fsx
+title: "FSx"
+type: comparison
+domain: storage
+summary: "Managed Windows File Server for SMB, NetApp ONTAP for enterprise features, OpenZFS for low latency, and Lustre for HPC against S3."
+monogram: FSX
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [efs]
+  alternative_to: [efs]
+connects:
+  - to: directory-service
+    text: "FSx for Windows joins an Active Directory domain, so the directory is a prerequisite, not an extra."
+  - to: s3
+    text: "FSx for Lustre links to a bucket and presents it as a POSIX file system at hundreds of gigabytes per second."
+reviewed: 2026-11-05
+---
+
+Managed Windows File Server for SMB, NetApp ONTAP for enterprise features, OpenZFS for low latency, and Lustre for HPC against S3.

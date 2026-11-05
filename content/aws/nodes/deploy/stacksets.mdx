@@ -1,0 +1,21 @@
+---
+id: stacksets
+title: "StackSets"
+type: service
+domain: deploy
+summary: "One template deployed to many accounts and regions from the management account, with automatic deployment to new accounts in an OU."
+monogram: ST
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [cloudformation]
+connects:
+  - to: organizations
+    text: "Targeting an OU means an account created next month gets the baseline without anyone remembering to do it."
+  - to: control-tower
+    text: "Control Tower's own customisations ride on StackSets, which is why the two are usually seen together."
+reviewed: 2026-11-05
+---
+
+One template deployed to many accounts and regions from the management account, with automatic deployment to new accounts in an OU.

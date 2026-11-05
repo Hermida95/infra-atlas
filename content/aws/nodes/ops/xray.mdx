@@ -1,0 +1,19 @@
+---
+id: xray
+title: "X-Ray"
+type: service
+domain: ops
+summary: "Distributed traces across services with a service map and sampling, so a slow request points at the hop that is slow."
+logo: aws:xray
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: lambda
+    text: "Active tracing on a function and on API Gateway is usually a checkbox, and it is where the first trace comes from."
+  - to: cloudwatch
+    text: "The service map lives next to the metrics now, which is how a latency alarm leads to a trace in two clicks."
+reviewed: 2026-11-05
+---
+
+Distributed traces across services with a service map and sampling, so a slow request points at the hop that is slow.

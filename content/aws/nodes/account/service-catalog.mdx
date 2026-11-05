@@ -1,0 +1,21 @@
+---
+id: service-catalog
+title: "Service Catalog"
+type: service
+domain: account
+summary: "A curated list of CloudFormation products teams may launch, with the permissions attached to the product rather than to the user."
+monogram: SC
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [control-tower]
+connects:
+  - to: cloudformation
+    text: "A product is a versioned template. Launching it is the only way the team needs to touch CloudFormation."
+  - to: iam-role
+    text: "A launch constraint lets a user with almost no permissions create a database, because the role is the product's, not theirs."
+reviewed: 2026-11-05
+---
+
+A curated list of CloudFormation products teams may launch, with the permissions attached to the product rather than to the user.

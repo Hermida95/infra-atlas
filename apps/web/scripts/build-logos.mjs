@@ -1,4 +1,5 @@
-// Builds src/data/logos.json with only the marks referenced by graph.json:
+// Builds src/data/logos.json with only the marks referenced by the generated graphs
+// (graph.json, and aws.json when it is there):
 // - `logo: <slug>`     -> Simple Icons path (24x24), so the bundle never ships the full set.
 // - `logo: aws:<name>` -> official AWS Architecture Icon in public/icons/aws. The HTML shows the
 //                         original file; the 3D map uses its glyph (every <path>, background dropped).
@@ -9,7 +10,9 @@ if (!fs.existsSync("src/data/graph.json")) {
   console.error("src/data/graph.json is missing. Run `make content` (uv run brain graph) from the repo root first.");
   process.exit(1);
 }
-const graph = JSON.parse(fs.readFileSync("src/data/graph.json", "utf8"));
+// Both graphs share one logo file: the AWS atlas reuses the same marks the journey map does.
+const GRAPHS = ["src/data/graph.json", "src/data/aws.json"].filter((f) => fs.existsSync(f));
+const nodes = GRAPHS.flatMap((file) => JSON.parse(fs.readFileSync(file, "utf8")).nodes);
 const bySlug = new Map(
   Object.values(si)
     .filter((icon) => icon && typeof icon === "object" && "slug" in icon)
@@ -30,7 +33,7 @@ function awsLogo(name, fallbackTitle) {
 
 const logos = {};
 const missing = [];
-for (const node of graph.nodes) {
+for (const node of nodes) {
   if (!node.logo || logos[node.logo]) continue;
   let logo = null;
   if (node.logo.startsWith("aws:")) logo = awsLogo(node.logo.slice(4), node.title);

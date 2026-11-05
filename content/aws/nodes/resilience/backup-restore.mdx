@@ -1,0 +1,22 @@
+---
+id: backup-restore
+title: "Backup and restore"
+type: pattern
+domain: resilience
+summary: "Snapshots and object copies in a second region, with nothing running there. The cheapest strategy, and hours of recovery time."
+monogram: BAR
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rto-rpo, ebs-snapshot]
+  alternative_to: [pilot-light, warm-standby, active-active]
+connects:
+  - to: aws-backup
+    text: "Cross-region, cross-account copies with Vault Lock is how this is implemented and how it survives ransomware."
+  - to: cloudformation
+    text: "The recovery depends entirely on the infrastructure being redeployable, which means it has to be in templates."
+reviewed: 2026-11-05
+---
+
+Snapshots and object copies in a second region, with nothing running there. The cheapest strategy, and hours of recovery time.

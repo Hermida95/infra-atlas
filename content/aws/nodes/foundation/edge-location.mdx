@@ -1,0 +1,21 @@
+---
+id: edge-location
+title: "Edge location"
+type: service
+domain: foundation
+summary: "Hundreds of points of presence worldwide that terminate TLS and serve cached content metres from the user, instead of oceans away."
+monogram: EL
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cloudfront
+    text: "CloudFront is what you configure; edge locations are where it runs. A cache hit never reaches your region at all."
+  - to: global-accelerator
+    text: "Global Accelerator takes the connection at the same edges and crosses the rest on the AWS backbone, for TCP and UDP."
+  - to: route53
+    text: "Route 53 is answered at the edges too, which is why DNS-based failover reacts in seconds anywhere in the world."
+reviewed: 2026-11-05
+---
+
+Hundreds of points of presence worldwide that terminate TLS and serve cached content metres from the user, instead of oceans away.

@@ -1,0 +1,19 @@
+---
+id: fis
+title: "Fault Injection Service"
+type: service
+domain: resilience
+summary: "Breaks things on purpose and on a schedule: stops instances, adds latency, fails a zone, so the failover you designed is one you have watched work."
+monogram: FIS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cloudwatch-alarms
+    text: "An experiment has stop conditions tied to alarms, so a game day cannot become an incident."
+  - to: warm-standby
+    text: "A DR plan that has never been exercised is a document. This is what turns it into a procedure."
+reviewed: 2026-11-05
+---
+
+Breaks things on purpose and on a schedule: stops instances, adds latency, fails a zone, so the failover you designed is one you have watched work.

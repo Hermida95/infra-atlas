@@ -1,0 +1,21 @@
+---
+id: local-zone
+title: "Local Zone"
+type: service
+domain: foundation
+summary: "An extension of a region placed in a metropolitan area, for single-digit millisecond latency to users or equipment in that city."
+monogram: LZ
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [outposts]
+connects:
+  - to: region
+    text: "A Local Zone is a child of a parent region: same VPC, same account, one more subnet in a place the region is not."
+  - to: direct-connect
+    text: "The usual pairing: a Local Zone for the latency, Direct Connect for the private path into it."
+reviewed: 2026-11-05
+---
+
+An extension of a region placed in a metropolitan area, for single-digit millisecond latency to users or equipment in that city.

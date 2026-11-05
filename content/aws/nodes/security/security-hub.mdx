@@ -1,0 +1,21 @@
+---
+id: security-hub
+title: "Security Hub"
+type: service
+domain: security
+summary: "One queue for findings from GuardDuty, Inspector, Macie, Config and Access Analyzer, scored against CIS, PCI and the AWS standard."
+monogram: SH
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [guardduty, inspector]
+connects:
+  - to: aws-config
+    text: "Most of its compliance checks are Config rules, so Config has to be on for the score to mean anything."
+  - to: eventbridge
+    text: "Findings are events, which is how a high-severity one becomes a ticket or a remediation automatically."
+reviewed: 2026-11-05
+---
+
+One queue for findings from GuardDuty, Inspector, Macie, Config and Access Analyzer, scored against CIS, PCI and the AWS standard.

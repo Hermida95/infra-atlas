@@ -8,8 +8,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
-from brain.loader import DOMAINS_FILE, REQUIREMENTS_FILE, load_content
-from brain.models import Domain, Node, Requirement
+from brain.loader import CASES_FILE, DOMAINS_FILE, REQUIREMENTS_FILE, load_content
+from brain.models import Case, Domain, Node, Requirement
 from brain.planner import KEYWORDS, ExpressionError, parse, variables
 
 STALE_AFTER = timedelta(days=365)
@@ -28,6 +28,7 @@ class Issue:
 class ValidationReport:
     domains: list[Domain] = field(default_factory=list)
     requirements: list[Requirement] = field(default_factory=list)
+    cases: list[Case] = field(default_factory=list)
     nodes: list[Node] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
 
@@ -55,9 +56,11 @@ def validate_content(
     requirements_path = content_dir / REQUIREMENTS_FILE
     issues += check_requirements(loaded.requirements, requirements_path)
     issues += check_planner_rules(loaded.nodes, loaded.requirements, requirements_path)
+    issues += check_cases(loaded.cases, loaded.nodes, content_dir / CASES_FILE)
     return ValidationReport(
         domains=loaded.domains,
         requirements=loaded.requirements,
+        cases=loaded.cases,
         nodes=loaded.nodes,
         issues=issues,
     )
@@ -105,6 +108,18 @@ def _check_node(
         )
     if meta.domain not in domain_ids:
         issues.append(Issue(path, f"unknown domain '{meta.domain}'"))
+
+    for index, connection in enumerate(meta.connects):
+        location = f"connects[{index}]"
+        if connection.to == meta.id:
+            issues.append(Issue(path, f"{location}: node connects to itself"))
+        elif connection.to not in node_ids:
+            issues.append(Issue(path, f"{location}: unknown node '{connection.to}'"))
+    seen_targets: set[str] = set()
+    for connection in meta.connects:
+        if connection.to in seen_targets:
+            issues.append(Issue(path, f"connects: '{connection.to}' is explained twice"))
+        seen_targets.add(connection.to)
 
     for kind, target in meta.relations.targets():
         if target == meta.id:
@@ -210,4 +225,49 @@ def check_planner_rules(
         for rid in (requirement.id for requirement in requirements)
         if rid not in referenced
     ]
+    return issues
+
+
+def check_cases(cases: Sequence[Case], nodes: Sequence[Node], source: Path) -> list[Issue]:
+    """A case names real nodes, offers a real choice and commits to one best answer."""
+    node_ids = {node.id for node in nodes}
+    seen: set[str] = set()
+    issues: list[Issue] = []
+
+    for case in cases:
+        where = f"case '{case.id}'"
+        if case.id in seen:
+            issues.append(Issue(source, f"duplicate case id '{case.id}'"))
+        seen.add(case.id)
+
+        for unknown in [nid for nid in case.nodes if nid not in node_ids]:
+            issues.append(Issue(source, f"{where}: unknown node '{unknown}'"))
+
+        if len(case.options) < 2:
+            issues.append(
+                Issue(source, f"{where}: needs at least two options, or it is not a choice")
+            )
+        best = [option for option in case.options if option.verdict == "best"]
+        if len(best) != 1:
+            issues.append(
+                Issue(source, f"{where}: exactly one option must be 'best', found {len(best)}")
+            )
+
+        option_ids: set[str] = set()
+        touched = set(case.nodes)
+        for option in case.options:
+            label = f"{where} option '{option.id}'"
+            if option.id in option_ids:
+                issues.append(Issue(source, f"{where}: duplicate option id '{option.id}'"))
+            option_ids.add(option.id)
+            if not option.nodes:
+                issues.append(Issue(source, f"{label}: names no service to light up"))
+            for unknown in [nid for nid in option.nodes if nid not in node_ids]:
+                issues.append(Issue(source, f"{label}: unknown node '{unknown}'"))
+            # The case lights everything it touches, an option lights its own share. An option
+            # that named a service the case did not would make the map grow when you pick it.
+            for extra in [nid for nid in option.nodes if nid in node_ids and nid not in touched]:
+                issues.append(Issue(source, f"{label}: '{extra}' is not in the case's own nodes"))
+            if option.verdict == "avoid" and not option.watch:
+                issues.append(Issue(source, f"{label}: an 'avoid' option must say what goes wrong"))
     return issues

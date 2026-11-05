@@ -1,0 +1,19 @@
+---
+id: transfer-family
+title: "Transfer Family"
+type: service
+domain: migrate
+summary: "Managed SFTP, FTPS, FTP and AS2 endpoints in front of S3 or EFS, for partners who are not going to change their client."
+monogram: TF
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: s3
+    text: "Each user is mapped to a prefix with a scope-down policy, so a partner sees only their own folder."
+  - to: lambda
+    text: "A workflow on upload is how a dropped file gets validated, converted and moved on without a cron job."
+reviewed: 2026-11-05
+---
+
+Managed SFTP, FTPS, FTP and AS2 endpoints in front of S3 or EFS, for partners who are not going to change their client.

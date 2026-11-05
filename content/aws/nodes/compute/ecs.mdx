@@ -1,0 +1,24 @@
+---
+id: ecs
+title: "ECS"
+type: service
+domain: compute
+summary: "AWS's own container orchestrator: task definitions, services, target groups and a deployment circuit breaker, with no control plane to run."
+logo: aws:ecs
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [eks, blue-green]
+  alternative_to: [eks, lambda]
+connects:
+  - to: ecr
+    text: "The task definition names an image by digest in ECR, and the task execution role is what pulls it."
+  - to: alb
+    text: "A service registers its tasks in a target group, and the ALB routes by path or host to each service."
+  - to: fargate
+    text: "The launch type is the real decision: Fargate for no nodes, EC2 when you need GPUs, daemons or your own AMI."
+reviewed: 2026-11-05
+---
+
+AWS's own container orchestrator: task definitions, services, target groups and a deployment circuit breaker, with no control plane to run.

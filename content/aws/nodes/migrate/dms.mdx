@@ -1,0 +1,23 @@
+---
+id: dms
+title: "Database Migration Service"
+type: service
+domain: migrate
+summary: "Keeps a source database replicating into AWS while it is still serving, so the cutover is minutes rather than a weekend."
+monogram: DMS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [seven-rs, documentdb]
+connects:
+  - to: sct
+    text: "DMS moves the data; the Schema Conversion Tool is what handles the schema when the engine changes."
+  - to: rds
+    text: "Homogeneous migrations land on RDS or Aurora with no conversion at all, and that is the easy case."
+  - to: s3
+    text: "S3 is a valid target too, which is how a relational source becomes files in a lake."
+reviewed: 2026-11-05
+---
+
+Keeps a source database replicating into AWS while it is still serving, so the cutover is minutes rather than a weekend.

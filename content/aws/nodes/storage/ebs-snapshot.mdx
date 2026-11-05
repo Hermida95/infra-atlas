@@ -1,0 +1,19 @@
+---
+id: ebs-snapshot
+title: "EBS snapshots"
+type: service
+domain: storage
+summary: "Incremental, encrypted copies stored in S3. The basis of AMIs, cross-region copies, and almost every EC2 backup policy."
+monogram: EBS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: aws-backup
+    text: "Data Lifecycle Manager or AWS Backup is what actually takes them on a schedule, with retention and a cross-region copy."
+  - to: ami
+    text: "An AMI is a set of snapshots plus a manifest, which is why copying an AMI is mostly copying snapshots."
+reviewed: 2026-11-05
+---
+
+Incremental, encrypted copies stored in S3. The basis of AMIs, cross-region copies, and almost every EC2 backup policy.

@@ -1,0 +1,19 @@
+---
+id: codebuild
+title: "CodeBuild"
+type: service
+domain: deploy
+summary: "Managed build containers that run your buildspec, cache dependencies, and can run inside a VPC to reach private resources."
+monogram: CO
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: ecr
+    text: "The usual output: an image built, scanned and pushed by digest."
+  - to: codepipeline
+    text: "It is the stage that turns a commit into an artefact everything downstream refers to."
+reviewed: 2026-11-05
+---
+
+Managed build containers that run your buildspec, cache dependencies, and can run inside a VPC to reach private resources.

@@ -1,0 +1,21 @@
+---
+id: aws-config
+title: "AWS Config"
+type: service
+domain: ops
+summary: "Resource configuration over time, rules that say whether it is compliant, conformance packs, and remediation when it is not."
+monogram: AWS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cloudtrail
+    text: "CloudTrail says who changed it; Config says what it looked like before and after."
+  - to: security-hub
+    text: "Most of Security Hub's compliance score is Config rules, aggregated across accounts."
+  - to: tagging
+    text: "The required-tags rule with automatic remediation is how a tagging policy stops being a wiki page."
+reviewed: 2026-11-05
+---
+
+Resource configuration over time, rules that say whether it is compliant, conformance packs, and remediation when it is not.

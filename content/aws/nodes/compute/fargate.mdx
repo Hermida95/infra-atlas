@@ -1,0 +1,24 @@
+---
+id: fargate
+title: "Fargate"
+type: service
+domain: compute
+summary: "Serverless capacity for ECS and EKS tasks: each task gets its own kernel, and there are no nodes to patch, scale or bin-pack."
+monogram: FA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [lambda, ec2]
+  alternative_to: [ec2, lambda]
+connects:
+  - to: ecs
+    text: "ECS on Fargate is the shortest path from a container image to something running with a load balancer in front."
+  - to: eks
+    text: "The same for Kubernetes, at the price of losing daemonsets, node-level agents and some of the control."
+  - to: spot
+    text: "Fargate Spot is the same 70% discount for tasks that tolerate being stopped."
+reviewed: 2026-11-05
+---
+
+Serverless capacity for ECS and EKS tasks: each task gets its own kernel, and there are no nodes to patch, scale or bin-pack.

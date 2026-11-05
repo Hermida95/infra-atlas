@@ -8,19 +8,18 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { domainById, graph, type GraphNode, neighbours } from "@/lib/graph";
+import { type GraphNode, MAP, type World } from "@/lib/graph";
+import type { Lit } from "@/lib/lit";
 import { hasMark } from "@/lib/logos";
-import type { Route } from "@/lib/planner";
 import { glowTexture, markCanvas } from "@/lib/textures";
-import { STAGE_COLORS } from "@/lib/stages";
 
 export type MapStore = {
   hover: GraphNode | null;
   selected: GraphNode | null;
-  /** The planner route currently lit in gold, and when it was lit (for the staggered reveal). */
-  route: Route | null;
-  routeAt: number;
-  /** Desktop layout reserves the left side for the planner panel. */
+  /** What is currently lit, and when it was lit (for the staggered reveal). */
+  lit: Lit | null;
+  litAt: number;
+  /** Desktop layout reserves the left side for a panel. */
   shiftX: number;
 };
 
@@ -28,6 +27,8 @@ type Props = {
   store: RefObject<MapStore>;
   labels: RefObject<HTMLDivElement | null>;
   onSelect: (node: GraphNode | null) => void;
+  /** Which graph to draw. Defaults to the journey map. */
+  world?: World;
   /** Stop rendering while another full-screen view covers the map. */
   paused?: boolean;
 };
@@ -40,11 +41,16 @@ const RAD = 240;
 const CYAN = new THREE.Color(0x7fe3ff);
 const WHITE = new THREE.Color(1, 1, 1);
 const GOLD = new THREE.Color(0xffc46b);
-// One THREE.Color per stage, built once: the route is repainted every frame and a route of
-// forty nodes would otherwise parse the same nine hex strings sixty times a second.
-const STAGE_LIT = STAGE_COLORS.map((hex) => new THREE.Color(hex));
+// Hex strings are cached as THREE.Color objects: what is lit is repainted every frame, and a
+// hundred lit nodes would otherwise parse the same handful of hex strings sixty times a second.
+const litColors = new Map<string, THREE.Color>();
+function asColor(hex: string): THREE.Color {
+  let colour = litColors.get(hex);
+  if (!colour) litColors.set(hex, (colour = new THREE.Color(hex)));
+  return colour;
+}
 
-export default function BrainScene({ paused = false, ...props }: Props) {
+export default function BrainScene({ paused = false, world = MAP, ...props }: Props) {
   return (
     <Canvas
       frameloop={paused ? "never" : "always"}
@@ -56,7 +62,7 @@ export default function BrainScene({ paused = false, ...props }: Props) {
       onCreated={({ gl }) => gl.setClearColor(0x04070b, 1)}
     >
       <fogExp2 attach="fog" args={[0x04070b, 0.00055]} />
-      <World {...props} />
+      <Hologram world={world} {...props} />
     </Canvas>
   );
 }
@@ -73,15 +79,15 @@ type Item = {
   el: HTMLDivElement | null;
 };
 
-function buildScene() {
+function buildScene(world: World) {
   const glow = glowTexture();
   const root = new THREE.Group();
   const brain = new THREE.Group();
   root.add(brain);
 
-  const items: Item[] = graph.nodes.map((node) => {
+  const items: Item[] = world.graph.nodes.map((node) => {
     const pos = new THREE.Vector3(...node.position);
-    const color = new THREE.Color().setHSL((domainById.get(node.domain)?.hue ?? 190) / 360, 0.75, 0.68);
+    const color = new THREE.Color().setHSL((world.domainById.get(node.domain)?.hue ?? 190) / 360, 0.75, 0.68);
     const sprite = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: glow, color: color.clone(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
@@ -100,7 +106,7 @@ function buildScene() {
   });
   const byId = new Map(items.map((i) => [i.node.id, i]));
 
-  const links = graph.links
+  const links = world.graph.links
     .map((l) => ({ s: byId.get(l.source)!, t: byId.get(l.target)!, cur: [0, 0, 0], tgt: [0, 0, 0] }))
     .filter((l) => l.s && l.t);
   const lPos = new Float32Array(links.length * 6);
@@ -116,7 +122,7 @@ function buildScene() {
     ),
   );
 
-  // Gold pulses that travel along lit links, from earlier route stages to later ones.
+  // Gold pulses that travel along lit links, from earlier groups to later ones.
   const pPos = new Float32Array(links.length * 3);
   const pGeo = new THREE.BufferGeometry();
   pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
@@ -203,9 +209,9 @@ function buildScene() {
   return { root, brain, items, links, lGeo, lCol, pGeo, pPos, arcs, dispose };
 }
 
-function World({ store, labels, onSelect }: Omit<Props, "paused">) {
+function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused">) {
   const { camera, gl, size } = useThree();
-  const [scene] = useState(buildScene);
+  const [scene] = useState(() => buildScene(world));
   const view = useRef({
     rotY: -0.35, rotX: 0.12, tRotY: -0.35, tRotX: 0.12, dist: 920, tDist: 760, focusY: 0, tFocusY: 0,
     idleAt: 0, dragging: false, lastSel: null as GraphNode | null, t0: 0, boot: 0, reduce: false,
@@ -296,17 +302,21 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
       el.removeEventListener("wheel", wheel);
     };
   }, [gl, camera, size, scene, store, onSelect]);
+  // `world` is captured by buildScene once: a different graph means a different <BrainScene key>.
 
   const tmp = useMemo(() => new THREE.Vector3(), []);
   useFrame((_, delta) => {
     const v = view.current;
     const now = performance.now();
     const dt = Math.min(50, delta * 1000);
-    const { hover, selected, route, routeAt, shiftX } = store.current;
-    const lit = (id: string) => route?.order.has(id) ?? false;
-    // Which colour a lit node takes: its stage. GOLD stays as the fallback for a node in the
-    // route whose stage index is somehow missing -- better one wrong hue than a black sprite.
-    const litColor = (id: string) => STAGE_LIT[route?.stageIndex.get(id) ?? -1] ?? GOLD;
+    const { hover, selected, lit: show, litAt, shiftX } = store.current;
+    const lit = (id: string) => show?.order.has(id) ?? false;
+    // GOLD stays as the fallback for a lit node whose colour is somehow missing -- better one
+    // wrong hue than a black sprite.
+    const litColor = (id: string) => {
+      const hex = show?.colors.get(id);
+      return hex ? asColor(hex) : GOLD;
+    };
 
     if (selected !== v.lastSel) {
       v.lastSel = selected;
@@ -347,12 +357,12 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
     }
 
     const focus = hover ?? selected;
-    const near = focus ? neighbours.get(focus.id)! : null;
+    const near = focus ? world.neighbours.get(focus.id)! : null;
     const zoomK = 0.5 + 0.5 * Math.min(1, v.dist / 760);
     for (const it of scene.items) {
       const gold = lit(it.node.id);
-      if (route) {
-        const revealed = v.reduce || now - routeAt > route.order.get(it.node.id)! * 55;
+      if (show) {
+        const revealed = v.reduce || now - litAt > show.order.get(it.node.id)! * 55;
         it.ta = gold ? (revealed ? 1 : 0.15) : 0.1;
       } else it.ta = focus ? (it.node === focus || near!.has(it.node.id) ? 1 : 0.15) : 0.85;
       it.a += (it.ta - it.a) * (v.reduce ? 1 : 0.12);
@@ -369,7 +379,7 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
       }
     }
     scene.links.forEach((l, i) => {
-      if (route) {
+      if (show) {
         const both = lit(l.s.node.id) && lit(l.t.node.id);
         const kk = both ? (Math.min(l.s.ta, l.t.ta) > 0.5 ? 1.1 : 0.1) : 0.04;
         l.tgt = both ? [kk, 0.77 * kk, 0.42 * kk] : [0.5 * kk, 0.89 * kk, kk];
@@ -387,9 +397,9 @@ function World({ store, labels, onSelect }: Omit<Props, "paused">) {
     scene.lGeo.attributes.color.needsUpdate = true;
 
     let pulses = 0;
-    if (route && !v.reduce && now - routeAt > route.order.size * 55) {
+    if (show && !v.reduce && now - litAt > show.order.size * 55) {
       scene.links.forEach((l, i) => {
-        const a = route.stageIndex.get(l.s.node.id), b = route.stageIndex.get(l.t.node.id);
+        const a = show.groups.get(l.s.node.id), b = show.groups.get(l.t.node.id);
         if (a === undefined || b === undefined) return;
         const [from, to] = a <= b ? [l.s.node.position, l.t.node.position] : [l.t.node.position, l.s.node.position];
         const p = (now / 1500 + i * 0.37) % 1;

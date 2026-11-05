@@ -1,0 +1,44 @@
+---
+id: kms
+title: "KMS"
+type: service
+domain: security
+hub: true
+summary: "Managed encryption keys that never leave the service. Nearly every AWS service encrypts through it, and the key policy decides who may decrypt."
+monogram: KMS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [shared-responsibility, cloudtrail]
+connects:
+  - to: s3
+    text: "SSE-KMS gives a bucket an audit trail and a key policy; SSE-S3 gives it neither, and costs nothing."
+  - to: cloudhsm
+    text: "The answer when the requirement is that AWS must never hold the key material at all."
+  - to: resource-policy
+    text: "A key policy is a resource policy, and the one place you can lock out the account's own administrator."
+  - to: secrets-manager
+    text: "Secrets Manager, Parameter Store, EBS, RDS and DynamoDB all encrypt through a key here."
+lead: "Encryption at rest on AWS is almost always the same shape: a key in KMS, a data key wrapped by it, and a policy saying who may unwrap."
+parts:
+  - name: "Key"
+    kind: core
+    text: "An AWS managed key costs nothing and you cannot control its policy. A customer managed key costs a dollar a month and you can."
+  - name: "Key policy"
+    kind: shell
+    text: "The resource policy of the key, and the only one that matters: an IAM allow without the key policy's agreement grants nothing."
+  - name: "Envelope encryption"
+    kind: modules
+    text: "KMS encrypts a data key; the data key encrypts your data. That is why a 5 TB object can be encrypted by a 4 KB service."
+  - name: "Grants and aliases"
+    kind: chips
+    text: "Grants for temporary, scoped delegation to a service; aliases so a key can be rotated behind a stable name."
+  - name: "CloudTrail record"
+    kind: panel
+    text: "Every encrypt and decrypt is logged, which is the real reason to choose a customer managed key over an AWS managed one."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Managed encryption keys that never leave the service. Nearly every AWS service encrypts through it, and the key policy decides who may decrypt.

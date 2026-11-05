@@ -1,0 +1,46 @@
+---
+id: vpc
+title: "VPC"
+type: service
+domain: network
+hub: true
+summary: "Your own software-defined network in one region: an address range, subnets across zones, routing, and the gateways you choose to add."
+logo: aws:vpc
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [igw, nat-gateway, privatelink, ipam]
+connects:
+  - to: subnet
+    text: "A VPC is only useful once it is cut into subnets, and a subnet is where the zone and the routing are decided."
+  - to: vpc-endpoint
+    text: "Endpoints are how a private subnet reaches S3, DynamoDB or any AWS API without a NAT Gateway or the internet."
+  - to: transit-gateway
+    text: "Past three VPCs, peering stops scaling and a Transit Gateway becomes the hub everything attaches to."
+  - to: flow-logs
+    text: "Flow logs are the only record of what actually crossed the network, and the first thing to turn on before you need it."
+  - to: security-group
+    text: "Security groups are attached inside the VPC, and they can reference each other instead of IP ranges."
+lead: "A VPC is not a firewall and not a data centre. It is a routing domain: an address range you cut into subnets, and a set of decisions about which of them can reach what."
+parts:
+  - name: "CIDR block"
+    kind: sheet
+    text: "The address range, chosen once and awkward to change. Big enough for growth, and not overlapping anything you may ever connect to."
+  - name: "Subnets per zone"
+    kind: zones
+    text: "The range cut into pieces, each pinned to one Availability Zone. Two per tier, in two zones, is the baseline shape."
+  - name: "Route tables"
+    kind: lanes
+    text: "What makes a subnet public or private. A default route to an Internet Gateway, to a NAT Gateway, or to nothing at all."
+  - name: "Gateways"
+    kind: gate
+    text: "Internet Gateway for two-way public traffic, NAT Gateway for outbound-only, endpoints for AWS APIs, Transit Gateway for everything else."
+  - name: "Security groups and NACLs"
+    kind: shell
+    text: "Stateful allow rules on each resource, and stateless ordered rules on each subnet. The first is where you work; the second is where you deny."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Your own software-defined network in one region: an address range, subnets across zones, routing, and the gateways you choose to add.

@@ -1,0 +1,21 @@
+---
+id: oidc-federation
+title: "Federation & OIDC"
+type: pattern
+domain: identity
+summary: "Trust an external identity provider to issue the token, then exchange it for a role. No AWS user, no stored access key."
+monogram: FO
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-identity-center, cognito]
+connects:
+  - to: sts
+    text: "AssumeRoleWithWebIdentity and AssumeRoleWithSAML are the two doors in. Both hand back credentials that expire."
+  - to: iam-role
+    text: "The trust policy pins the provider, the audience and usually the exact repository or group allowed to assume it."
+reviewed: 2026-11-05
+---
+
+Trust an external identity provider to issue the token, then exchange it for a role. No AWS user, no stored access key.

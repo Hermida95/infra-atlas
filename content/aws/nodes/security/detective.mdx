@@ -1,0 +1,19 @@
+---
+id: detective
+title: "Detective"
+type: service
+domain: security
+summary: "Builds a behaviour graph from CloudTrail, flow logs and GuardDuty so an investigation starts with context instead of a grep."
+monogram: DE
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudtrail]
+connects:
+  - to: guardduty
+    text: "It is the step after a finding: what else did this principal, instance or address do."
+reviewed: 2026-11-05
+---
+
+Builds a behaviour graph from CloudTrail, flow logs and GuardDuty so an investigation starts with context instead of a grep.

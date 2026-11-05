@@ -1,0 +1,23 @@
+---
+id: cloudtrail
+title: "CloudTrail"
+type: service
+domain: ops
+summary: "Every API call in the account: who, when, from where, and what the request was. An organization trail into a locked bucket is the audit baseline."
+monogram: CL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [aws-config, detective]
+connects:
+  - to: s3
+    text: "Management events are free for 90 days in the console; a trail to S3 is what keeps them, and Object Lock is what protects them."
+  - to: guardduty
+    text: "GuardDuty reads the same events and turns the suspicious ones into findings."
+  - to: organizations
+    text: "An organization trail covers every member account, including the ones created tomorrow."
+reviewed: 2026-11-05
+---
+
+Every API call in the account: who, when, from where, and what the request was. An organization trail into a locked bucket is the audit baseline.

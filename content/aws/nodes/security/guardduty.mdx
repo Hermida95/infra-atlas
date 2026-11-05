@@ -1,0 +1,23 @@
+---
+id: guardduty
+title: "GuardDuty"
+type: service
+domain: security
+summary: "Continuous threat detection from CloudTrail, DNS, VPC flow logs, EKS audit logs and S3 data events, with nothing to deploy or tune."
+monogram: GU
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [flow-logs, cloudtrail]
+connects:
+  - to: security-hub
+    text: "Findings land in Security Hub, which is where they get triaged rather than admired one service at a time."
+  - to: detective
+    text: "Detective is the next click: the graph of what that principal did before and after the finding."
+  - to: organizations
+    text: "Enabled for the whole organization from a delegated administrator account, or it covers one account and misses the rest."
+reviewed: 2026-11-05
+---
+
+Continuous threat detection from CloudTrail, DNS, VPC flow logs, EKS audit logs and S3 data events, with nothing to deploy or tune.

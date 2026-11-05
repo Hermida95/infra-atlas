@@ -1,0 +1,21 @@
+---
+id: iam-access-analyzer
+title: "IAM Access Analyzer"
+type: service
+domain: identity
+summary: "Proves which resources are reachable from outside the account, and rewrites over-broad policies down to the access actually used."
+monogram: IAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-policy]
+connects:
+  - to: security-hub
+    text: "Its findings land in Security Hub alongside GuardDuty and Inspector, so one queue covers them all."
+  - to: resource-policy
+    text: "External access findings are almost always a bucket, key or role policy that is broader than anyone intended."
+reviewed: 2026-11-05
+---
+
+Proves which resources are reachable from outside the account, and rewrites over-broad policies down to the access actually used.

@@ -1,0 +1,24 @@
+---
+id: athena
+title: "Athena"
+type: service
+domain: analytics
+summary: "Serverless SQL straight over files in S3, charged per terabyte scanned. Partitioning and a columnar format are the entire cost story."
+monogram: AT
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [redshift]
+  alternative_to: [redshift]
+connects:
+  - to: glue
+    text: "The Glue Data Catalog is where Athena gets its table definitions, written by a crawler or by hand."
+  - to: s3
+    text: "Parquet and partitions turn a hundred-dollar query into a one-dollar one, scanning the same data."
+  - to: quicksight
+    text: "QuickSight over Athena is the cheapest dashboard that reads a data lake directly."
+reviewed: 2026-11-05
+---
+
+Serverless SQL straight over files in S3, charged per terabyte scanned. Partitioning and a columnar format are the entire cost story.

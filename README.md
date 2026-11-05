@@ -4,7 +4,9 @@ A 3D, explorable map of DevOps, cloud and AI: the journey of an app from `localh
 
 Every technology is a node in a holographic knowledge graph. Open one and it comes apart into the pieces it is made of; some include a lab where you build, run and break things yourself. The project deploys itself along the same journey it teaches.
 
-> Status: phase 1. The 3D map, the content-driven deployment planner, per-technology teardowns and the Docker lab run in the Next.js app. `prototypes/brain` keeps the original HTML prototype for reference.
+Behind the AWS node there is a second brain: [`/aws`](apps/web/src/app/aws/page.tsx) is the same hologram over a map of its own, with the 156 services the Solutions Architect exams cover, the sentence that explains every connection, and real cases that light up the services that could solve them.
+
+> Status: phase 1. The 3D map, the content-driven deployment planner, per-technology teardowns, the AWS atlas and the Docker lab run in the Next.js app. `prototypes/brain` keeps the original HTML prototype for reference.
 
 ## Layout
 
@@ -13,6 +15,7 @@ apps/web          Next.js 16 + React Three Fiber: the 3D map
 apps/api          FastAPI, packaged as one Docker image for Compose, Kubernetes and Lambda
 packages/brain    Python CLI: validates /content and builds the graph (3D layout included)
 content/          The knowledge base: one MDX file per concept, typed frontmatter
+content/aws/      The AWS atlas: a second graph with its own categories and its real cases
 infra/            Terraform modules and environments, Helm chart (upcoming)
 prototypes/brain  Standalone HTML prototype of the full experience
 docs/             Architecture decisions and design direction (Spanish)
@@ -29,6 +32,23 @@ make api       # API on http://localhost:8000 (semantic search for ⌘K: cp apps
 make up        # the API in Docker
 make help      # everything else
 ```
+
+## Inside AWS
+
+```bash
+uv run brain validate --content content/aws
+uv run brain graph --content content/aws --out apps/web/src/data/aws.json
+```
+
+`make content` builds both graphs. The atlas is the same pipeline over a second content tree:
+15 service categories, `connects` edges that carry the sentence explaining what crosses them,
+an `exam` field (`saa`, `sap`) and `content/aws/cases.yaml`.
+
+A case is a real situation with two to four ways to solve it. Picking the case lights every
+service it touches; picking an option narrows that to its own, painted by its verdict, so
+comparing two approaches is a diff you can see. `brain validate` refuses a case that does not
+commit to exactly one best option, an `avoid` that does not say what goes wrong, and an option
+that lights a service the case never named.
 
 ## Plan a deployment from the terminal
 

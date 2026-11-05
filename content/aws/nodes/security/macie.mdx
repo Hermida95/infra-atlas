@@ -1,0 +1,19 @@
+---
+id: macie
+title: "Macie"
+type: service
+domain: security
+summary: "Discovers personal and sensitive data sitting in S3 buckets, and reports which of them are public, unencrypted or shared."
+monogram: MA
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: s3
+    text: "It is S3-specific, which is also where the forgotten copy of the customer export usually is."
+  - to: security-hub
+    text: "Findings aggregate with the rest, so a sensitive-data finding is triaged like any other."
+reviewed: 2026-11-05
+---
+
+Discovers personal and sensitive data sitting in S3 buckets, and reports which of them are public, unencrypted or shared.

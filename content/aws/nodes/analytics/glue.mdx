@@ -1,0 +1,21 @@
+---
+id: glue
+title: "Glue"
+type: service
+domain: analytics
+summary: "A crawler that catalogues S3 into tables, a serverless Spark for transformation, and the Data Catalog that Athena, EMR and Redshift all read."
+monogram: GL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [emr]
+connects:
+  - to: athena
+    text: "One catalogue, several engines. Registering a table once is what lets all of them query it."
+  - to: lake-formation
+    text: "Lake Formation layers column- and row-level permissions over the same catalogue."
+reviewed: 2026-11-05
+---
+
+A crawler that catalogues S3 into tables, a serverless Spark for transformation, and the Data Catalog that Athena, EMR and Redshift all read.

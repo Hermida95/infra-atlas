@@ -1,0 +1,22 @@
+---
+id: app-runner
+title: "App Runner"
+type: service
+domain: compute
+summary: "A container image or a source repository in, an HTTPS URL out, scaling to zero. No load balancer, no cluster and no VPC to design."
+monogram: APP
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [beanstalk, fargate]
+  alternative_to: [fargate, beanstalk]
+connects:
+  - to: ecr
+    text: "It watches a repository or an ECR tag and redeploys when the image changes."
+  - to: privatelink
+    text: "A VPC connector gives it private access to a database while the service itself stays public."
+reviewed: 2026-11-05
+---
+
+A container image or a source repository in, an HTTPS URL out, scaling to zero. No load balancer, no cluster and no VPC to design.

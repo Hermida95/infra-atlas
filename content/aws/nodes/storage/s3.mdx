@@ -1,0 +1,46 @@
+---
+id: s3
+title: "S3"
+type: service
+domain: storage
+hub: true
+summary: "Object storage with eleven nines of durability across three zones, addressed by key over HTTP, with no capacity to provision."
+logo: aws:s3
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [s3-replication, kms, aws-backup, glue]
+connects:
+  - to: s3-storage-classes
+    text: "The class is the single biggest lever on an S3 bill, and the only question is what retrieval time you can accept."
+  - to: s3-lifecycle
+    text: "Nobody moves objects by hand. A lifecycle rule is how archival actually happens."
+  - to: cloudfront
+    text: "A private bucket plus a distribution is the cheapest highly available website on AWS, and the one with no servers to patch."
+  - to: vpc-endpoint
+    text: "A gateway endpoint takes S3 traffic off the NAT Gateway, which removes both the data processing charge and the internet path."
+  - to: athena
+    text: "Files in S3 plus Athena is a query engine with no database: the lake pattern, charged per terabyte scanned."
+lead: "S3 is the default place for anything that is a file. Almost every S3 question is really about one of five things: the class, the lifecycle, who can read it, where the copies are, and how it is encrypted."
+parts:
+  - name: "Bucket"
+    kind: cylinder
+    text: "A globally unique name in one region. Flat: there are no real folders, only keys that happen to contain slashes."
+  - name: "Objects and versions"
+    kind: discs
+    text: "Up to 5 TB each, immutable once written. Versioning keeps every overwrite and turns a delete into a marker."
+  - name: "Storage class"
+    kind: lanes
+    text: "Standard, Intelligent-Tiering, Infrequent Access, Glacier Instant, Flexible and Deep Archive. Durability is identical; retrieval time and price are not."
+  - name: "Access"
+    kind: gate
+    text: "Block Public Access on, a bucket policy for who may read, and presigned URLs or CloudFront for everyone else."
+  - name: "Encryption"
+    kind: shell
+    text: "Encrypted at rest by default with SSE-S3, or SSE-KMS when you need an audit trail and a key policy of your own."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Object storage with eleven nines of durability across three zones, addressed by key over HTTP, with no capacity to provision.

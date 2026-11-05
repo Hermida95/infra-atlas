@@ -1,0 +1,21 @@
+---
+id: igw
+title: "Internet Gateway"
+type: service
+domain: network
+summary: "The VPC's door to the internet, horizontally scaled and highly available by AWS. Traffic both ways, and only for resources with a public address."
+monogram: IG
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [nat-gateway, vpc]
+connects:
+  - to: route-table
+    text: "An Internet Gateway does nothing until a route table sends a default route to it."
+  - to: alb
+    text: "A public load balancer lives in the public subnets; the targets it reaches stay private."
+reviewed: 2026-11-05
+---
+
+The VPC's door to the internet, horizontally scaled and highly available by AWS. Traffic both ways, and only for resources with a public address.

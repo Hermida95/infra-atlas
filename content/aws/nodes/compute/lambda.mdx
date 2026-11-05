@@ -1,0 +1,47 @@
+---
+id: lambda
+title: "Lambda"
+type: service
+domain: compute
+hub: true
+summary: "Run a function on an event, pay per millisecond of the memory you asked for, and never see a server or a scaling policy."
+logo: aws:lambda
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [fargate, step-functions, app-runner]
+  alternative_to: [fargate, ecs]
+connects:
+  - to: api-gateway
+    text: "Synchronous and user-facing: the API handles the protocol, the function handles the logic."
+  - to: sqs
+    text: "Polled and resilient: the queue absorbs the spike and holds the message until a successful run, with a dead-letter queue for the rest."
+  - to: rds-proxy
+    text: "The connection problem: a thousand concurrent functions mean a thousand database connections unless the proxy pools them."
+  - to: eventbridge
+    text: "Event-driven glue: a rule matches, the function runs, and nothing polls anything."
+  - to: iam-role
+    text: "The execution role is the whole security boundary of a function, so it is the first thing to scope down."
+lead: "Lambda removes the server and adds a set of limits. Knowing the limits is what separates a design that works from one that nearly does."
+parts:
+  - name: "Handler and runtime"
+    kind: code
+    text: "Your function in a managed runtime or a container image, up to 10 GB of memory and 15 minutes per invocation."
+  - name: "Event source"
+    kind: trigger
+    text: "API Gateway, S3, SQS, DynamoDB Streams, EventBridge, an ALB. The source decides whether it is synchronous, asynchronous or polled."
+  - name: "Execution role"
+    kind: shell
+    text: "The function's identity. Everything it is allowed to touch is in this one role."
+  - name: "Concurrency"
+    kind: jobs
+    text: "One invocation per instance of the function. Reserved concurrency caps it, provisioned concurrency keeps instances warm."
+  - name: "Networking"
+    kind: bus
+    text: "No VPC by default. Attach it to subnets and it reaches private resources through an ENI, and loses the public internet without NAT."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Run a function on an event, pay per millisecond of the memory you asked for, and never see a server or a scaling policy.

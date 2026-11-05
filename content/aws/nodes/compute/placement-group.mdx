@@ -1,0 +1,19 @@
+---
+id: placement-group
+title: "Placement groups"
+type: service
+domain: compute
+summary: "Cluster for lowest latency within one zone, spread for separate hardware, partition for separate racks. HPC and clustered databases need them."
+monogram: PG
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: ec2
+    text: "A cluster group needs the same instance type and enough capacity in one zone, so it is requested all at once."
+  - to: fault-isolation
+    text: "Spread and partition groups are hardware-level bulkheads, which is why big distributed stores ask for them."
+reviewed: 2026-11-05
+---
+
+Cluster for lowest latency within one zone, spread for separate hardware, partition for separate racks. HPC and clustered databases need them.

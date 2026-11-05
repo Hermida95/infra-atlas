@@ -1,0 +1,21 @@
+---
+id: opensearch
+title: "OpenSearch Service"
+type: service
+domain: analytics
+summary: "Managed search and log analytics with dashboards, plus a serverless option and vector search for retrieval-augmented generation."
+monogram: OS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [neptune]
+connects:
+  - to: cloudwatch-logs
+    text: "Where logs go when Logs Insights is not enough: full-text search, long retention and dashboards."
+  - to: firehose
+    text: "Firehose is the managed path from a stream into an index, with buffering and retries handled."
+reviewed: 2026-11-05
+---
+
+Managed search and log analytics with dashboards, plus a serverless option and vector search for retrieval-augmented generation.

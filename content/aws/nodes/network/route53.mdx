@@ -1,0 +1,23 @@
+---
+id: route53
+title: "Route 53"
+type: service
+domain: network
+summary: "Authoritative DNS with health checks and routing policies: simple, weighted, latency, failover, geolocation, geoproximity and multivalue."
+logo: aws:route53
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [global-accelerator, multi-region]
+connects:
+  - to: route53-failover
+    text: "Health checks plus failover records are the cheapest cross-region switch there is, and the one most DR designs use."
+  - to: cloudfront
+    text: "An alias record to a distribution costs nothing to resolve and lets the apex of a domain point at it."
+  - to: acm
+    text: "A DNS validation record is how a certificate proves the domain, and how it renews itself for ever after."
+reviewed: 2026-11-05
+---
+
+Authoritative DNS with health checks and routing policies: simple, weighted, latency, failover, geolocation, geoproximity and multivalue.

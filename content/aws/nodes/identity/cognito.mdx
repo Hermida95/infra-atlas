@@ -1,0 +1,21 @@
+---
+id: cognito
+title: "Cognito"
+type: service
+domain: identity
+summary: "Sign-up, sign-in, social and SAML federation and JWTs for your application's end users, which is not what IAM is for."
+logo: aws:cognito
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [appsync, cloudfront]
+connects:
+  - to: api-gateway
+    text: "A Cognito authoriser validates the token at the front door, so no request without a valid user reaches the backend."
+  - to: iam-role
+    text: "An identity pool exchanges a user's token for temporary AWS credentials, scoped by their group."
+reviewed: 2026-11-05
+---
+
+Sign-up, sign-in, social and SAML federation and JWTs for your application's end users, which is not what IAM is for.

@@ -1,0 +1,23 @@
+---
+id: iam-role
+title: "IAM roles"
+type: service
+domain: identity
+summary: "An identity with no long-lived credentials, assumed for minutes or hours. How an instance, a function, a pipeline or a person gets access."
+monogram: IAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [sts, iam-identity-center, service-catalog]
+connects:
+  - to: ec2
+    text: "An instance profile gives an instance a role, so no key ever lands on the disk or in an environment variable."
+  - to: lambda
+    text: "The execution role is the function's identity: the only thing it is allowed to touch."
+  - to: oidc-federation
+    text: "A GitHub Actions workflow assumes a role with an OIDC token, which is how a pipeline deploys without a stored key."
+reviewed: 2026-11-05
+---
+
+An identity with no long-lived credentials, assumed for minutes or hours. How an instance, a function, a pipeline or a person gets access.

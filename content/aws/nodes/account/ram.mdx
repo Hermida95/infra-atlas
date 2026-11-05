@@ -1,0 +1,21 @@
+---
+id: ram
+title: "Resource Access Manager"
+type: service
+domain: account
+summary: "Shares a subnet, a Transit Gateway, a Route 53 rule or a licence with other accounts in the organization instead of duplicating it."
+monogram: RAM
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: subnet
+    text: "A shared VPC puts every team's resources in one network the platform team owns, and keeps the accounts separate."
+  - to: transit-gateway
+    text: "One Transit Gateway shared with the organization, rather than one per account to be peered together."
+  - to: organizations
+    text: "Sharing to an OU rather than to account ids is what keeps it working as accounts are added."
+reviewed: 2026-11-05
+---
+
+Shares a subnet, a Transit Gateway, a Route 53 rule or a licence with other accounts in the organization instead of duplicating it.

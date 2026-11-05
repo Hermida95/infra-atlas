@@ -14,8 +14,15 @@ const graph = JSON.parse(fs.readFileSync("src/data/graph.json", "utf8"));
 const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 const escape = (value) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+// The AWS atlas is one page, but each of its cases is a distinct, linkable view of it.
+const cases = fs.existsSync("src/data/aws.json")
+  ? JSON.parse(fs.readFileSync("src/data/aws.json", "utf8")).cases
+  : [];
+
 const urls = [
   { loc: `${site}/`, priority: "1.0" },
+  { loc: `${site}/aws/`, priority: "0.9" },
+  ...cases.map((c) => ({ loc: `${site}/aws/?case=${c.id}`, priority: "0.6" })),
   ...graph.nodes.map((node) => ({ loc: `${site}/c/${node.id}/`, priority: node.hub ? "0.8" : "0.5" })),
 ];
 

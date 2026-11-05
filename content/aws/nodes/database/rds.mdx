@@ -1,0 +1,46 @@
+---
+id: rds
+title: "RDS"
+type: service
+domain: database
+hub: true
+summary: "Managed relational databases: PostgreSQL, MySQL, MariaDB, Oracle and SQL Server, with patching, backups and failover handled for you."
+logo: aws:rds
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [dms, aws-backup, elasticache]
+connects:
+  - to: rds-multi-az
+    text: "Multi-AZ buys availability and nothing else: the standby serves no reads at all."
+  - to: read-replica
+    text: "Read replicas buy read capacity and nothing else: they lag, and they do not fail over on their own."
+  - to: aurora
+    text: "Aurora is the upgrade path when one writer and asynchronous replicas stop being enough."
+  - to: secrets-manager
+    text: "Managed rotation of the master credential, with the application reading it at runtime instead of holding it."
+  - to: rds-proxy
+    text: "The connection pool that stands between a serverless front end and a database with a finite connection limit."
+lead: "RDS takes the operations and leaves you the schema. Two knobs do most of the work, and they are not the same knob: one buys availability, the other buys read capacity."
+parts:
+  - name: "Instance and storage"
+    kind: machine
+    text: "A DB instance class and gp3 or io2 storage that can grow but never shrink. The class is where the memory for the buffer pool comes from."
+  - name: "Multi-AZ"
+    kind: zones
+    text: "A synchronous standby in another zone, invisible to the application, with failover in a minute or two by DNS."
+  - name: "Read replicas"
+    kind: satellites
+    text: "Asynchronous copies for read traffic, up to fifteen, possibly in another region, and promotable to standalone."
+  - name: "Backups"
+    kind: discs
+    text: "Automated snapshots plus transaction logs for point-in-time recovery within the retention window, and manual snapshots that outlive the instance."
+  - name: "Access"
+    kind: shell
+    text: "A subnet group in private subnets, a security group that only the application's group can reach, and IAM or Secrets Manager for the credential."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Managed relational databases: PostgreSQL, MySQL, MariaDB, Oracle and SQL Server, with patching, backups and failover handled for you.

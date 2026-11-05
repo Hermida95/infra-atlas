@@ -1,0 +1,21 @@
+---
+id: aws-backup
+title: "AWS Backup"
+type: service
+domain: storage
+summary: "One backup plan, one vault and one restore test across EBS, RDS, Aurora, EFS, FSx, DynamoDB and S3, with cross-region and cross-account copies."
+monogram: AWS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ebs-snapshot, rto-rpo]
+connects:
+  - to: organizations
+    text: "A backup policy applied to an OU is how 'everything is backed up' becomes true rather than aspirational."
+  - to: backup-restore
+    text: "Vault Lock makes a retention period immutable, which is what turns backups into a ransomware answer."
+reviewed: 2026-11-05
+---
+
+One backup plan, one vault and one restore test across EBS, RDS, Aurora, EFS, FSx, DynamoDB and S3, with cross-region and cross-account copies.

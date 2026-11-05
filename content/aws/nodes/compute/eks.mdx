@@ -1,0 +1,24 @@
+---
+id: eks
+title: "EKS"
+type: service
+domain: compute
+summary: "A managed Kubernetes control plane, charged per hour per cluster. You get the API you already know, with the upgrades and add-ons it implies."
+logo: aws:eks
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ecs, ecr]
+  alternative_to: [ecs]
+connects:
+  - to: iam-role
+    text: "IRSA or Pod Identity maps a service account to an IAM role, so a pod gets AWS credentials without a node-wide role."
+  - to: alb
+    text: "The AWS Load Balancer Controller turns an Ingress into an ALB and a Service into an NLB."
+  - to: fargate
+    text: "Fargate profiles run selected namespaces with no nodes, usually alongside a managed node group rather than instead of it."
+reviewed: 2026-11-05
+---
+
+A managed Kubernetes control plane, charged per hour per cluster. You get the API you already know, with the upgrades and add-ons it implies.

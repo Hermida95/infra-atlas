@@ -1,0 +1,21 @@
+---
+id: route53-failover
+title: "Health checks & failover routing"
+type: service
+domain: resilience
+summary: "Route 53 health checks plus failover, latency or weighted records. The cheapest switch in a DR plan, and the one most of them use."
+monogram: HCF
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [multi-region, warm-standby]
+connects:
+  - to: route53
+    text: "The health check is what makes the record conditional, and it can watch an endpoint, an alarm or other checks."
+  - to: global-accelerator
+    text: "The alternative when a cached DNS record is unacceptable: the client's IP never changes."
+reviewed: 2026-11-05
+---
+
+Route 53 health checks plus failover, latency or weighted records. The cheapest switch in a DR plan, and the one most of them use.

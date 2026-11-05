@@ -1,0 +1,21 @@
+---
+id: ecr
+title: "ECR"
+type: service
+domain: compute
+summary: "A private container registry with vulnerability scanning, lifecycle rules, immutable tags and cross-region replication."
+logo: aws:ecr
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ecs, eks, codebuild]
+connects:
+  - to: vpc-endpoint
+    text: "Pulling images from a private subnet needs the ECR API, ECR DKR and S3 endpoints, or a NAT Gateway and its bill."
+  - to: inspector
+    text: "Enhanced scanning is Inspector, which keeps re-scanning pushed images as new CVEs are published."
+reviewed: 2026-11-05
+---
+
+A private container registry with vulnerability scanning, lifecycle rules, immutable tags and cross-region replication.

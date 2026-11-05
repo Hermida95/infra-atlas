@@ -1,0 +1,22 @@
+---
+id: rds-multi-az
+title: "Multi-AZ deployments"
+type: service
+domain: database
+summary: "A synchronous standby in a second zone with automatic failover. It buys availability, not read throughput: the standby serves nothing."
+monogram: MAD
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rds, multi-az]
+  alternative_to: [read-replica]
+connects:
+  - to: az
+    text: "Synchronous replication only works because the zones are close enough for the write latency to be acceptable."
+  - to: read-replica
+    text: "The pair that gets confused in every exam: Multi-AZ for uptime, read replicas for reads. Multi-AZ cluster deployments do both."
+reviewed: 2026-11-05
+---
+
+A synchronous standby in a second zone with automatic failover. It buys availability, not read throughput: the standby serves nothing.

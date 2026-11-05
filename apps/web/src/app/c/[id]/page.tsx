@@ -84,6 +84,11 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
                 Take it apart
               </Link>
             )}
+            {node.id === "aws" && (
+              <Link className="btn" href="/aws">
+                Go inside AWS →
+              </Link>
+            )}
           </div>
         </div>
       </section>

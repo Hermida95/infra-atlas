@@ -1,0 +1,21 @@
+---
+id: direct-connect
+title: "Direct Connect"
+type: service
+domain: network
+summary: "A private physical circuit into AWS, from 50 Mbps to 100 Gbps. Predictable bandwidth and latency, and weeks to provision."
+monogram: DC
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [outposts, storage-gateway]
+connects:
+  - to: site-to-site-vpn
+    text: "The standard resilient pair: Direct Connect for the traffic, a VPN as the cheap backup when it fails."
+  - to: transit-gateway
+    text: "One circuit, a Direct Connect gateway, and every VPC behind the Transit Gateway becomes reachable."
+reviewed: 2026-11-05
+---
+
+A private physical circuit into AWS, from 50 Mbps to 100 Gbps. Predictable bandwidth and latency, and weeks to provision.

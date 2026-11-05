@@ -1,0 +1,19 @@
+---
+id: vpc-peering
+title: "VPC peering"
+type: service
+domain: network
+summary: "A one-to-one, non-transitive link between two VPCs, free within a zone and across accounts or regions. Fine for two; unmanageable for twenty."
+monogram: VPC
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: transit-gateway
+    text: "Peering is n-squared and non-transitive. Past a handful of VPCs the hub-and-spoke of a Transit Gateway is the answer."
+  - to: route-table
+    text: "Each side needs its own route to the other's CIDR, and the ranges must not overlap."
+reviewed: 2026-11-05
+---
+
+A one-to-one, non-transitive link between two VPCs, free within a zone and across accounts or regions. Fine for two; unmanageable for twenty.

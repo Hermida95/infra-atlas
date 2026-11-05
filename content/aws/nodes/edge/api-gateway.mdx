@@ -1,0 +1,24 @@
+---
+id: api-gateway
+title: "API Gateway"
+type: service
+domain: edge
+summary: "A managed front door for an API: authorisation, throttling, request validation, transformation and caching before anything reaches your code."
+logo: aws:apigateway
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [appsync, alb]
+  alternative_to: [alb]
+connects:
+  - to: lambda
+    text: "The pair behind most serverless APIs. API Gateway handles the HTTP; the function handles only the logic."
+  - to: cognito
+    text: "A Cognito or Lambda authoriser rejects unauthenticated requests at the edge of the API, not in the handler."
+  - to: step-functions
+    text: "Direct integrations mean an endpoint can start a workflow, write to DynamoDB or publish to SQS with no function at all."
+reviewed: 2026-11-05
+---
+
+A managed front door for an API: authorisation, throttling, request validation, transformation and caching before anything reaches your code.

@@ -1,0 +1,21 @@
+---
+id: batch
+title: "AWS Batch"
+type: service
+domain: compute
+summary: "Queues thousands of jobs with dependencies and retries onto capacity it provisions and tears down, usually Spot, on Fargate or EC2."
+monogram: AWS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [emr, lambda]
+connects:
+  - to: spot
+    text: "Batch is the easiest place to spend Spot: every job is retryable by definition."
+  - to: step-functions
+    text: "Step Functions orchestrates the pipeline; Batch runs the heavy, long steps inside it."
+reviewed: 2026-11-05
+---
+
+Queues thousands of jobs with dependencies and retries onto capacity it provisions and tears down, usually Spot, on Fargate or EC2.

@@ -10,10 +10,11 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from brain.models import Domain, Node, NodeFrontmatter, Requirement
+from brain.models import Case, Domain, Node, NodeFrontmatter, Requirement
 
 DOMAINS_FILE = "domains.yaml"
 REQUIREMENTS_FILE = "requirements.yaml"
+CASES_FILE = "cases.yaml"
 NODES_DIR = "nodes"
 NODE_GLOB = "*.mdx"
 REPO_MARKER = "pnpm-workspace.yaml"
@@ -36,6 +37,7 @@ class RepoRootNotFoundError(RuntimeError):
 class LoadResult:
     domains: list[Domain] = field(default_factory=list)
     requirements: list[Requirement] = field(default_factory=list)
+    cases: list[Case] = field(default_factory=list)
     nodes: list[Node] = field(default_factory=list)
     errors: list[ContentError] = field(default_factory=list)
 
@@ -128,6 +130,13 @@ def load_requirements(path: Path) -> list[Requirement]:
     return _load_model_list(path, Requirement, "requirements")
 
 
+def load_cases(path: Path) -> list[Case]:
+    """Optional file: no cases.yaml means no cases. Only the AWS atlas has them today."""
+    if not path.exists():
+        return []
+    return _load_model_list(path, Case, "cases")
+
+
 def node_files(content_dir: Path) -> Iterable[Path]:
     return sorted((content_dir / NODES_DIR).rglob(NODE_GLOB))
 
@@ -140,6 +149,10 @@ def load_content(content_dir: Path) -> LoadResult:
         result.errors.append(exc)
     try:
         result.requirements = load_requirements(content_dir / REQUIREMENTS_FILE)
+    except ContentError as exc:
+        result.errors.append(exc)
+    try:
+        result.cases = load_cases(content_dir / CASES_FILE)
     except ContentError as exc:
         result.errors.append(exc)
 

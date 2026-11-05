@@ -1,0 +1,47 @@
+---
+id: dynamodb
+title: "DynamoDB"
+type: service
+domain: database
+hub: true
+summary: "A key-value and document store with single-digit millisecond reads at any scale, no servers, no connections and no capacity planning if you want none."
+logo: aws:dynamodb
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [lambda, aws-backup, elasticache]
+  alternative_to: [rds, documentdb]
+connects:
+  - to: dynamodb-index
+    text: "You design the access patterns first, then the keys and indexes. Doing it the other way round is the classic mistake."
+  - to: dax
+    text: "A write-through cache that turns milliseconds into microseconds, for read-heavy tables that re-read the same items."
+  - to: dynamodb-streams
+    text: "The change log is what makes DynamoDB event-driven: a Lambda per change, with no polling."
+  - to: vpc-endpoint
+    text: "A free gateway endpoint, like S3, so a private subnet reaches it without a NAT Gateway."
+  - to: global-tables
+    text: "Multi-region, multi-writer with last-writer-wins, which is as close to active/active as managed data gets."
+lead: "DynamoDB is fast because it refuses to do the things that make a relational database slow. Every design decision happens before the table exists."
+parts:
+  - name: "Partition key"
+    kind: core
+    text: "The hash of this value picks the partition. An even spread is the whole performance story; a hot key is the whole failure story."
+  - name: "Sort key"
+    kind: lanes
+    text: "Orders items inside a partition and makes range queries possible. Key plus sort key is the item's identity."
+  - name: "Indexes"
+    kind: satellites
+    text: "A local secondary index for another sort order, a global one for another partition key. One per access pattern."
+  - name: "Capacity"
+    kind: jobs
+    text: "On-demand for unknown or spiky traffic, provisioned with auto scaling when the shape is known and you want it cheaper."
+  - name: "Streams and TTL"
+    kind: trigger
+    text: "An ordered change log per partition to trigger functions, and a timestamp attribute that expires items for free."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A key-value and document store with single-digit millisecond reads at any scale, no servers, no connections and no capacity planning if you want none.

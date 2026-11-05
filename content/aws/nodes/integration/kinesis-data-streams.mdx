@@ -1,0 +1,24 @@
+---
+id: kinesis-data-streams
+title: "Kinesis Data Streams"
+type: service
+domain: integration
+summary: "An ordered, replayable stream read by many consumers at once. Throughput is shards, retention is up to a year."
+monogram: KDS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [msk]
+  alternative_to: [sqs, msk]
+connects:
+  - to: firehose
+    text: "Firehose is the no-code consumer: buffer the stream and land it in S3, Redshift or OpenSearch."
+  - to: sqs
+    text: "The real distinction: a queue deletes a message once handled, a stream keeps it for every consumer and for replay."
+  - to: lambda
+    text: "A function per shard, ordered within the shard, with the batch retried until it succeeds or is parked."
+reviewed: 2026-11-05
+---
+
+An ordered, replayable stream read by many consumers at once. Throughput is shards, retention is up to a year.

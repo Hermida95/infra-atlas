@@ -1,0 +1,21 @@
+---
+id: shield
+title: "Shield & Shield Advanced"
+type: comparison
+domain: edge
+summary: "DDoS protection. Standard is on for everything at no cost; Advanced adds detection, a response team, WAF, and cost protection against a scaling bill."
+monogram: SSA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [waf]
+connects:
+  - to: cloudfront
+    text: "Advanced is bought per protected resource, and CloudFront plus Route 53 is the pair it is usually bought for."
+  - to: budgets
+    text: "Cost protection matters because the first symptom of a layer-3 attack is often an autoscaling bill, not an outage."
+reviewed: 2026-11-05
+---
+
+DDoS protection. Standard is on for everything at no cost; Advanced adds detection, a response team, WAF, and cost protection against a scaling bill.

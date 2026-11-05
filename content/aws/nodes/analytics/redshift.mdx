@@ -1,0 +1,24 @@
+---
+id: redshift
+title: "Redshift"
+type: service
+domain: analytics
+summary: "A columnar, massively parallel data warehouse for joins across billions of rows, with Serverless, and Spectrum to read S3 in place."
+monogram: RE
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [glue]
+  alternative_to: [athena]
+connects:
+  - to: athena
+    text: "Athena for occasional queries over a lake, Redshift for a warehouse that is queried all day by many people."
+  - to: firehose
+    text: "Streaming ingestion and Firehose delivery are the two usual ways data lands in it."
+  - to: quicksight
+    text: "The classic pairing for business dashboards, with SPICE caching the results."
+reviewed: 2026-11-05
+---
+
+A columnar, massively parallel data warehouse for joins across billions of rows, with Serverless, and Spectrum to read S3 in place.

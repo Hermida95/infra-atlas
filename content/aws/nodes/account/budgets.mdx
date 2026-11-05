@@ -1,0 +1,21 @@
+---
+id: budgets
+title: "AWS Budgets"
+type: service
+domain: account
+summary: "An alert, or an automated action, when actual or forecast spend or usage crosses a line you set."
+logo: aws:budgets
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [savings-plans]
+connects:
+  - to: sns
+    text: "A budget notifies through SNS, so the same threshold can mail a person and trigger a function."
+  - to: cost-explorer
+    text: "A budget is a threshold over the same data Cost Explorer charts."
+reviewed: 2026-11-05
+---
+
+An alert, or an automated action, when actual or forecast spend or usage crosses a line you set.

@@ -1,0 +1,23 @@
+---
+id: shared-responsibility
+title: "Shared responsibility"
+type: concept
+domain: foundation
+summary: "AWS secures the cloud; you secure what you put in it. Which side of the line a control falls on decides who has to fix it."
+monogram: SR
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [well-architected]
+connects:
+  - to: iam-policy
+    text: "Access control is always yours. AWS will never stop a request your own policy allowed."
+  - to: kms
+    text: "AWS runs the key store and the hardware; you decide who may use the key, in the key policy."
+  - to: systems-manager
+    text: "Managed services are patched by AWS. On EC2 the operating system is yours, which is why Systems Manager Patch Manager exists."
+reviewed: 2026-11-05
+---
+
+AWS secures the cloud; you secure what you put in it. Which side of the line a control falls on decides who has to fix it.

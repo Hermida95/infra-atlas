@@ -1,0 +1,22 @@
+---
+id: nlb
+title: "Network Load Balancer"
+type: service
+domain: edge
+summary: "Layer 4 at millions of requests per second, with a static IP per zone, the client address preserved, and support for UDP and TLS passthrough."
+logo: aws:elb
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [alb, gwlb]
+  alternative_to: [alb]
+connects:
+  - to: privatelink
+    text: "An endpoint service is built on an NLB: this is the only load balancer PrivateLink will front."
+  - to: global-accelerator
+    text: "Static IPs at both layers, which is what lets a client hold one address and still fail over."
+reviewed: 2026-11-05
+---
+
+Layer 4 at millions of requests per second, with a static IP per zone, the client address preserved, and support for UDP and TLS passthrough.

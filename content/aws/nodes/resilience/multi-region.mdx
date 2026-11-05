@@ -1,0 +1,23 @@
+---
+id: multi-region
+title: "Multi-region architecture"
+type: pattern
+domain: resilience
+summary: "A second region is a different problem, not a bigger one: the data has to be replicated, and something has to decide which region is live."
+monogram: MRA
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [global-tables, s3-replication, active-active]
+connects:
+  - to: rto-rpo
+    text: "The two numbers decide which of the four strategies you are allowed to pick. Nothing else does."
+  - to: route53-failover
+    text: "Someone has to move the traffic, and in most designs that someone is Route 53 or Global Accelerator."
+  - to: aurora-global
+    text: "The data is the hard half, and managed cross-region replication is the only reason this is feasible at all."
+reviewed: 2026-11-05
+---
+
+A second region is a different problem, not a bigger one: the data has to be replicated, and something has to decide which region is live.

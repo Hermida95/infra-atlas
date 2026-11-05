@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AWS } from "@/lib/aws";
 import { search } from "@/lib/search";
 
 const ids = (q: string) => search(q).map((h) => h.node.id);
@@ -37,5 +38,18 @@ describe("concept search", () => {
     const hits = search("");
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((h) => h.node.hub)).toBe(true);
+  });
+});
+
+describe("searching another graph", () => {
+  it("ranks the AWS atlas, not the journey map", () => {
+    const hits = search("nat gateway", AWS.graph.nodes, 3, AWS);
+    expect(hits[0].node.id).toBe("nat-gateway");
+  });
+
+  it("matches a service by its AWS category name", () => {
+    const hits = search("resilience", AWS.graph.nodes, 20, AWS);
+    expect(hits.every((h) => AWS.nodeById.get(h.node.id)!.domain === "resilience")).toBe(true);
+    expect(hits.length).toBeGreaterThan(0);
   });
 });

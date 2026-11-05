@@ -1,0 +1,23 @@
+---
+id: scp
+title: "Service Control Policies"
+type: service
+domain: account
+summary: "Organization-wide guardrails. An SCP never grants a permission; it caps what IAM in a member account is able to grant."
+monogram: SCP
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [organizations]
+connects:
+  - to: iam-policy
+    text: "A request is allowed only if the SCP and an IAM policy both allow it. The intersection, never the union."
+  - to: permission-boundary
+    text: "Same idea one level down: SCPs cap an account, boundaries cap an identity inside it."
+  - to: region
+    text: "The classic SCP denies every region but the two you operate in, so nothing can be launched somewhere nobody is watching."
+reviewed: 2026-11-05
+---
+
+Organization-wide guardrails. An SCP never grants a permission; it caps what IAM in a member account is able to grant.

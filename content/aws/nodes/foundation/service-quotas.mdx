@@ -1,0 +1,21 @@
+---
+id: service-quotas
+title: "Service Quotas"
+type: service
+domain: foundation
+summary: "Per-account, per-region limits on almost everything. The reason a design that passed a load test stops dead in production."
+monogram: SQ
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: auto-scaling
+    text: "An Auto Scaling group cannot grow past the account's instance or vCPU quota, however high the target is set."
+  - to: organizations
+    text: "Quotas are per account, so splitting workloads across accounts is also a way of splitting their limits."
+  - to: cloudwatch-alarms
+    text: "Quotas publish usage metrics: alarm at 80% and raise the limit before the launch, not during it."
+reviewed: 2026-11-05
+---
+
+Per-account, per-region limits on almost everything. The reason a design that passed a load test stops dead in production.

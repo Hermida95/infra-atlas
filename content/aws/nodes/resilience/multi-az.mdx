@@ -1,0 +1,23 @@
+---
+id: multi-az
+title: "Multi-AZ by default"
+type: pattern
+domain: resilience
+summary: "Two or more zones for everything, stateless and stateful alike. The cheapest availability you will ever buy, and the baseline every answer assumes."
+monogram: MAB
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [auto-scaling, nat-gateway]
+connects:
+  - to: az
+    text: "Zones fail independently and are close enough to replicate synchronously. That combination is what makes this cheap."
+  - to: alb
+    text: "A load balancer in two zones with targets in both, and cross-zone balancing so one zone's loss is capacity, not an outage."
+  - to: rds-multi-az
+    text: "The stateful half: a synchronous standby next door, failed over by the service rather than by a person."
+reviewed: 2026-11-05
+---
+
+Two or more zones for everything, stateless and stateful alike. The cheapest availability you will ever buy, and the baseline every answer assumes.

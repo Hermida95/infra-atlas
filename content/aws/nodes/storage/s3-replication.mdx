@@ -1,0 +1,21 @@
+---
+id: s3-replication
+title: "S3 replication"
+type: service
+domain: storage
+summary: "Copies new objects to another bucket, region or account, with optional Replication Time Control for a fifteen-minute objective."
+monogram: S3
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [s3, aws-backup]
+connects:
+  - to: backup-restore
+    text: "Cross-region replication is how an S3 RPO is met, and the reason an S3 restore is rarely the slow part of a DR plan."
+  - to: multi-region
+    text: "Two-way replication keeps both regions writable, at the price of having to settle conflicts yourself."
+reviewed: 2026-11-05
+---
+
+Copies new objects to another bucket, region or account, with optional Replication Time Control for a fifteen-minute objective.

@@ -1,0 +1,23 @@
+---
+id: blue-green
+title: "Blue/green & canary on AWS"
+type: pattern
+domain: deploy
+summary: "Which service does the shifting: ALB target groups, the ECS deployment circuit breaker, Lambda alias weights, or Route 53 weighted records."
+monogram: BGC
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [codedeploy]
+connects:
+  - to: alb
+    text: "Two target groups and a listener rule is the simplest blue/green there is, and it rolls back in one API call."
+  - to: ecs
+    text: "The circuit breaker stops and reverses a deployment whose tasks never become healthy, with nothing else configured."
+  - to: lambda
+    text: "An alias with weighted versions shifts a percentage of invocations, and CodeDeploy walks the percentage up."
+reviewed: 2026-11-05
+---
+
+Which service does the shifting: ALB target groups, the ECS deployment circuit breaker, Lambda alias weights, or Route 53 weighted records.

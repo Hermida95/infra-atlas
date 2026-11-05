@@ -1,0 +1,23 @@
+---
+id: transit-gateway
+title: "Transit Gateway"
+type: service
+domain: network
+summary: "A regional hub that every VPC, VPN and Direct Connect attaches to, with its own route tables for segmenting who may reach whom."
+monogram: TG
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [vpc-peering, site-to-site-vpn, multi-region]
+connects:
+  - to: ram
+    text: "One Transit Gateway shared with the organization, rather than one per account to be stitched together."
+  - to: direct-connect
+    text: "A Direct Connect gateway attaches to it, so one circuit reaches every VPC in the region."
+  - to: network-firewall
+    text: "The inspection pattern: spoke routes point at the Transit Gateway, which sends traffic through a firewall VPC and back."
+reviewed: 2026-11-05
+---
+
+A regional hub that every VPC, VPN and Direct Connect attaches to, with its own route tables for segmenting who may reach whom.

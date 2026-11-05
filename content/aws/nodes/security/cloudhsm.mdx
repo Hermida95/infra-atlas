@@ -1,0 +1,20 @@
+---
+id: cloudhsm
+title: "CloudHSM"
+type: service
+domain: security
+summary: "A dedicated FIPS 140-3 level 3 hardware module in your VPC that only you can access. AWS cannot recover the key, and nor can you."
+monogram: CL
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [acm]
+  alternative_to: [kms]
+connects:
+  - to: kms
+    text: "A custom key store puts KMS in front of your HSM cluster, so services keep using KMS while the material stays yours."
+reviewed: 2026-11-05
+---
+
+A dedicated FIPS 140-3 level 3 hardware module in your VPC that only you can access. AWS cannot recover the key, and nor can you.

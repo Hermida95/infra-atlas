@@ -1,0 +1,21 @@
+---
+id: iam-policy
+title: "IAM policies"
+type: service
+domain: identity
+summary: "JSON documents of allow and deny statements over actions, resources and conditions. No matching allow is a deny; an explicit deny is final."
+monogram: IAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam, permission-boundary, scp]
+connects:
+  - to: iam-access-analyzer
+    text: "Access Analyzer rewrites a broad policy down to the actions that were actually used in the last 90 days."
+  - to: tagging
+    text: "Conditions on tags turn one policy into a per-team policy, which is how least privilege survives growth."
+reviewed: 2026-11-05
+---
+
+JSON documents of allow and deny statements over actions, resources and conditions. No matching allow is a deny; an explicit deny is final.

@@ -1,0 +1,23 @@
+---
+id: step-functions
+title: "Step Functions"
+type: service
+domain: integration
+summary: "A state machine for a workflow: retries, catch, choice, parallel, map and wait, with the orchestration out of your code entirely."
+monogram: SF
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [eventbridge]
+connects:
+  - to: lambda
+    text: "Standard workflows keep state for up to a year, so a function no longer has to wait fifteen minutes for anything."
+  - to: batch
+    text: "The long, heavy steps run in Batch or on ECS; the workflow just waits for them and handles the failure."
+  - to: api-gateway
+    text: "An endpoint can start an execution directly, which removes the function that existed only to start it."
+reviewed: 2026-11-05
+---
+
+A state machine for a workflow: retries, catch, choice, parallel, map and wait, with the orchestration out of your code entirely.

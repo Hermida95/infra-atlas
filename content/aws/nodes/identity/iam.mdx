@@ -1,0 +1,46 @@
+---
+id: iam
+title: "IAM"
+type: service
+domain: identity
+hub: true
+summary: "Who may call which API on which resource. Evaluated on every single request, and the one service no design escapes."
+logo: aws:iam
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-access-analyzer, cognito, cloudtrail]
+connects:
+  - to: iam-role
+    text: "Almost every real answer is a role: for an instance, for a function, for a person signing in, for another account."
+  - to: sts
+    text: "Assuming a role is an STS call that hands back a key, a secret and a session token that expire."
+  - to: resource-policy
+    text: "Cross-account access needs both ends to agree: a role in one account, a resource policy in the other."
+  - to: scp
+    text: "An organization's SCPs sit above IAM: an allow here means nothing if the SCP denies it."
+  - to: kms
+    text: "A key policy is IAM for a key, and it is the one policy that can lock out even the account's administrator."
+lead: "Every API call in AWS is authenticated and then authorised by IAM. Reading the evaluation order once is worth more than memorising any policy."
+parts:
+  - name: "Principals"
+    kind: satellites
+    text: "Users, roles and AWS services. A role is the one you should be reaching for: no password, no key, credentials that expire."
+  - name: "Identity policies"
+    kind: sheet
+    text: "Attached to the principal, they say what that principal may do. Nothing is allowed until one of them allows it."
+  - name: "Resource policies"
+    kind: sheet
+    text: "Attached to the resource, they say who may touch it. A bucket policy can grant access to a whole other account."
+  - name: "Conditions"
+    kind: chips
+    text: "The interesting half of a policy: source VPC, MFA present, tag matches, time of day, request came through PrivateLink."
+  - name: "Evaluation"
+    kind: gate
+    text: "Explicit deny wins over everything. Then an allow is needed from the identity side, the resource side, the SCP and any boundary."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Who may call which API on which resource. Evaluated on every single request, and the one service no design escapes.

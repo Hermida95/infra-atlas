@@ -1,0 +1,79 @@
+# Service categories of the AWS atlas. Same shape as ../domains.yaml, but this map is not a
+# journey: it is the cloud read from the inside out. `network` sits at the centre because
+# almost everything runs inside a VPC; `edge` and `foundation` sit outside it, on the side
+# the user's request arrives from; governance, security and operations wrap the whole thing.
+- id: foundation
+  name: "Global footprint"
+  order: 0
+  position: [-1.08, 0.0, 0.0]
+  hue: 196
+- id: account
+  name: "Accounts & governance"
+  order: 1
+  position: [-0.72, 0.62, -0.3]
+  hue: 216
+- id: identity
+  name: "Identity & access"
+  order: 2
+  position: [-0.7, -0.6, 0.3]
+  hue: 230
+- id: network
+  name: "Networking"
+  order: 3
+  position: [0.0, 0.0, 0.0]
+  hue: 186
+- id: edge
+  name: "Edge & delivery"
+  order: 4
+  position: [-0.3, 0.42, 0.4]
+  hue: 202
+- id: compute
+  name: "Compute"
+  order: 5
+  position: [0.12, -0.64, 0.14]
+  hue: 176
+- id: storage
+  name: "Storage"
+  order: 6
+  position: [0.68, -0.56, 0.34]
+  hue: 164
+- id: database
+  name: "Databases"
+  order: 7
+  position: [0.62, -0.06, -0.3]
+  hue: 154
+- id: integration
+  name: "Application integration"
+  order: 8
+  position: [0.3, 0.44, 0.34]
+  hue: 244
+- id: analytics
+  name: "Analytics"
+  order: 9
+  position: [1.06, -0.26, -0.08]
+  hue: 146
+- id: security
+  name: "Data protection & threats"
+  order: 10
+  position: [-0.3, 0.66, -0.38]
+  hue: 264
+- id: ops
+  name: "Operations"
+  order: 11
+  position: [0.5, 0.6, -0.34]
+  hue: 208
+- id: resilience
+  name: "Resilience & DR"
+  order: 12
+  position: [0.96, 0.36, 0.28]
+  hue: 284
+- id: deploy
+  name: "Provisioning"
+  order: 13
+  position: [-0.42, -0.28, -0.42]
+  hue: 222
+- id: migrate
+  name: "Migration & transfer"
+  order: 14
+  position: [1.04, 0.1, -0.42]
+  hue: 134

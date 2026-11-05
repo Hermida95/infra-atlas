@@ -1,0 +1,23 @@
+---
+id: vpc-endpoint
+title: "VPC endpoints"
+type: service
+domain: network
+summary: "Reach AWS services from a private subnet without the internet. Gateway endpoints for S3 and DynamoDB are free; interface endpoints are hourly plus per GB."
+monogram: VPC
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [nat-gateway, route-table]
+connects:
+  - to: s3
+    text: "A gateway endpoint adds a route for S3 prefixes. No NAT, no public addresses, no data processing charge."
+  - to: resource-policy
+    text: "An endpoint policy plus a bucket policy that requires that endpoint is the standard anti-exfiltration pair."
+  - to: privatelink
+    text: "Interface endpoints are PrivateLink: an ENI in your subnet with a private address for the service."
+reviewed: 2026-11-05
+---
+
+Reach AWS services from a private subnet without the internet. Gateway endpoints for S3 and DynamoDB are free; interface endpoints are hourly plus per GB.

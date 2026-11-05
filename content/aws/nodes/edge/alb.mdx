@@ -1,0 +1,24 @@
+---
+id: alb
+title: "Application Load Balancer"
+type: service
+domain: edge
+summary: "Layer 7 load balancing: routes on host, path, header, query and source IP, terminates TLS, and reaches targets in two or more zones."
+logo: aws:elb
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [nlb, api-gateway, igw]
+  alternative_to: [nlb, api-gateway]
+connects:
+  - to: ecs
+    text: "Dynamic port mapping and target groups per service are why ALB is the default front door for containers."
+  - to: auto-scaling
+    text: "The Auto Scaling group registers and drains instances in the target group, and uses its health checks."
+  - to: waf
+    text: "WAF attaches directly to an ALB, which is the answer when there is no CloudFront in front."
+reviewed: 2026-11-05
+---
+
+Layer 7 load balancing: routes on host, path, header, query and source IP, terminates TLS, and reaches targets in two or more zones.

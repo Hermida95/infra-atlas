@@ -1,0 +1,19 @@
+---
+id: lake-formation
+title: "Lake Formation"
+type: service
+domain: analytics
+summary: "Column-, row- and tag-level permissions over a data lake, granted in the catalogue instead of in every bucket policy."
+monogram: LF
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: glue
+    text: "It governs the Glue catalogue, so Athena, Redshift and EMR all inherit the same grants."
+  - to: ram
+    text: "Catalogue resources can be shared across accounts, which is how a central lake serves many consumer accounts."
+reviewed: 2026-11-05
+---
+
+Column-, row- and tag-level permissions over a data lake, granted in the catalogue instead of in every bucket policy.

@@ -1,0 +1,21 @@
+---
+id: cdk
+title: "CDK"
+type: service
+domain: deploy
+summary: "Infrastructure in TypeScript, Python, Java or Go that synthesises CloudFormation. Loops, types and tested constructs instead of YAML."
+monogram: CDK
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [cloudformation]
+connects:
+  - to: cloudformation
+    text: "It is a template generator. The deployment, the rollback and the drift are still CloudFormation's."
+  - to: codepipeline
+    text: "CDK Pipelines is a self-mutating pipeline: the pipeline deploys changes to itself as well as to the stacks."
+reviewed: 2026-11-05
+---
+
+Infrastructure in TypeScript, Python, Java or Go that synthesises CloudFormation. Loops, types and tested constructs instead of YAML.

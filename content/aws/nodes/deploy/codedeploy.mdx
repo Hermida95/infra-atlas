@@ -1,0 +1,19 @@
+---
+id: codedeploy
+title: "CodeDeploy"
+type: service
+domain: deploy
+summary: "Blue/green and canary rollouts for EC2, ECS and Lambda, shifting traffic in steps and rolling back automatically on a CloudWatch alarm."
+monogram: CO
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: cloudwatch-alarms
+    text: "The alarm is the rollback trigger, which is the whole reason a canary is safer than a deploy."
+  - to: blue-green
+    text: "Which mechanism it uses depends on the target: target groups, ECS deployments or Lambda alias weights."
+reviewed: 2026-11-05
+---
+
+Blue/green and canary rollouts for EC2, ECS and Lambda, shifting traffic in steps and rolling back automatically on a CloudWatch alarm.

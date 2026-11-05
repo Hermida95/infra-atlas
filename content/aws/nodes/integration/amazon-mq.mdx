@@ -1,0 +1,20 @@
+---
+id: amazon-mq
+title: "Amazon MQ"
+type: service
+domain: integration
+summary: "Managed ActiveMQ or RabbitMQ, for applications that already speak AMQP, MQTT, STOMP or JMS and are not going to be rewritten."
+monogram: AM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [seven-rs]
+  alternative_to: [sqs]
+connects:
+  - to: sqs
+    text: "For anything new, SQS is cheaper and scales further. MQ exists for the migration that must keep its protocol."
+reviewed: 2026-11-05
+---
+
+Managed ActiveMQ or RabbitMQ, for applications that already speak AMQP, MQTT, STOMP or JMS and are not going to be rewritten.

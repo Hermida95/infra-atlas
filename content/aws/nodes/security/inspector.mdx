@@ -1,0 +1,21 @@
+---
+id: inspector
+title: "Inspector"
+type: service
+domain: security
+summary: "Continuously scans EC2 instances, container images in ECR and Lambda functions for known CVEs and for network paths that reach them."
+monogram: IN
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [security-hub]
+connects:
+  - to: ecr
+    text: "Enhanced scanning re-scans pushed images as new vulnerabilities are published, not just once at push."
+  - to: systems-manager
+    text: "On EC2 it works through the SSM agent, so the agent and its role are the prerequisite."
+reviewed: 2026-11-05
+---
+
+Continuously scans EC2 instances, container images in ECR and Lambda functions for known CVEs and for network paths that reach them.

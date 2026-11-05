@@ -1,0 +1,22 @@
+---
+id: read-replica
+title: "Read replicas"
+type: service
+domain: database
+summary: "Asynchronous copies that serve read traffic and can be promoted to standalone. They lag, and promotion is a manual decision."
+monogram: RR
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rds-multi-az, elasticache]
+  alternative_to: [rds-multi-az, elasticache]
+connects:
+  - to: rds
+    text: "The application has to send reads somewhere else, so this is a change in the code as much as in the infrastructure."
+  - to: aurora-global
+    text: "A cross-region read replica is the poor relation of an Aurora global database: the same idea, slower and more manual."
+reviewed: 2026-11-05
+---
+
+Asynchronous copies that serve read traffic and can be promoted to standalone. They lag, and promotion is a manual decision.

@@ -1,0 +1,23 @@
+---
+id: nat-gateway
+title: "NAT Gateway"
+type: service
+domain: network
+summary: "Outbound-only internet access for private subnets. Managed, zonal, and charged per hour plus per gigabyte processed."
+monogram: NAT
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [igw, route-table]
+connects:
+  - to: vpc-endpoint
+    text: "The cost fix: traffic to S3 or DynamoDB through a gateway endpoint is free, and skips the NAT Gateway entirely."
+  - to: az
+    text: "One per zone, or a zone failure takes out the other zone's outbound traffic along with it."
+  - to: cost-explorer
+    text: "Data processing charges here are one of the most common unexplained line items on a bill."
+reviewed: 2026-11-05
+---
+
+Outbound-only internet access for private subnets. Managed, zonal, and charged per hour plus per gigabyte processed.

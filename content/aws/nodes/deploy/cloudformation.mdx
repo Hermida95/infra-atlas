@@ -1,0 +1,44 @@
+---
+id: cloudformation
+title: "CloudFormation"
+type: service
+domain: deploy
+hub: true
+summary: "Declarative templates AWS applies as a stack, with change sets, drift detection, automatic rollback and no state file to look after."
+monogram: CL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [sam, codepipeline]
+connects:
+  - to: cdk
+    text: "CDK is a program that synthesises one of these templates, so everything here still applies underneath."
+  - to: stacksets
+    text: "The same template rolled out to many accounts and regions from the management account."
+  - to: service-catalog
+    text: "A template becomes a product a team may launch without having the permissions to build it by hand."
+  - to: backup-restore
+    text: "A DR plan is only as good as the templates: redeploying the stack is the recovery."
+lead: "CloudFormation is the native way infrastructure is described on AWS, and the thing CDK, SAM, Service Catalog and Control Tower all end up producing."
+parts:
+  - name: "Template"
+    kind: sheet
+    text: "Resources, parameters, mappings, conditions and outputs. YAML or JSON, and the unit of review."
+  - name: "Stack"
+    kind: modules
+    text: "A template plus its parameter values, applied. Deleting the stack deletes what it made, unless a resource says otherwise."
+  - name: "Change set"
+    kind: gate
+    text: "A dry run: what would be created, updated or replaced. Replaced is the word to read carefully."
+  - name: "Rollback and drift"
+    kind: loop
+    text: "A failed update returns to the previous state. Drift detection says what somebody changed by hand afterwards."
+  - name: "Nested stacks and exports"
+    kind: graph
+    text: "Stacks that reference each other's outputs, which is how one template stops being four thousand lines."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Declarative templates AWS applies as a stack, with change sets, drift detection, automatic rollback and no state file to look after.

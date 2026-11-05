@@ -1,0 +1,23 @@
+---
+id: control-tower
+title: "Control Tower"
+type: service
+domain: account
+summary: "A managed landing zone: an organization, a log archive and audit account, mandatory guardrails and an account factory."
+monogram: CT
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: organizations
+    text: "Control Tower is Organizations with opinions: the OUs, the SCPs and the shared accounts come set up."
+  - to: cloudtrail
+    text: "An organization trail into the log archive account is one of the controls you cannot turn off."
+  - to: aws-config
+    text: "Detective guardrails are Config rules, aggregated into the audit account."
+  - to: service-catalog
+    text: "The account factory is a Service Catalog product, so a new account is a form, not a runbook."
+reviewed: 2026-11-05
+---
+
+A managed landing zone: an organization, a log archive and audit account, mandatory guardrails and an account factory.

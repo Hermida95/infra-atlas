@@ -1,0 +1,23 @@
+---
+id: seven-rs
+title: "The 7 Rs"
+type: concept
+domain: migrate
+summary: "Retire, retain, relocate, rehost, replatform, repurchase, refactor. Every migration question is picking one of these per application."
+monogram: THE
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [migration-hub, well-architected]
+connects:
+  - to: mgn
+    text: "Rehost is the default and the fastest: block-level replication into EC2 with the application untouched."
+  - to: dms
+    text: "Replatform usually means the same application on a managed database, and DMS is how the data gets there."
+  - to: amazon-mq
+    text: "Repurchase and replatform both show up as 'keep the protocol, drop the servers', which is what Amazon MQ is for."
+reviewed: 2026-11-05
+---
+
+Retire, retain, relocate, rehost, replatform, repurchase, refactor. Every migration question is picking one of these per application.

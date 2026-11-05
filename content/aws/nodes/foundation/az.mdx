@@ -1,0 +1,23 @@
+---
+id: az
+title: "Availability Zone"
+type: service
+domain: foundation
+summary: "One or more discrete data centres inside a region, far enough apart to fail separately and close enough to replicate synchronously."
+monogram: AZ
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [alb, auto-scaling]
+connects:
+  - to: subnet
+    text: "A subnet belongs to exactly one zone. Choosing a subnet is how you choose which zone a resource runs in."
+  - to: rds-multi-az
+    text: "A synchronous standby in a second zone is the whole trick behind Multi-AZ: the latency between zones is low enough for it."
+  - to: multi-az
+    text: "Spread across two or more and a zone failure becomes a capacity event instead of an outage."
+reviewed: 2026-11-05
+---
+
+One or more discrete data centres inside a region, far enough apart to fail separately and close enough to replicate synchronously.

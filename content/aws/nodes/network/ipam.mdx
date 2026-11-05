@@ -1,0 +1,19 @@
+---
+id: ipam
+title: "IP Address Manager"
+type: service
+domain: network
+summary: "Plans, allocates and audits CIDR blocks across accounts and regions, so two VPCs that must be connected later do not overlap."
+monogram: IP
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: vpc
+    text: "A VPC takes its range from an IPAM pool instead of someone's spreadsheet, and the overlap is refused at creation."
+  - to: transit-gateway
+    text: "Overlapping ranges are the one thing a Transit Gateway cannot route around, which is the problem IPAM exists to prevent."
+reviewed: 2026-11-05
+---
+
+Plans, allocates and audits CIDR blocks across accounts and regions, so two VPCs that must be connected later do not overlap.

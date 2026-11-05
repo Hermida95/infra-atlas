@@ -1,0 +1,21 @@
+---
+id: ami
+title: "AMIs"
+type: service
+domain: compute
+summary: "A bootable image of a configured machine, backed by EBS snapshots. Immutable deployment and Auto Scaling both start from one."
+monogram: AM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ec2, systems-manager]
+connects:
+  - to: ebs-snapshot
+    text: "An AMI is a manifest over snapshots, which is why copying one to another region copies those too."
+  - to: auto-scaling
+    text: "The launch template points at an AMI id, so a new image is a new template version and a rolling replacement."
+reviewed: 2026-11-05
+---
+
+A bootable image of a configured machine, backed by EBS snapshots. Immutable deployment and Auto Scaling both start from one.

@@ -1,0 +1,24 @@
+---
+id: efs
+title: "EFS"
+type: service
+domain: storage
+summary: "An elastic NFS file system many instances across many zones mount at once, growing and shrinking on its own, with an archive tier."
+monogram: EFS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ebs, aws-backup]
+  alternative_to: [fsx, ebs]
+connects:
+  - to: ec2
+    text: "Mount targets live one per zone, and every instance in the VPC sees the same files."
+  - to: lambda
+    text: "A function can mount EFS, which is how serverless gets a shared, writable, persistent file system."
+  - to: fsx
+    text: "EFS speaks NFS to Linux. If the requirement names SMB, Windows, Lustre or ONTAP, the answer is FSx."
+reviewed: 2026-11-05
+---
+
+An elastic NFS file system many instances across many zones mount at once, growing and shrinking on its own, with an archive tier.

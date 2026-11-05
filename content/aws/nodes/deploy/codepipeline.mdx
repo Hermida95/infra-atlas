@@ -1,0 +1,23 @@
+---
+id: codepipeline
+title: "CodePipeline"
+type: service
+domain: deploy
+summary: "Stages, artefacts, manual approvals and cross-account deployment, wiring source to build to deploy inside AWS."
+monogram: CO
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [oidc-federation]
+connects:
+  - to: codebuild
+    text: "The build stage is almost always CodeBuild, publishing an artefact to S3 or an image to ECR."
+  - to: codedeploy
+    text: "The deploy stage hands the artefact to CodeDeploy, ECS or CloudFormation, depending on what is being replaced."
+  - to: iam-role
+    text: "Cross-account deployment is a role per target account plus a KMS key the artefact bucket shares."
+reviewed: 2026-11-05
+---
+
+Stages, artefacts, manual approvals and cross-account deployment, wiring source to build to deploy inside AWS.

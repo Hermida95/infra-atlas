@@ -1,0 +1,21 @@
+---
+id: aurora-global
+title: "Aurora Global Database"
+type: service
+domain: database
+summary: "One writer region and up to five read regions with typically sub-second replication, and managed failover in about a minute."
+monogram: AGD
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [aurora, warm-standby]
+connects:
+  - to: multi-region
+    text: "This is the managed answer to a cross-region RPO measured in seconds, which replication alone cannot give you."
+  - to: route53-failover
+    text: "Promoting the secondary is only half of it: something has to move the traffic, and that is usually Route 53."
+reviewed: 2026-11-05
+---
+
+One writer region and up to five read regions with typically sub-second replication, and managed failover in about a minute.

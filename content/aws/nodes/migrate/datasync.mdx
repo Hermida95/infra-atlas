@@ -1,0 +1,22 @@
+---
+id: datasync
+title: "DataSync"
+type: service
+domain: migrate
+summary: "Moves and then keeps in sync file and object data between on-premises storage and S3, EFS or FSx, with verification and scheduling."
+monogram: DA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [storage-gateway]
+  alternative_to: [snow-family, storage-gateway]
+connects:
+  - to: efs
+    text: "The managed path to fill an EFS or FSx file system from an existing NFS or SMB share."
+  - to: snow-family
+    text: "Over the network up to tens of terabytes. Past that, the device arrives by courier."
+reviewed: 2026-11-05
+---
+
+Moves and then keeps in sync file and object data between on-premises storage and S3, EFS or FSx, with verification and scheduling.

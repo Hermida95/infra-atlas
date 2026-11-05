@@ -1,0 +1,23 @@
+---
+id: iam-identity-center
+title: "IAM Identity Center"
+type: service
+domain: account
+summary: "Workforce sign-in once against your own directory, then short-lived roles in any account. What replaced IAM users for people."
+monogram: IAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [organizations, permission-boundary]
+connects:
+  - to: iam-role
+    text: "Every assignment is a permission set, which becomes an IAM role in each account it applies to."
+  - to: sts
+    text: "Sign-in exchanges the SAML or OIDC assertion for temporary credentials. Nobody holds an access key."
+  - to: directory-service
+    text: "The identity source can be Identity Center itself, Active Directory, or any external IdP."
+reviewed: 2026-11-05
+---
+
+Workforce sign-in once against your own directory, then short-lived roles in any account. What replaced IAM users for people.

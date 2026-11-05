@@ -1,0 +1,21 @@
+---
+id: global-tables
+title: "DynamoDB global tables"
+type: service
+domain: database
+summary: "The same table replicated to several regions, writable in all of them, converging with last-writer-wins."
+monogram: DGT
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [dynamodb]
+connects:
+  - to: active-active
+    text: "This is what makes a true active/active application plausible, and the conflict rule is the thing to read twice."
+  - to: multi-region
+    text: "Replication is seconds, not synchronous, so the application has to tolerate reading a value it just overwrote elsewhere."
+reviewed: 2026-11-05
+---
+
+The same table replicated to several regions, writable in all of them, converging with last-writer-wins.

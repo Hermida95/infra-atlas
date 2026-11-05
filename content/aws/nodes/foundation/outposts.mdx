@@ -1,0 +1,21 @@
+---
+id: outposts
+title: "Outposts"
+type: service
+domain: foundation
+summary: "AWS-owned racks installed in your own data centre, running EC2, EBS, S3 and EKS against the same APIs as the region."
+monogram: OU
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [local-zone, storage-gateway]
+connects:
+  - to: region
+    text: "An Outpost is an anchor back to one region: it needs that link, and the control plane stays there."
+  - to: direct-connect
+    text: "The service link usually rides a Direct Connect, because the rack is useless when the link is down."
+reviewed: 2026-11-05
+---
+
+AWS-owned racks installed in your own data centre, running EC2, EBS, S3 and EKS against the same APIs as the region.

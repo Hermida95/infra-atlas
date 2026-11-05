@@ -1,0 +1,22 @@
+---
+id: elasticache
+title: "ElastiCache"
+type: service
+domain: database
+summary: "Managed Redis or Valkey and Memcached for sessions, hot keys, leaderboards and rate limits. Redis adds replication, persistence and cluster mode."
+logo: aws:elasticache
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [read-replica]
+  alternative_to: [dax]
+connects:
+  - to: rds
+    text: "The cheapest way to take read load off a relational database is to stop asking it the same question twice."
+  - to: dax
+    text: "For DynamoDB, DAX is usually the better cache because it invalidates itself. For anything else, this is the cache."
+reviewed: 2026-11-05
+---
+
+Managed Redis or Valkey and Memcached for sessions, hot keys, leaderboards and rate limits. Redis adds replication, persistence and cluster mode.

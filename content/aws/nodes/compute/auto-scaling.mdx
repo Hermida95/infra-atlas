@@ -1,0 +1,23 @@
+---
+id: auto-scaling
+title: "EC2 Auto Scaling"
+type: service
+domain: compute
+summary: "Keeps a group at a size, spreads it across zones, replaces unhealthy members, and scales on a target metric, a schedule or a forecast."
+monogram: EC2
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ec2, spot, warm-standby]
+connects:
+  - to: cloudwatch-alarms
+    text: "Target tracking is an alarm on a metric such as average CPU or requests per target, and the group does the arithmetic."
+  - to: alb
+    text: "The group registers instances in the target group and drains them on the way out, using the load balancer's health checks."
+  - to: az
+    text: "Capacity is balanced across the zones in the group, which is what makes a zone failure a scaling event."
+reviewed: 2026-11-05
+---
+
+Keeps a group at a size, spreads it across zones, replaces unhealthy members, and scales on a target metric, a schedule or a forecast.

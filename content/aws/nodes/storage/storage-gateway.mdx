@@ -1,0 +1,21 @@
+---
+id: storage-gateway
+title: "Storage Gateway"
+type: service
+domain: storage
+summary: "An on-premises appliance presenting NFS, SMB, iSCSI or a virtual tape library, with a local cache and the real data in S3."
+monogram: SG
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [datasync, outposts]
+connects:
+  - to: s3
+    text: "File Gateway writes each file as an S3 object, so the lifecycle and replication rules then apply to it like any other."
+  - to: direct-connect
+    text: "Bandwidth to the gateway is the limit, which is why it is usually paired with a private circuit."
+reviewed: 2026-11-05
+---
+
+An on-premises appliance presenting NFS, SMB, iSCSI or a virtual tape library, with a local cache and the real data in S3.

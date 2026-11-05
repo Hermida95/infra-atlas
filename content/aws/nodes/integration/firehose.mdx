@@ -1,0 +1,21 @@
+---
+id: firehose
+title: "Data Firehose"
+type: service
+domain: integration
+summary: "Buffers a stream by size or time and delivers it to S3, Redshift, OpenSearch or a partner, converting to Parquet and compressing on the way."
+monogram: DF
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [kinesis-data-streams]
+connects:
+  - to: s3
+    text: "The lake loader: partitioned Parquet in a bucket is exactly what Athena and Glue want to read."
+  - to: flow-logs
+    text: "Flow logs, CloudWatch Logs subscriptions and application events all reach storage through it."
+reviewed: 2026-11-05
+---
+
+Buffers a stream by size or time and delivers it to S3, Redshift, OpenSearch or a partner, converting to Parquet and compressing on the way.

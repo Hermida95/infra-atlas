@@ -1,0 +1,24 @@
+---
+id: eventbridge
+title: "EventBridge"
+type: service
+domain: integration
+summary: "An event bus that routes by the content of the event, with schemas, archives and replay, plus the scheduler that replaced cron."
+monogram: EV
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [sqs, cloudtrail]
+  alternative_to: [sns]
+connects:
+  - to: lambda
+    text: "A rule matches a pattern and invokes a target. Nothing polls, and the producer never knows who is listening."
+  - to: step-functions
+    text: "The pair for choreography: events arrive on the bus, and a workflow runs the multi-step part."
+  - to: sns
+    text: "SNS is fan-out to subscribers you register; EventBridge is routing on content, with replay and a schema registry."
+reviewed: 2026-11-05
+---
+
+An event bus that routes by the content of the event, with schemas, archives and replay, plus the scheduler that replaced cron.

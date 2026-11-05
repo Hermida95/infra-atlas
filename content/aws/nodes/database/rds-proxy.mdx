@@ -1,0 +1,21 @@
+---
+id: rds-proxy
+title: "RDS Proxy"
+type: service
+domain: database
+summary: "A managed connection pool in front of RDS or Aurora that multiplexes thousands of client connections onto a few database ones."
+monogram: RDS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rds, aurora]
+connects:
+  - to: lambda
+    text: "The standard fix for a thousand concurrent functions exhausting a database's max_connections."
+  - to: secrets-manager
+    text: "The proxy holds the credential and authenticates through IAM, so the function never sees a password."
+reviewed: 2026-11-05
+---
+
+A managed connection pool in front of RDS or Aurora that multiplexes thousands of client connections onto a few database ones.

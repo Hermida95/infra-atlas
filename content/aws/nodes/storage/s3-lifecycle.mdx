@@ -1,0 +1,19 @@
+---
+id: s3-lifecycle
+title: "S3 lifecycle rules"
+type: service
+domain: storage
+summary: "Transitions objects between classes and expires them by age or prefix, including old versions and incomplete multipart uploads."
+monogram: S3
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: s3-storage-classes
+    text: "A rule is how an object reaches Glacier: 30 days to Infrequent Access, 90 to Flexible, delete at a year."
+  - to: cost-explorer
+    text: "Expiring incomplete multipart uploads is the one-line rule that quietly removes storage nobody can even see."
+reviewed: 2026-11-05
+---
+
+Transitions objects between classes and expires them by age or prefix, including old versions and incomplete multipart uploads.

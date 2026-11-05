@@ -1,0 +1,23 @@
+---
+id: subnet
+title: "Subnets"
+type: service
+domain: network
+summary: "A slice of the VPC range pinned to one Availability Zone. Public or private is decided by its route table, not by a setting."
+monogram: SU
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [vpc, ram]
+connects:
+  - to: az
+    text: "One subnet, one zone, always. This is the only place in a VPC design where you choose a zone."
+  - to: route-table
+    text: "A subnet with a default route to an Internet Gateway is public. The same subnet pointed at a NAT Gateway is private."
+  - to: nacl
+    text: "A network ACL is attached to the subnet, which is why it is the only place you can block a single address."
+reviewed: 2026-11-05
+---
+
+A slice of the VPC range pinned to one Availability Zone. Public or private is decided by its route table, not by a setting.

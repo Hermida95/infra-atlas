@@ -1,0 +1,21 @@
+---
+id: nacl
+title: "Network ACLs"
+type: service
+domain: network
+summary: "Stateless allow and deny rules on a subnet, evaluated in rule order. The only place inside a VPC you can block an address outright."
+monogram: NA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [security-group]
+connects:
+  - to: subnet
+    text: "Attached to the subnet, so it applies to everything in it, including resources whose security group you do not control."
+  - to: waf
+    text: "For an attack at layer 7 the answer is WAF, not a NACL: a NACL knows nothing above IP and port."
+reviewed: 2026-11-05
+---
+
+Stateless allow and deny rules on a subnet, evaluated in rule order. The only place inside a VPC you can block an address outright.

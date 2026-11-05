@@ -1,0 +1,22 @@
+---
+id: beanstalk
+title: "Elastic Beanstalk"
+type: service
+domain: compute
+summary: "Hand it code and it builds the EC2 instances, load balancer, Auto Scaling group and health reporting underneath, all still visible to you."
+monogram: EB
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudformation]
+  alternative_to: [app-runner, ecs]
+connects:
+  - to: auto-scaling
+    text: "It creates and owns the group and the load balancer, which means you can still look at and tune them."
+  - to: app-runner
+    text: "The modern alternative when the application is a container and you do not want the EC2 underneath at all."
+reviewed: 2026-11-05
+---
+
+Hand it code and it builds the EC2 instances, load balancer, Auto Scaling group and health reporting underneath, all still visible to you.

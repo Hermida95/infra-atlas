@@ -1,0 +1,21 @@
+---
+id: drs
+title: "Elastic Disaster Recovery"
+type: service
+domain: migrate
+summary: "The same block-level replication as a rehost, kept running continuously, so a data centre can fail over into EC2 in minutes."
+monogram: EDR
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rto-rpo]
+connects:
+  - to: mgn
+    text: "Same engine, different purpose: one is a one-way move, the other is a standing recovery plan."
+  - to: pilot-light
+    text: "This is the pilot light for servers you have not rebuilt as code, and the pragmatic answer for a lift-and-shift estate."
+reviewed: 2026-11-05
+---
+
+The same block-level replication as a rehost, kept running continuously, so a data centre can fail over into EC2 in minutes.

@@ -1,0 +1,22 @@
+---
+id: active-active
+title: "Multi-site active/active"
+type: pattern
+domain: resilience
+summary: "Both regions serving real traffic. Near-zero recovery time, and the only strategy where write conflicts become your problem."
+monogram: MSA
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [rto-rpo, fault-isolation]
+  alternative_to: [backup-restore, pilot-light, warm-standby]
+connects:
+  - to: global-tables
+    text: "Multi-writer data with last-writer-wins is what makes this possible for most applications."
+  - to: route53
+    text: "Latency or weighted routing sends each user to the nearer region, and removes the dead one on a health check."
+reviewed: 2026-11-05
+---
+
+Both regions serving real traffic. Near-zero recovery time, and the only strategy where write conflicts become your problem.

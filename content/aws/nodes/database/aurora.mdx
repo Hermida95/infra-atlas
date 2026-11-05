@@ -1,0 +1,24 @@
+---
+id: aurora
+title: "Aurora"
+type: service
+domain: database
+summary: "A MySQL- and PostgreSQL-compatible engine on a shared storage layer that keeps six copies across three zones and grows to 128 TB by itself."
+monogram: AU
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [read-replica, rds-proxy]
+  alternative_to: [rds]
+connects:
+  - to: aurora-serverless
+    text: "Same cluster, different capacity model: provisioned instances for steady load, Serverless v2 for load you cannot predict."
+  - to: aurora-global
+    text: "The cross-region story is built in, with sub-second replication and failover in about a minute."
+  - to: rds
+    text: "Compatible enough to migrate into with a snapshot or a replica, and cheaper per transaction at scale."
+reviewed: 2026-11-05
+---
+
+A MySQL- and PostgreSQL-compatible engine on a shared storage layer that keeps six copies across three zones and grows to 128 TB by itself.

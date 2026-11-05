@@ -1,0 +1,21 @@
+---
+id: resource-policy
+title: "Resource-based policies"
+type: service
+domain: identity
+summary: "A policy attached to the resource rather than the caller: S3 bucket policies, KMS key policies, SQS and SNS policies, Lambda permissions."
+monogram: RBP
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam, kms]
+connects:
+  - to: s3
+    text: "A bucket policy is how a bucket is shared with another account, locked to a VPC endpoint, or forced to HTTPS."
+  - to: vpc-endpoint
+    text: "The pair that makes data exfiltration hard: an endpoint policy saying which buckets, a bucket policy saying which endpoint."
+reviewed: 2026-11-05
+---
+
+A policy attached to the resource rather than the caller: S3 bucket policies, KMS key policies, SQS and SNS policies, Lambda permissions.

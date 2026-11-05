@@ -1,0 +1,23 @@
+---
+id: security-group
+title: "Security groups"
+type: service
+domain: network
+summary: "A stateful, allow-only virtual firewall attached to an elastic network interface. Return traffic is automatic; there is no deny rule."
+monogram: SG
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [vpc]
+connects:
+  - to: nacl
+    text: "Security groups are stateful and cannot deny; NACLs are stateless and can. You need the second only for blocking."
+  - to: alb
+    text: "The pattern worth remembering: the application's group allows the load balancer's group, not a CIDR, so addresses never matter."
+  - to: flow-logs
+    text: "A rejected flow in the logs is almost always a security group, and the log says which interface."
+reviewed: 2026-11-05
+---
+
+A stateful, allow-only virtual firewall attached to an elastic network interface. Return traffic is automatic; there is no deny rule.

@@ -1,0 +1,23 @@
+---
+id: ebs
+title: "EBS"
+type: service
+domain: storage
+summary: "Network block storage attached to one instance in one zone. gp3 for almost everything, io2 Block Express for the IOPS you can prove you need."
+monogram: EBS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [instance-store, aws-backup]
+connects:
+  - to: ec2
+    text: "One volume, one zone, one instance at a time, unless you are using io2 Multi-Attach deliberately."
+  - to: ebs-snapshot
+    text: "A snapshot in S3 is the only way a volume leaves its zone, and the way it reaches another region."
+  - to: efs
+    text: "The choice is a question, not a preference: one instance and a block device, or many instances and a shared file system."
+reviewed: 2026-11-05
+---
+
+Network block storage attached to one instance in one zone. gp3 for almost everything, io2 Block Express for the IOPS you can prove you need.

@@ -1,0 +1,24 @@
+---
+id: sqs
+title: "SQS"
+type: service
+domain: integration
+summary: "A queue that decouples a producer from a consumer and absorbs a spike. Standard for throughput, FIFO when order and exactly-once matter."
+logo: aws:sqs
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [eventbridge, amazon-mq]
+  alternative_to: [kinesis-data-streams, amazon-mq]
+connects:
+  - to: lambda
+    text: "An event source mapping polls for you, scales with the backlog, and retries the batch until the visibility timeout is out of patience."
+  - to: sns
+    text: "Fan-out: SNS publishes once, several queues receive, and each consumer keeps its own backlog and its own failures."
+  - to: auto-scaling
+    text: "Scaling on queue depth per instance is the textbook worker pattern, and it beats scaling on CPU."
+reviewed: 2026-11-05
+---
+
+A queue that decouples a producer from a consumer and absorbs a spike. Standard for throughput, FIFO when order and exactly-once matter.

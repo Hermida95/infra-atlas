@@ -1,0 +1,21 @@
+---
+id: aurora-serverless
+title: "Aurora Serverless v2"
+type: service
+domain: database
+summary: "Capacity in half-ACU increments, scaling in seconds and down to near zero. For spiky, intermittent or unpredictable load."
+monogram: ASV
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [aurora]
+connects:
+  - to: aurora
+    text: "It is a capacity type of an Aurora cluster, so it mixes with provisioned instances in the same cluster."
+  - to: lambda
+    text: "The serverless pair, with the Data API or RDS Proxy taking care of the connections."
+reviewed: 2026-11-05
+---
+
+Capacity in half-ACU increments, scaling in seconds and down to near zero. For spiky, intermittent or unpredictable load.
