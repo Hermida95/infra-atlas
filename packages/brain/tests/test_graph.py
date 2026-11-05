@@ -56,7 +56,7 @@ def test_shape_and_ordering(content_dir: Path, write_node, tmp_path: Path) -> No
     write_graph(graph, out)
     written = json.loads(out.read_text())
 
-    assert written["version"] == 1
+    assert written["version"] == 2
     assert written["generatedAt"] == "2026-10-20T12:00:00Z"
     assert [d["id"] for d in written["domains"]] == ["local", "containers"]
     assert [n["id"] for n in written["nodes"]] == ["beta", "zeta", "alpha"]
@@ -100,6 +100,7 @@ def test_requirements_and_planner_blocks(content_dir: Path, write_node, write_re
     assert list(graph) == [
         "version",
         "generatedAt",
+        "world",
         "domains",
         "requirements",
         "cases",

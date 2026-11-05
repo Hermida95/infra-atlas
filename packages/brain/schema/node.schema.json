@@ -359,10 +359,7 @@
     "exam": {
       "default": [],
       "items": {
-        "enum": [
-          "saa",
-          "sap"
-        ],
+        "pattern": "^[a-z0-9][a-z0-9-]*$",
         "type": "string"
       },
       "title": "Exam",

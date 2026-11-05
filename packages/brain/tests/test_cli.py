@@ -25,7 +25,8 @@ def test_validate_summary(content_dir: Path, write_node) -> None:
 
     assert result.exit_code == 0
     assert (
-        "2 nodes, 2 domains, 1 links (0 explained), 0 requirements, 0 planner rules, 0 cases, OK"
+        "2 nodes, 2 domains, 1 links (0 explained), 0 requirements, 0 planner rules, "
+        "0 cases, no certifications, OK"
     ) in result.output
 
 

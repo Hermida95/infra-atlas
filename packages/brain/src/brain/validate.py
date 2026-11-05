@@ -8,8 +8,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
-from brain.loader import CASES_FILE, DOMAINS_FILE, REQUIREMENTS_FILE, load_content
-from brain.models import Case, Domain, Node, Requirement
+from brain.loader import CASES_FILE, DOMAINS_FILE, REQUIREMENTS_FILE, WORLD_FILE, load_content
+from brain.models import Case, Domain, Node, Requirement, WorldManifest
 from brain.planner import KEYWORDS, ExpressionError, parse, variables
 
 STALE_AFTER = timedelta(days=365)
@@ -26,6 +26,7 @@ class Issue:
 
 @dataclass
 class ValidationReport:
+    world: WorldManifest | None = None
     domains: list[Domain] = field(default_factory=list)
     requirements: list[Requirement] = field(default_factory=list)
     cases: list[Case] = field(default_factory=list)
@@ -57,13 +58,66 @@ def validate_content(
     issues += check_requirements(loaded.requirements, requirements_path)
     issues += check_planner_rules(loaded.nodes, loaded.requirements, requirements_path)
     issues += check_cases(loaded.cases, loaded.nodes, content_dir / CASES_FILE)
+    issues += check_exams(loaded.world, loaded.nodes, loaded.cases, content_dir)
     return ValidationReport(
+        world=loaded.world,
         domains=loaded.domains,
         requirements=loaded.requirements,
         cases=loaded.cases,
         nodes=loaded.nodes,
         issues=issues,
     )
+
+
+def check_exams(
+    world: WorldManifest | None,
+    nodes: Sequence[Node],
+    cases: Sequence[Case],
+    content_dir: Path,
+) -> list[Issue]:
+    """`exam` tags come from the world's own vocabulary, not from a list baked into the schema.
+
+    A world declares its certifications in world.yaml, so `saa` is meaningful in content/aws and
+    meaningless in content/k8s. A tag nothing declares is an error rather than a typo that
+    silently disappears from a filter, and a certification nothing is tagged with is a warning:
+    it would show up as a filter chip that empties the map.
+    """
+    world_path = content_dir / WORLD_FILE
+    issues: list[Issue] = []
+    known: set[str] = set()
+
+    if world is not None:
+        for exam in world.exams:
+            if exam.id in known:
+                issues.append(Issue(world_path, f"duplicate exam id '{exam.id}'"))
+            known.add(exam.id)
+
+    declared = ", ".join(sorted(known)) if known else "none"
+    tagged: set[str] = set()
+    for node in nodes:
+        for tag in node.meta.exam:
+            tagged.add(tag)
+            if tag not in known:
+                issues.append(
+                    Issue(node.source, f"exam: '{tag}' is not declared by this world ({declared})")
+                )
+    for case in cases:
+        for tag in case.exam:
+            tagged.add(tag)
+            if tag not in known:
+                issues.append(
+                    Issue(
+                        content_dir / CASES_FILE,
+                        f"case '{case.id}': exam '{tag}' is not declared by this world "
+                        f"({declared})",
+                    )
+                )
+
+    issues += [
+        Issue(world_path, f"exam '{exam_id}' is not used by any node or case", "warning")
+        for exam_id in sorted(known - tagged)
+    ]
+    return issues
 
 
 def check_domains(domains: Sequence[Domain], source: Path) -> list[Issue]:

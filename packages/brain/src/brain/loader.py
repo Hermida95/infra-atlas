@@ -10,8 +10,9 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from brain.models import Case, Domain, Node, NodeFrontmatter, Requirement
+from brain.models import Case, Domain, Node, NodeFrontmatter, Requirement, WorldManifest
 
+WORLD_FILE = "world.yaml"
 DOMAINS_FILE = "domains.yaml"
 REQUIREMENTS_FILE = "requirements.yaml"
 CASES_FILE = "cases.yaml"
@@ -35,6 +36,7 @@ class RepoRootNotFoundError(RuntimeError):
 
 @dataclass
 class LoadResult:
+    world: WorldManifest | None = None
     domains: list[Domain] = field(default_factory=list)
     requirements: list[Requirement] = field(default_factory=list)
     cases: list[Case] = field(default_factory=list)
@@ -119,6 +121,29 @@ def _load_model_list[ModelT: BaseModel](path: Path, model: type[ModelT], what: s
     return items
 
 
+def _load_model[ModelT: BaseModel](path: Path, model: type[ModelT], what: str) -> ModelT:
+    try:
+        data: Any = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        raise ContentError(path, f"cannot read file: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ContentError(path, f"invalid YAML: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise ContentError(path, f"must be a YAML mapping describing the {what}")
+    try:
+        return model.model_validate(data)
+    except ValidationError as exc:
+        raise ContentError(path, "; ".join(format_validation_error(exc))) from exc
+
+
+def load_world(path: Path) -> WorldManifest | None:
+    """Optional file: a content tree with no world.yaml declares no certifications at all."""
+    if not path.exists():
+        return None
+    return _load_model(path, WorldManifest, "world")
+
+
 def load_domains(path: Path) -> list[Domain]:
     return _load_model_list(path, Domain, "domains")
 
@@ -143,6 +168,10 @@ def node_files(content_dir: Path) -> Iterable[Path]:
 
 def load_content(content_dir: Path) -> LoadResult:
     result = LoadResult()
+    try:
+        result.world = load_world(content_dir / WORLD_FILE)
+    except ContentError as exc:
+        result.errors.append(exc)
     try:
         result.domains = load_domains(content_dir / DOMAINS_FILE)
     except ContentError as exc:

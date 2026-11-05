@@ -66,7 +66,10 @@ Layout = Literal["stack", "row", "cluster"]
 Level = Literal["core", "intermediate", "advanced"]
 Access = Literal["free", "pro"]
 # Which certification a node or a case is studied for. Empty means "not exam material".
-Exam = Literal["saa", "sap"]
+# The vocabulary is not global: each world declares its own in its world.yaml (saa and sap in
+# the AWS atlas, ckad, cka and cks in the Kubernetes one), and `brain validate` rejects a tag
+# the world being validated does not declare.
+Exam = Slug
 # What a case thinks of an option: one `best`, any number of `works`, and the ones that
 # look right in a question and are not.
 Verdict = Literal["best", "works", "avoid"]
@@ -98,6 +101,28 @@ class Domain(_Strict):
     order: int
     position: tuple[float, float, float]
     hue: int = Field(ge=0, le=360)
+
+
+class ExamTag(_Strict):
+    """One certification a world is studied for. `label` is what the filter chip shows."""
+
+    id: Slug
+    label: NonEmptyStr
+    name: NonEmptyStr | None = None
+
+
+class WorldManifest(_Strict):
+    """What a content tree is, declared in its own world.yaml.
+
+    One content directory is one world: the journey map in /content, the AWS atlas in
+    content/aws, Kubernetes in content/k8s. The manifest is what makes a world self-describing
+    instead of hard-coded in the renderer -- above all its certification vocabulary, which used
+    to be a Literal in this file and therefore AWS vocabulary in a shared model.
+    """
+
+    id: Slug
+    name: NonEmptyStr
+    exams: list[ExamTag] = []
 
 
 class Part(_Strict):
@@ -175,7 +200,8 @@ class NodeFrontmatter(_Strict):
     # Labelled edges. A `connects` entry draws the same line `relations.related` would, and
     # adds the sentence that says what crosses it, so a map of services explains itself.
     connects: list[Connection] = []
-    # Certifications this node is studied for. Drives the SAA/SAP filter of the AWS atlas.
+    # Certifications this node is studied for, from the ids its world's manifest declares.
+    # Drives the certification filter of an atlas: SAA/SAP in AWS, CKAD/CKA/CKS in Kubernetes.
     exam: list[Exam] = []
     lead: NonEmptyStr | None = None
     parts: list[Part] = []

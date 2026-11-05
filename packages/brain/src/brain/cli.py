@@ -71,10 +71,13 @@ def validate(content: ContentOption = None) -> None:
     links = related_links(report.nodes)
     rules = sum(node.meta.planner is not None for node in report.nodes)
     explained = sum(1 for *_, text in links if text)
+    world = report.world
+    scope = f"{world.name}: " if world else ""
+    exams = ", ".join(e.id for e in world.exams) if world and world.exams else "no certifications"
     typer.echo(
-        f"{len(report.nodes)} nodes, {len(report.domains)} domains, {len(links)} links "
+        f"{scope}{len(report.nodes)} nodes, {len(report.domains)} domains, {len(links)} links "
         f"({explained} explained), {len(report.requirements)} requirements, "
-        f"{rules} planner rules, {len(report.cases)} cases, OK"
+        f"{rules} planner rules, {len(report.cases)} cases, {exams}, OK"
     )
 
 
@@ -93,6 +96,7 @@ def graph(
     data = build_graph(
         report.domains,
         report.nodes,
+        world=report.world,
         requirements=report.requirements,
         cases=report.cases,
         include_pro=include_pro,

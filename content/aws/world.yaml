@@ -1,0 +1,14 @@
+# The AWS atlas: what is inside AWS, read from the account outwards (decision 13).
+#
+# `exams` is this world's own certification vocabulary. `brain validate` only accepts these two
+# ids in content/aws, and the web builds the filter chips of /aws from them, so the renderer
+# holds no table of exam labels.
+id: aws
+name: "Inside AWS"
+exams:
+  - id: saa
+    label: "SAA-C03"
+    name: "Solutions Architect Associate"
+  - id: sap
+    label: "SAP-C02"
+    name: "Solutions Architect Professional"

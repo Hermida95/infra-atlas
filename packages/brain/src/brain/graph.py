@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from brain.layout import compute_layout
-from brain.models import Case, CaseOption, Domain, Node, Planner, Requirement
+from brain.models import Case, CaseOption, Domain, Node, Planner, Requirement, WorldManifest
 
-GRAPH_VERSION = 1
+GRAPH_VERSION = 2
 
 # (source, target, text): `text` is the sentence that says what crosses the edge, empty for
 # a plain `related` line.
@@ -48,6 +48,7 @@ def build_graph(
     domains: Sequence[Domain],
     nodes: Sequence[Node],
     *,
+    world: WorldManifest | None = None,
     requirements: Sequence[Requirement] = (),
     cases: Sequence[Case] = (),
     include_pro: bool = False,
@@ -66,6 +67,9 @@ def build_graph(
     return {
         "version": GRAPH_VERSION,
         "generatedAt": timestamp.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        # What this world is and which certifications it is studied for. The web reads the
+        # filter chips from here, so adding a third world adds no label table to the renderer.
+        "world": _world_json(world),
         "domains": [_domain_json(d) for d in sorted(domains, key=lambda d: (d.order, d.id))],
         "requirements": [_requirement_json(r) for r in requirements],
         # A case only offers options the published graph can draw, so a `pro` service never
@@ -116,6 +120,16 @@ def _option_json(option: CaseOption, present: Container[str]) -> dict[str, Any]:
         "why": option.why,
         "cost": option.cost,
         "watch": list(option.watch),
+    }
+
+
+def _world_json(world: WorldManifest | None) -> dict[str, Any] | None:
+    if world is None:
+        return None
+    return {
+        "id": world.id,
+        "name": world.name,
+        "exams": [{"id": e.id, "label": e.label, "name": e.name} for e in world.exams],
     }
 
 
