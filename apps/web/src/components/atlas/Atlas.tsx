@@ -3,9 +3,16 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AWS, awsCaseById, awsCategories, EXAM_LABEL, type ExamFilter, inScope } from "@/lib/aws";
+import {
+  type Atlas as AtlasWorld,
+  categories,
+  type ExamFilter,
+  examLabel,
+  inScope,
+} from "@/lib/atlas";
 import { type Case, type CaseOption, edgeTextBetween, type GraphNode } from "@/lib/graph";
 import { caseLit, optionLit } from "@/lib/lit";
+import { doorway } from "@/lib/worlds";
 import type { MapStore } from "../brain/BrainScene";
 import { Mark } from "../brain/Mark";
 import { Header } from "../Header";
@@ -16,12 +23,17 @@ import { Cases } from "./Cases";
 const BrainScene = dynamic(() => import("../brain/BrainScene"), { ssr: false });
 
 /*
- * The AWS atlas: the same hologram, a different graph. Where the journey map answers "what do I
- * need in order to deploy this", this one answers "what is inside AWS, and which of these
- * services solves the problem in front of me" -- which is why it is a map of real cases rather
+ * An atlas: the same hologram, a different graph. Where the journey map answers "what do I need
+ * in order to deploy this", an atlas answers "what is inside this thing, and which of these
+ * pieces solves the problem in front of me" -- which is why it is a map of real cases rather
  * than a second deployment planner.
+ *
+ * Nothing here knows whether it is drawing AWS or Kubernetes. The route, the graph, the
+ * certifications and the words all arrive in the `atlas` descriptor (lib/atlas.ts), so a third
+ * world is a content directory and a descriptor, not a copy of this file.
  */
-export default function AwsAtlas() {
+export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
+  const world = atlas.world;
   const store = useRef<MapStore>({ hover: null, selected: null, lit: null, litAt: 0, shiftX: 0 });
   const labels = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
@@ -41,9 +53,9 @@ export default function AwsAtlas() {
   const light = useCallback(
     (next: Case | null, nextOption: CaseOption | null) => {
       store.current.lit = nextOption
-        ? optionLit(AWS, nextOption)
+        ? optionLit(world, nextOption)
         : next
-          ? caseLit(AWS, next)
+          ? caseLit(world, next)
           : null;
       store.current.litAt = performance.now();
       store.current.selected = null;
@@ -56,15 +68,15 @@ export default function AwsAtlas() {
       window.history.replaceState(null, "", url);
       if (next) revealMap();
     },
-    [revealMap],
+    [revealMap, world],
   );
 
-  // Deep links: /aws?case=<id> opens a case, /aws?focus=<id> flies to a service and
-  // &open=1 takes it apart, so a situation, a service or a teardown is a shareable URL.
+  // Deep links: /<world>?case=<id> opens a case, ?focus=<id> flies to a node and
+  // &open=1 takes it apart, so a situation, an object or a teardown is a shareable URL.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const picked = awsCaseById.get(params.get("case") ?? "");
-    const node = AWS.nodeById.get(params.get("focus") ?? "");
+    const picked = atlas.caseById.get(params.get("case") ?? "");
+    const node = world.nodeById.get(params.get("focus") ?? "");
     if (!picked && !node) return;
     // Deferred so the state updates do not run synchronously inside the effect.
     queueMicrotask(() => {
@@ -75,7 +87,7 @@ export default function AwsAtlas() {
         if (params.get("open") && node.parts.length) setTeardown(node);
       }
     });
-  }, [light]);
+  }, [light, atlas, world]);
 
   // On desktop the case panel sits on the left, so the hologram is centred in what is left.
   useEffect(() => {
@@ -101,24 +113,29 @@ export default function AwsAtlas() {
     return () => window.removeEventListener("keydown", onKey);
   }, [select, browsing]);
 
-  const visible = useMemo(() => AWS.graph.nodes.filter((n) => inScope(n, filter)).length, [filter]);
+  const visible = useMemo(
+    () => world.graph.nodes.filter((n) => inScope(n, filter)).length,
+    [filter, world],
+  );
+  const back = `Back to ${atlas.copy.short}`;
+  const deeper = selected ? doorway(atlas.id, selected.id) : null;
 
   return (
     <>
-      <Header current="aws" world={AWS} onPick={select} />
+      <Header current={atlas.id} world={world} onPick={select} placeholder={atlas.copy.searchPlaceholder}
+        one={atlas.copy.one} />
 
       <nav className="crumbs atlas-crumbs" aria-label="Breadcrumb">
         <Link href="/">Map</Link>
         <span aria-hidden="true">/</span>
-        <span>AWS</span>
+        <span>{atlas.copy.short}</span>
       </nav>
 
-      <div
-        className="stage"
-        aria-label="3D map of the AWS services covered by the Solutions Architect certifications. Drag to rotate, scroll to zoom, click a service for details."
-      >
+      <div className="stage" aria-label={atlas.copy.stage}>
+        {/* The scene captures its graph once, so switching worlds has to build a new one. */}
         <BrainScene
-          world={AWS}
+          key={atlas.id}
+          world={world}
           store={store}
           labels={labels}
           onSelect={select}
@@ -128,6 +145,7 @@ export default function AwsAtlas() {
       <div className="labels" ref={labels} aria-hidden="true" />
 
       <Cases
+        atlas={atlas}
         study={study}
         option={option}
         filter={filter}
@@ -146,7 +164,7 @@ export default function AwsAtlas() {
             <button className="close" onClick={() => select(null)} aria-label="Close">
               ×
             </button>
-            <p className="tag">{AWS.domainById.get(selected.domain)?.name}</p>
+            <p className="tag">{world.domainById.get(selected.domain)?.name}</p>
             <div className="dhead">
               <Mark node={selected} size={34} />
               <h2>{selected.title}</h2>
@@ -155,7 +173,7 @@ export default function AwsAtlas() {
               <p className="exams">
                 {selected.exam.map((e) => (
                   <span key={e} className="exam">
-                    {EXAM_LABEL[e]}
+                    {examLabel(atlas, e)}
                   </span>
                 ))}
               </p>
@@ -166,14 +184,20 @@ export default function AwsAtlas() {
                 Take it apart
               </button>
             )}
+            {/* A node with a world of its own behind it: EKS is where this atlas ends. */}
+            {deeper && (
+              <Link className="btn primary enter-aws" href={deeper.href}>
+                {deeper.label}
+              </Link>
+            )}
             <p className="detail-more">
-              <Link href={`/aws/${selected.id}`}>Read the whole thing →</Link>
+              <Link href={`${atlas.path}/${selected.id}`}>Read the whole thing →</Link>
             </p>
             <h4>How it connects</h4>
             <ul className="wires">
-              {[...(AWS.neighbours.get(selected.id) ?? [])].map((id) => {
-                const node = AWS.nodeById.get(id)!;
-                const text = edgeTextBetween(AWS, selected.id, id);
+              {[...(world.neighbours.get(selected.id) ?? [])].map((id) => {
+                const node = world.nodeById.get(id)!;
+                const text = edgeTextBetween(world, selected.id, id);
                 return (
                   <li key={id}>
                     <button type="button" className="wire" onClick={() => select(node)}>
@@ -194,20 +218,28 @@ export default function AwsAtlas() {
       </button>
 
       {browsing && (
-        <Structure filter={filter} onClose={() => setBrowsing(false)} onSelect={(n) => {
-          setBrowsing(false);
-          select(n);
-        }} />
+        <Structure
+          atlas={atlas}
+          filter={filter}
+          onClose={() => setBrowsing(false)}
+          onSelect={(n) => {
+            setBrowsing(false);
+            select(n);
+          }}
+        />
       )}
 
       <div className="hud" aria-hidden="true">
-        Services <b>{visible}</b>
+        {atlas.copy.nouns} <b>{visible}</b>
         <br />
-        Links <b>{AWS.graph.links.length}</b>
+        Links <b>{world.graph.links.length}</b>
         {study && (
           <>
             <br />
-            Case <span className="gold">{(option ?? study).nodes.length} services</span>
+            Case{" "}
+            <span className="gold">
+              {(option ?? study).nodes.length} {atlas.copy.noun}s
+            </span>
           </>
         )}
         {selected && (
@@ -222,8 +254,8 @@ export default function AwsAtlas() {
         <Teardown
           key={teardown.id}
           node={teardown}
-          world={AWS}
-          backLabel="Back to AWS"
+          world={world}
+          backLabel={back}
           onClose={() => setTeardown(null)}
           onSelect={(n) => {
             setTeardown(null);
@@ -232,35 +264,40 @@ export default function AwsAtlas() {
         />
       )}
 
-      <div className="hint" aria-hidden="true">Drag to rotate · scroll to zoom · click a service</div>
+      <div className="hint" aria-hidden="true">
+        Drag to rotate · scroll to zoom · click {atlas.copy.one}
+      </div>
     </>
   );
 }
 
-/** The whole catalogue, by category, for when you want to read rather than be asked a question. */
+/** The whole catalogue, by area, for when you want to read rather than be asked a question. */
 function Structure({
+  atlas,
   filter,
   onClose,
   onSelect,
 }: {
+  atlas: AtlasWorld;
   filter: ExamFilter;
   onClose: () => void;
   onSelect: (node: GraphNode) => void;
 }) {
-  const categories = useMemo(() => awsCategories(filter), [filter]);
+  const areas = useMemo(() => categories(atlas, filter), [atlas, filter]);
   return (
-    <section className="structure" aria-label="AWS services by category">
+    <section className="structure" aria-label={`${atlas.copy.short} ${atlas.copy.noun}s by area`}>
       <button type="button" className="btn td-back" onClick={onClose}>
-        Back to AWS
+        Back to {atlas.copy.short}
       </button>
       <div className="structure-inner">
-        <h2>What is inside AWS</h2>
-        <p className="sub">
-          Fifteen categories, read from the account outwards. Everything runs inside a VPC, the
-          edge sits in front of it, and governance, security and operations wrap the whole thing.
-        </p>
-        {categories.map(({ domain, nodes }) => (
-          <section key={domain.id} className="cat" style={{ "--lit": `hsl(${domain.hue} 78% 66%)` } as React.CSSProperties}>
+        <h2>{atlas.copy.structureTitle}</h2>
+        <p className="sub">{atlas.copy.structureIntro}</p>
+        {areas.map(({ domain, nodes }) => (
+          <section
+            key={domain.id}
+            className="cat"
+            style={{ "--lit": `hsl(${domain.hue} 78% 66%)` } as React.CSSProperties}
+          >
             <h3>
               <span className="dot" aria-hidden="true" />
               {domain.name}

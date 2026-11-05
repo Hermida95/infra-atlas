@@ -10,6 +10,7 @@ import { Teardown } from "../teardown/Teardown";
 import { Header } from "../Header";
 import type { Route } from "@/lib/planner";
 import { routeLit } from "@/lib/lit";
+import { doorway, JOURNEY } from "@/lib/worlds";
 
 export default function BrainMap() {
   const store = useRef<MapStore>({ hover: null, selected: null, lit: null, litAt: 0, shiftX: 0 });
@@ -110,10 +111,10 @@ export default function BrainMap() {
                 Take it apart
               </button>
             )}
-            {/* AWS is the one node with a map of its own behind it. */}
-            {selected.id === "aws" && (
-              <Link className="btn primary enter-aws" href="/aws">
-                Go inside AWS →
+            {/* Some nodes have a map of their own behind them: aws and kubernetes (lib/worlds.ts). */}
+            {doorway(JOURNEY, selected.id) && (
+              <Link className="btn primary enter-aws" href={doorway(JOURNEY, selected.id)!.href}>
+                {doorway(JOURNEY, selected.id)!.label}
               </Link>
             )}
             <p className="detail-more">

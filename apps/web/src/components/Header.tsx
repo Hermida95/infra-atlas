@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { type GraphNode, MAP, type World } from "@/lib/graph";
+import { ATLASES } from "@/lib/worlds";
 import { CommandPalette } from "./CommandPalette";
 
 /**
@@ -14,11 +15,18 @@ export function Header({
   onPick,
   current = "map",
   world = MAP,
+  placeholder,
+  one = "a concept",
 }: {
   onPick?: (node: GraphNode) => void;
-  current?: "map" | "concept" | "aws";
+  /** "map", "concept", or the id of the atlas being read, which marks its link as current. */
+  current?: string;
   /** Which graph ⌘K searches. Defaults to the journey map. */
   world?: World;
+  /** What the ⌘K input suggests typing. An atlas passes its own; the journey map has a default. */
+  placeholder?: string;
+  /** What the search button offers to find: "a concept" on the journey map, "an object" inside Kubernetes. */
+  one?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -52,12 +60,18 @@ export function Header({
           <Link href="/" aria-current={current === "map" ? "page" : undefined}>
             Map
           </Link>
-          <Link href="/aws" aria-current={current === "aws" ? "page" : undefined}>
-            Inside AWS
-          </Link>
+          {ATLASES.map((atlas) => (
+            <Link
+              key={atlas.id}
+              href={atlas.path}
+              aria-current={current === atlas.id ? "page" : undefined}
+            >
+              {atlas.name}
+            </Link>
+          ))}
         </nav>
         <button type="button" className="search-trigger" onClick={() => setOpen(true)} aria-keyshortcuts="Meta+K Control+K">
-          <span>{world === MAP ? "Find a concept" : "Find a service"}</span>
+          <span>Find {one}</span>
           <kbd>⌘K</kbd>
         </button>
       </header>
@@ -68,7 +82,7 @@ export function Header({
         onOpenPage={page}
         hasPages={world === MAP}
         world={world}
-        placeholder={world === MAP ? "Search Docker, etcd, managed postgres..." : "Search NAT gateway, Aurora, failover..."}
+        placeholder={placeholder ?? "Search Docker, etcd, managed postgres..."}
       />
     </>
   );

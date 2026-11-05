@@ -9,6 +9,7 @@ import { conceptBody, evidenceSnippet, evidenceUrl, sourceUrl } from "@/lib/cont
 import { domainById, graph, neighbours, nodeById } from "@/lib/graph";
 import { STAGE_LABEL } from "@/lib/planner";
 import { readableRule } from "@/lib/rule";
+import { doorway, JOURNEY } from "@/lib/worlds";
 
 // Every concept page is fully static: generateStaticParams prerenders every id at build time,
 // and `output: "export"` makes the build fail if anything request-time sneaks in later -- the
@@ -61,6 +62,8 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
   const domain = domainById.get(node.domain);
   const body = conceptBody(node).filter((p) => p !== node.summary);
   const related = [...(neighbours.get(node.id) ?? [])].map((id) => nodeById.get(id)!);
+  // A concept with a world of its own behind it: aws and kubernetes (lib/worlds.ts).
+  const deeper = doorway(JOURNEY, node.id);
 
   return (
     <>
@@ -85,9 +88,9 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
                 Take it apart
               </Link>
             )}
-            {node.id === "aws" && (
-              <Link className="btn" href="/aws">
-                Go inside AWS →
+            {deeper && (
+              <Link className="btn" href={deeper.href}>
+                {deeper.label}
               </Link>
             )}
           </div>

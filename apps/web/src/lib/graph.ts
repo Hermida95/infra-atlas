@@ -19,8 +19,20 @@ export type PlannerRule = { stage: Stage; when: string; why: string; notes: Plan
 export type Requirement = { id: string; label: string; keywords: string[] };
 /** Lines of this repo that back the card, checked by `brain validate`. */
 export type Evidence = { path: string; lines: [number, number]; text: string };
-/** Which certification a node is studied for. Empty means it is not exam material. */
-export type Exam = "saa" | "sap";
+/**
+ * Which certification a node is studied for. Empty means it is not exam material. The ids are
+ * a world's own vocabulary, declared in its world.yaml and carried in `Graph.world.exams`
+ * (saa and sap inside AWS, ckad, cka and cks inside Kubernetes), so this is a plain string
+ * rather than a union: nothing in the renderer knows the names of anyone's exams.
+ */
+export type Exam = string;
+/** One certification a world is studied for. `label` is what a filter chip shows. */
+export type ExamTag = { id: string; label: string; name: string | null };
+/**
+ * What a content tree says it is, from its world.yaml. Null on a tree without one: the journey
+ * map predates the manifest and is studied for nothing.
+ */
+export type WorldInfo = { id: string; name: string; exams: ExamTag[] };
 
 export type GraphNode = {
   id: string;
@@ -76,6 +88,7 @@ export type Case = {
 export type Graph = {
   version: number;
   generatedAt: string;
+  world: WorldInfo | null;
   domains: Domain[];
   requirements: Requirement[];
   cases: Case[];

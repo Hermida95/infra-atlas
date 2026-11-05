@@ -1,12 +1,13 @@
 "use client";
 
+import { type Atlas, type ExamFilter, examLabel } from "@/lib/atlas";
 import type { Case, CaseOption, GraphNode } from "@/lib/graph";
-import { AWS, awsCases, EXAM_LABEL, type ExamFilter } from "@/lib/aws";
 import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/lit";
 import { Mark } from "../brain/Mark";
 import { inline } from "../Prose";
 
 type Props = {
+  atlas: Atlas;
   study: Case | null;
   option: CaseOption | null;
   filter: ExamFilter;
@@ -17,25 +18,34 @@ type Props = {
 };
 
 /*
- * The left panel of the atlas. Picking a case lights every service it touches, in the colour of
- * its category; picking one option lights that option's services only, in the colour of its
- * verdict. Switching between two options is then a diff you can see on the map rather than two
- * lists to compare by eye.
+ * The left panel of an atlas. Picking a case lights every node it touches, in the colour of
+ * its area; picking one option lights that option's nodes only, in the colour of its verdict.
+ * Switching between two options is then a diff you can see on the map rather than two lists to
+ * compare by eye.
+ *
+ * The certification chips are built from the world's own vocabulary (content/<id>/world.yaml),
+ * so this panel never names an exam.
  */
-export function Cases({ study, option, filter, onFilter, onCase, onOption, onSelect }: Props) {
+export function Cases({
+  atlas,
+  study,
+  option,
+  filter,
+  onFilter,
+  onCase,
+  onOption,
+  onSelect,
+}: Props) {
   return (
     <aside className="panel cases" aria-labelledby="cases-title">
-      <p className="tag">Inside AWS</p>
+      <p className="tag">{atlas.name}</p>
       <h1 id="cases-title">{study ? study.title : "Real cases"}</h1>
 
       {!study && (
         <>
-          <p className="sub">
-            Pick a situation. The services that could solve it light up on the map, and the ways to
-            solve it appear here, with the one to reach for first.
-          </p>
+          <p className="sub">{atlas.copy.intro}</p>
           <div className="chips" role="group" aria-label="Certification scope">
-            {([null, "saa", "sap"] as const).map((scope) => (
+            {[null, ...atlas.exams.map((e) => e.id)].map((scope) => (
               <button
                 key={scope ?? "all"}
                 type="button"
@@ -43,17 +53,17 @@ export function Cases({ study, option, filter, onFilter, onCase, onOption, onSel
                 aria-pressed={filter === scope}
                 onClick={() => onFilter(scope)}
               >
-                {scope ? EXAM_LABEL[scope] : "Everything"}
+                {scope ? examLabel(atlas, scope) : "Everything"}
               </button>
             ))}
           </div>
           <ul className="case-list">
-            {awsCases.map((c) => (
+            {atlas.cases.map((c) => (
               <li key={c.id}>
                 <button type="button" className="case-pick" onClick={() => onCase(c)}>
                   <b>{c.title}</b>
                   <span>{c.scenario}</span>
-                  <em>{c.exam.map((e) => EXAM_LABEL[e]).join(" · ")}</em>
+                  <em>{c.exam.map((e) => examLabel(atlas, e)).join(" · ")}</em>
                 </button>
               </li>
             ))}
@@ -80,6 +90,7 @@ export function Cases({ study, option, filter, onFilter, onCase, onOption, onSel
             {study.options.map((o) => (
               <Option
                 key={o.id}
+                atlas={atlas}
                 option={o}
                 open={option?.id === o.id}
                 onToggle={() => onOption(option?.id === o.id ? null : o)}
@@ -101,11 +112,13 @@ export function Cases({ study, option, filter, onFilter, onCase, onOption, onSel
 }
 
 function Option({
+  atlas,
   option,
   open,
   onToggle,
   onSelect,
 }: {
+  atlas: Atlas;
   option: CaseOption;
   open: boolean;
   onToggle: () => void;
@@ -144,7 +157,7 @@ function Option({
           )}
           <div className="links">
             {option.nodes.map((id) => {
-              const node = AWS.nodeById.get(id);
+              const node = atlas.world.nodeById.get(id);
               if (!node) return null;
               return (
                 <button key={id} type="button" className="chip" onClick={() => onSelect(node)}>

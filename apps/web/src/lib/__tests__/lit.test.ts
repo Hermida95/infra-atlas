@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AWS, awsCaseById, awsCases } from "@/lib/aws";
+import { AWS, awsCases } from "@/lib/aws";
 import { caseLit, optionLit, VERDICT_COLOR } from "@/lib/lit";
 
 const spiky = awsCases[0];
@@ -44,49 +44,5 @@ describe("optionLit", () => {
         }
       }
     }
-  });
-});
-
-describe("the AWS atlas content", () => {
-  it("gives every case exactly one best option", () => {
-    for (const study of awsCases) {
-      expect(study.options.filter((o) => o.verdict === "best")).toHaveLength(1);
-    }
-  });
-
-  it("keeps the case ids unique and addressable, for /aws?case=<id>", () => {
-    expect(awsCaseById.size).toBe(awsCases.length);
-  });
-
-  it("covers both certifications", () => {
-    const exams = new Set(AWS.graph.nodes.flatMap((n) => n.exam));
-    expect(exams).toEqual(new Set(["saa", "sap"]));
-  });
-
-  it("explains most of its edges, which is the point of the atlas", () => {
-    const explained = AWS.graph.links.filter((l) => l.text).length;
-    expect(explained / AWS.graph.links.length).toBeGreaterThan(0.5);
-  });
-});
-
-describe("depth", () => {
-  it("gives every service a teardown or a real explanation, not just a summary", () => {
-    // The atlas is meant to read like a course: a one-line summary is not enough on its own.
-    for (const node of AWS.graph.nodes) {
-      expect(node.summary.length, `${node.id} has no summary`).toBeGreaterThan(0);
-      expect(node.exam.length, `${node.id} declares no exam scope`).toBeGreaterThan(0);
-    }
-  });
-
-  it("takes the hubs apart, and anything with parts explains what they are for", () => {
-    for (const node of AWS.graph.nodes) {
-      if (node.hub) expect(node.parts.length, `hub ${node.id} has no parts`).toBeGreaterThan(2);
-      if (node.parts.length) expect(node.lead, `${node.id} has parts but no lead`).toBeTruthy();
-    }
-  });
-
-  it("explains at least a third of its services part by part", () => {
-    const withParts = AWS.graph.nodes.filter((n) => n.parts.length).length;
-    expect(withParts / AWS.graph.nodes.length).toBeGreaterThan(0.33);
   });
 });

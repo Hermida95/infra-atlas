@@ -205,6 +205,21 @@ Aceptada el 2026-11-05.
 - **Qué se pierde / riesgo:** el bundle de la web crece con un segundo `graph.json` (156 fichas); si pesa, se carga `/aws` con `fetch` en vez de `import`. El índice semántico de la API solo cubre `/content`, así que dentro de `/aws` el ⌘K es léxico (búsqueda por texto, sin "por significado"): embeber el atlas es trabajo aparte. Y 156 fichas de AWS son 156 fichas que envejecen: `reviewed` y el aviso de caducidad a los 365 días son la red.
 - **Cuándo revisarla:** si aparece un tercer cerebro (Azure, GCP), extraer el patrón "grafo anidado" a algo declarativo en vez de copiar `/aws`.
 
+### 14. El mundo es un dato: descriptor por mundo y vocabulario de certificaciones propio
+Aceptada el 2026-11-05. Es la revisión que la decisión 13 se dejó anotada ("si aparece un tercer cerebro, extraer el patrón en vez de copiar `/aws`"), ejecutada al añadir el atlas de Kubernetes: `content/k8s/`, 133 fichas en 14 áreas, 391 aristas (347 explicadas) y 10 casos, apuntando a CKAD, CKA y CKS.
+
+- **Opciones valoradas:** copiar los ~790 líneas de `/aws` y renombrarlas a `/k8s`; una ruta dinámica `/[mundo]` que resolviera el grafo en tiempo de construcción; **un descriptor de mundo que los componentes y las rutas reciben como dato**.
+- **Elegida y motivo:** el descriptor, en `apps/web/src/lib/atlas.ts`.
+  - Copiar habría duplicado el renderizador entero para cambiar unas treinta palabras. De las ~790 líneas específicas de `/aws`, solo 32 eran realmente de AWS; el resto era lógica de mundo con nombres de AWS.
+  - Un `Atlas` lleva **ruta, `World`, casos, certificaciones y las palabras que cambian** (cómo se llama una ficha, el rótulo del escenario 3D, los textos del buscador y de la cabecera). `AwsAtlas.tsx` y su panel de casos pasan a `components/atlas/`, sin saber qué mundo dibujan, y `/aws`, `/aws/<id>`, `/k8s` y `/k8s/<id>` son cuatro ficheros de nueve líneas sobre los mismos componentes. Las URLs y los enlaces profundos (`?case=`, `?focus=`, `&open=1`) no cambian: los tests existentes siguen verdes sin tocarlos.
+  - **La ruta no se configura: es el id del mundo.** `content/k8s/world.yaml` declara `id: k8s`, y de ahí salen la ruta `/k8s`, el directorio de contenido y la URL de edición en GitHub. Un mundo nuevo no puede desincronizar esas tres cosas porque son la misma.
+  - **Fichero nuevo `world.yaml` por mundo**, con `id`, `name` y `exams`. Es lo que convierte un directorio de contenido en un mundo que se describe a sí mismo, y `brain graph` lo copia al `graph.json` (versión 2), así que la web lee las etiquetas de certificación como dato en vez de tener una tabla.
+- **Por qué el vocabulario de certificaciones pasa a ser por mundo:** `exam` era `Literal["saa", "sap"]` en `packages/brain/src/brain/models.py`, es decir **vocabulario de AWS dentro del esquema que comparten todos los mundos**. Con eso, `exam: [ckad]` era inválido en Kubernetes y `exam: [saa]` era válido en el mapa del viaje, que no se estudia para ningún examen. Ahora cada mundo declara sus ids en su `world.yaml` y `brain validate` rechaza una etiqueta que ese mundo no declare (y avisa de una declarada que nadie usa, porque sería una pastilla de filtro que vacía el mapa). Siete tests nuevos en `packages/brain/tests/test_validate.py` cubren la regla; el mapa del viaje declara `exams: []`, así que una etiqueta ahí es un error en vez de pasar inadvertida.
+- **Cómo se cosen los mundos:** `apps/web/src/lib/worlds.ts` tiene las puertas. El nodo `aws` y el nodo `kubernetes` del mapa del viaje bajan a `/aws` y a `/k8s`, y el nodo `eks` del atlas de AWS baja a `/k8s` -- porque EKS es un plano de control gestionado y nada por encima del apiserver, que es justo donde empieza el otro atlas. Un lector baja del viaje a AWS y de AWS a Kubernetes, y el botón "Go inside AWS" deja de ser un `if` sobre un id concreto.
+- **Orden del contenido:** el atlas de AWS se lee de la cuenta hacia fuera; este se lee **del objeto hacia el clúster** (el objeto y la API en el centro, el plano de control y el nodo a la izquierda, lo que consume una carga de trabajo a la derecha, y seguridad y observabilidad envolviéndolo). Ordenarlo por dominios de examen habría sido ordenarlo por el temario y no por cómo funciona.
+- **Qué se pierde / riesgo:** la web importa ya tres `graph.json` (77 + 156 + 133 fichas); si el bundle pesa, el arreglo es cargar cada atlas con `fetch` en vez de `import`, y ahora es un cambio en un sitio. El `Graph` sube a versión 2 por el bloque `world`, así que un `graph.json` viejo sin ese bloque no sirve para un atlas (el descriptor falla con un mensaje claro en vez de renderizar un mundo sin nombre). El índice semántico de la API sigue cubriendo solo `/content`, así que dentro de `/k8s` el ⌘K es léxico. Y son 133 fichas más que envejecen: `reviewed` y el aviso a los 365 días son la red.
+- **Cuándo revisarla:** si un cuarto mundo necesita algo que el descriptor no lleva (otro modelo de casos, otro eje de filtrado), convertir `AtlasCopy` en parte del `world.yaml` en vez de ampliar el tipo en TypeScript.
+
 ## Coste mensual estimado
 | Concepto | Estimación | Verificado |
 |---|---|---|
@@ -234,7 +249,8 @@ infra-atlas/
 ├── content/
 │   ├── nodes/<dominio>/*.mdx # docker/, terraform/, kubernetes/, aws/, cicd/, observability/, ai/
 │   ├── journeys/*.yaml       # localhost-to-aws.yaml, …
-│   ├── aws/                  # segundo grafo: el atlas de AWS (nodes/, domains.yaml, cases.yaml)
+│   ├── aws/                  # segundo mundo: el atlas de AWS (world.yaml, nodes/, domains.yaml, cases.yaml)
+│   ├── k8s/                  # tercer mundo: el atlas de Kubernetes (misma forma)
 │   └── assets/
 ├── infra/
 │   ├── terraform/
