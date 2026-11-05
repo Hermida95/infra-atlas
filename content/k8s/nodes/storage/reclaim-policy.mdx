@@ -1,0 +1,50 @@
+---
+id: reclaim-policy
+title: "Reclaim policy"
+type: concept
+domain: storage
+summary: "What happens to the real disk when the claim goes away. Delete is convenient and irreversible; Retain is safe and leaves you an inventory problem."
+level: intermediate
+access: free
+monogram: RP
+exam: [cka]
+relations:
+  related: [storage-class, persistent-volume]
+connects:
+  - to: storage-class
+    text: "The class sets the policy that new volumes inherit, so this decision is made once per class rather than per workload."
+  - to: namespace
+    text: "Deleting a namespace deletes its claims, so with Delete it is one command that destroys the data of everything inside it."
+  - to: volume-snapshot
+    text: "A snapshot is the real protection: a reclaim policy controls deletion, it does not give you a copy to go back to."
+reviewed: 2026-11-05
+---
+
+A PersistentVolume's `persistentVolumeReclaimPolicy` decides what happens when its claim is
+deleted. `Delete` removes the volume object and asks the driver to destroy the real disk.
+`Retain` keeps both, marking the volume `Released`. Dynamically provisioned volumes inherit the
+policy from their StorageClass, and that inheritance is where the decision is actually made.
+
+**`Delete` is the default and it means `kubectl delete namespace` destroys data.** That single
+command removes the claims, which removes the volumes, which removes the disks -- no
+confirmation, no recycle bin, and nothing to restore from unless you took snapshots. For a
+development namespace that is a convenience. For anything with a database in it, it is the most
+dangerous command available to a cluster user, and it is why a `Retain` class for stateful
+workloads is worth the extra work.
+
+**`Retain` is safe and leaves a job.** A released volume will not be reused: it still carries the
+`claimRef` of the claim that is gone, so a new identical claim will not bind to it. Reusing it
+means clearing that reference by hand (`kubectl patch pv ... --type=merge -p
+'{"spec":{"claimRef":null}}'`) so it becomes `Available` again. Deleting it means deleting the PV
+object *and* then the real disk in the cloud, because removing the object with
+`Retain` leaves the disk behind, billing silently.
+
+**That orphan accumulation is a real cost line.** Clusters that use `Retain` without a cleanup
+habit end up with dozens of unattached disks nobody can map back to a workload. A scheduled
+report of PersistentVolumes in `Released` state, and of cloud disks with no attachment, is the
+cheap counter-measure.
+
+**Neither policy is a backup.** A reclaim policy decides whether deletion propagates; it does
+nothing about corruption, a bad migration, or ransomware. VolumeSnapshots or a backup tool like
+Velero with a snapshot provider are what give you a version to go back to, and the reclaim policy
+only decides how easy it is to lose the current one.

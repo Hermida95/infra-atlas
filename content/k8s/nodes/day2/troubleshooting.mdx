@@ -1,0 +1,75 @@
+---
+id: troubleshooting
+title: "Troubleshooting"
+type: howto
+domain: day2
+hub: true
+summary: "A fixed order that answers most failures in minutes: describe, then events, then logs, then the raw object. Guessing is slower than looking."
+level: core
+access: free
+monogram: TS
+exam: [ckad, cka]
+relations:
+  related: [pod-lifecycle, events]
+connects:
+  - to: pod-lifecycle
+    text: "The Pod's phase and its container states narrow the problem to one component before you look at anything else."
+  - to: events
+    text: "describe is mostly an event viewer, and the reason a controller could not act is written there and nowhere else."
+  - to: logs
+    text: "For a crash loop the answer is in the previous container's logs, which the default logs command does not show."
+  - to: ephemeral-containers
+    text: "When the image has no shell, kubectl debug is how you get tools into the Pod's own namespaces."
+  - to: rbac
+    text: "A 403 is a missing rule, and kubectl auth can-i answers it without guessing."
+lead: "The order to go in. Each step rules out a layer, so later steps have less to search."
+parts:
+  - name: "describe the object"
+    kind: panel
+    text: "Status, conditions and events in one view. A Pending Pod, a FailedMount or a quota denial is fully explained here."
+  - name: "events, sorted"
+    kind: bell
+    text: "kubectl get events --sort-by=.lastTimestamp, namespace-wide. What happened before the current state, which describe only partly shows."
+  - name: "logs, including previous"
+    kind: code
+    text: "The application's own account. For CrashLoopBackOff, --previous is the only version that contains the error."
+  - name: "the raw object"
+    kind: sheet
+    text: "get -o yaml settles disagreements between tools: defaulted fields, mutations from webhooks, what is really stored."
+  - name: "inside the Pod"
+    kind: pod
+    text: "exec or debug: resolve a name, curl a ClusterIP, check what is listening. Where network and config problems become visible."
+layout: row
+reviewed: 2026-11-05
+---
+
+Most Kubernetes failures fall into a small number of shapes, and a fixed order of commands
+identifies which one you have faster than reasoning about it does. The principle is to let each
+step eliminate a layer: the control plane's view, then the controller's commentary, then the
+application's own account, then the object as stored, then the inside of the Pod.
+
+**Pending means scheduling or the kubelet, and the field tells you which.**
+`spec.nodeName` empty: the scheduler could not place it, and `describe` ends with a line per
+reason and a node count -- insufficient CPU, untolerated taint, no matching affinity, volume zone
+conflict. Node assigned but still Pending or `ContainerCreating`: the kubelet is working, and the
+cause is almost always an image pull or a volume -- a missing Secret or ConfigMap, a CSI attach
+that never completed.
+
+**CrashLoopBackOff is always the application, and the evidence is in the previous container.**
+`kubectl logs --previous` plus `lastState.terminated.exitCode`: 137 is an OOM kill, 143 an
+unhandled SIGTERM, 127 a missing entrypoint, anything else is the process's own failure.
+
+**Running but not Ready is a readiness probe**, and `describe` prints the probe's actual response.
+A Service with no endpoints is one of three things: labels not matching the selector, Pods not
+Ready, or no Pods -- and `kubectl get pods --show-labels` next to
+`kubectl describe svc` resolves it immediately.
+
+**For networking, test from inside.** `kubectl exec` (or `kubectl debug` for an image with no
+shell) and then: resolve the Service name, curl the ClusterIP, curl the Pod IP directly. Which of
+the three fails tells you whether the problem is DNS, kube-proxy, or the application -- in one
+minute, without reading any configuration.
+
+**And check permissions explicitly rather than inferring them.** A 403 names the verb and
+resource; `kubectl auth can-i <verb> <resource> --as=<subject>` asks the API server to evaluate
+the real rules. A write that is rejected by a webhook is also in the message, and
+`kubectl apply --dry-run=server` reproduces it without changing anything.

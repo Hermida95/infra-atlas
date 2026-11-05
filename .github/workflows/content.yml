@@ -77,6 +77,13 @@ jobs:
       - name: Validate the AWS atlas and its cases
         run: uv run brain validate --content content/aws
 
+      # The Kubernetes atlas, the third world through the same pipeline (decision 14). Its
+      # world.yaml declares its own certification vocabulary -- ckad, cka, cks -- and this step
+      # is what rejects an `exam:` tag the world does not declare, which is the check that was
+      # impossible while that vocabulary was a Literal in the shared schema.
+      - name: Validate the Kubernetes atlas and its cases
+        run: uv run brain validate --content content/k8s
+
       # The Pydantic model is the single source of truth, and node.schema.json is generated
       # from it. If they drift, the TypeScript and Zod types generated downstream describe a
       # schema that no longer exists.
@@ -91,6 +98,9 @@ jobs:
 
       - name: Build the AWS atlas the /aws page renders
         run: uv run brain graph --content content/aws --out apps/web/src/data/aws.json
+
+      - name: Build the Kubernetes atlas the /k8s page renders
+        run: uv run brain graph --content content/k8s --out apps/web/src/data/k8s.json
 
       # bge-small-en-v1.5 (~67 MB) downloads once from Hugging Face, then comes from the cache.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

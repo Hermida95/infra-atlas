@@ -1,0 +1,53 @@
+---
+id: argocd
+title: "Argo CD"
+type: tool
+domain: delivery
+summary: "GitOps with an application model and a UI that shows the live-versus-desired diff. Usually the easier of the two to adopt across several teams."
+logo: argo
+level: intermediate
+access: free
+monogram: ACD
+exam: [ckad]
+relations:
+  related: [gitops, flux]
+  alternative_to: [flux]
+connects:
+  - to: gitops
+    text: "It is one implementation of the pattern: an in-cluster controller reconciling the cluster towards a repository."
+  - to: flux
+    text: "The alternative has no UI and is a set of composable controllers, which some teams prefer and others find harder to introduce."
+  - to: progressive-delivery
+    text: "Argo Rollouts replaces the Deployment with a canary or blue-green object that can judge a release on metrics."
+  - to: rbac
+    text: "It holds broad cluster permissions and its own project-level access model, which makes it a high-value target worth hardening."
+reviewed: 2026-11-05
+---
+
+Argo CD models deployments as `Application` objects: a source (repository, path, revision) and a
+destination (cluster, namespace). It renders whatever it finds -- plain YAML, Kustomize, Helm,
+jsonnet -- compares the result with the live cluster, and shows the difference as a tree you can
+click through. Sync can be manual or automatic, with optional pruning and self-healing.
+
+**The diff view is why it is easy to adopt.** Everyone can see what is deployed, what git says,
+and exactly which fields differ, without knowing any of the tooling. For an organisation moving
+several teams onto GitOps at once, that visibility does more for adoption than any feature.
+
+**`ApplicationSet` is the piece that makes it scale.** Rather than one Application per app per
+environment written by hand, a generator produces them -- from directories in a repository, from
+a list of clusters, from pull requests (an ephemeral preview environment per PR). Without it, a
+large estate becomes hundreds of nearly identical Application objects.
+
+**Sync options are where the real operational tuning is.** `automated` with
+`prune` and `selfHeal` gives you true continuous reconciliation, including reverting manual
+edits -- which is correct and surprises people the first time. Sync waves order resources
+(CRDs before the resources that use them, a migration Job before the Deployment). And ignore
+rules are necessary in practice: a Deployment whose `replicas` is managed by an HPA must have
+that field ignored, or Argo will fight the autoscaler forever.
+
+**It is privileged infrastructure and deserves the same care as the API server.** It holds
+credentials for repositories and often for several clusters, and its admin account can deploy
+anything anywhere. SSO rather than the local admin user, its own RBAC with projects limiting
+which repositories may deploy to which namespaces, and the UI not exposed to the internet are the
+baseline. A compromised Argo CD is a compromised cluster, and more than one if it manages
+several.

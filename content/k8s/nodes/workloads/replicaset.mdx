@@ -1,0 +1,49 @@
+---
+id: replicaset
+title: "ReplicaSet"
+type: concept
+domain: workloads
+summary: "The loop that keeps N Pods matching a selector alive. You rarely write one, but every rollout you debug is two of them trading replicas."
+level: core
+access: free
+monogram: RS
+exam: [ckad, cka]
+relations:
+  related: [deployment]
+connects:
+  - to: deployment
+    text: "A Deployment creates one ReplicaSet per Pod template hash, and owns them. Deleting a Deployment deletes them and their Pods through ownership."
+  - to: labels
+    text: "It adopts any Pod that matches its selector and has no other owner, which is how an orphaned Pod can suddenly belong to something."
+  - to: owner-references
+    text: "The chain Deployment to ReplicaSet to Pod is pure ownership, which is why cascading delete reaches all the way down."
+reviewed: 2026-11-05
+---
+
+A ReplicaSet does one thing: count the Pods matching its selector and create or delete Pods until
+the count equals `spec.replicas`. That is the entire controller. It has no concept of versions,
+updates or ordering -- which is exactly why Deployments exist on top of it.
+
+**You read them, you do not write them.** During a rolling update, `kubectl get rs` shows the old
+ReplicaSet going 3 → 2 → 1 → 0 and the new one 0 → 1 → 2 → 3, each with
+DESIRED, CURRENT and READY columns. That table is the clearest view of a rollout there is: a new
+ReplicaSet whose CURRENT climbs but whose READY stays at zero means the new Pods are starting and
+failing their readiness probe, and the rollout will stall there until the progress deadline
+fires.
+
+**Adoption is the surprising behaviour.** A ReplicaSet will adopt any Pod that matches its
+selector and has no controller owner -- so a bare Pod you created with the same labels can be
+taken over, counted, and deleted when the ReplicaSet decides it has too many. This is also why
+two Deployments with overlapping selectors fight: each sees the other's Pods as its own and
+deletes them to get back to its count.
+
+**Scaling down is not random.** The controller prefers to delete Pods that are unscheduled, then
+Pods in a worse phase, then Pods on nodes with more replicas of the same set, then the youngest.
+In practice that means a scale-down leans towards leaving you a balanced, healthy, longer-running
+set -- but it is a heuristic, not a guarantee, and nothing stops it from taking the Pod that was
+mid-request. That is what `terminationGracePeriodSeconds` and a `preStop` hook are for.
+
+`kubectl describe rs` is worth knowing for one line: `ReplicaFailure`, with the actual API error
+the controller got when it tried to create a Pod. A Deployment that produces no Pods at all --
+not Pending, not failing, simply absent -- is nearly always a quota denial or an admission
+webhook rejection recorded exactly there, and nowhere else.

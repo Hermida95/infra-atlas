@@ -1,0 +1,53 @@
+---
+id: eviction
+title: "Node-pressure eviction"
+type: concept
+domain: node
+summary: "The kubelet killing Pods to save its node. It happens before the kernel OOM killer would, and it chooses victims by QoS class and by how far over request they are."
+level: intermediate
+access: free
+monogram: EV
+exam: [cka]
+relations:
+  related: [kubelet, qos-classes]
+connects:
+  - to: qos-classes
+    text: "BestEffort Pods go first, then Burstable ones exceeding their requests, and Guaranteed Pods last. The class is the ranking."
+  - to: kubelet
+    text: "The kubelet watches memory, disk and inodes on its own node and acts without asking the control plane, so eviction continues during an API outage."
+  - to: image-management
+    text: "Disk pressure first triggers image and dead-container garbage collection; evicting Pods is what happens when that is not enough."
+  - to: pdb
+    text: "A PodDisruptionBudget does not apply here. Node-pressure eviction is not the eviction API, and it will not wait for your budget."
+reviewed: 2026-11-05
+---
+
+When a node is running out of memory, disk or inodes, the kubelet starts deleting Pods on it.
+This is deliberate and much better than the alternative: a kernel out-of-memory kill takes an
+arbitrary process at an arbitrary moment, possibly the kubelet or the container runtime, leaving
+the node unusable. Eviction gets ahead of it, picks a victim on purpose, and reports a Pod status
+the control plane can act on by rescheduling elsewhere.
+
+**Thresholds are configured on the kubelet, not in the cluster.** `memory.available`,
+`nodefs.available`, `imagefs.available` and their inode counterparts each have a *hard*
+threshold (act immediately) and a *soft* threshold (act after a grace period, honouring
+`terminationGracePeriod`). Defaults are modest -- 100Mi of memory, 10% of disk -- and the
+`--eviction-minimum-reclaim` and `--kube-reserved` flags are what stop the node from
+oscillating in and out of pressure.
+
+**Victim selection follows a fixed order.** First, Pods whose usage exceeds their requests, with
+BestEffort Pods (no requests at all) effectively always in that set; among those, the ones most
+over request by priority order. Guaranteed Pods -- requests equal to limits -- are evicted only
+when there is nothing else left. So declaring honest requests is not bureaucracy, it is the
+thing that decides whether your Pod survives a bad neighbour.
+
+**Three traps worth knowing.** First, eviction here ignores PodDisruptionBudgets: those govern
+the voluntary eviction API used by `kubectl drain`, and a node under pressure is not negotiating.
+Second, a Pod evicted for disk often comes back and fills the disk again, so the real fix is
+usually `emptyDir` `sizeLimit`, log rotation, or an ephemeral-storage request that makes the
+scheduler account for it. Third, memory-backed `emptyDir` counts against the Pod's memory limit,
+which surprises people writing large files to `/tmp` in a tmpfs.
+
+Operationally, `kubectl get events --field-selector reason=Evicted` and the
+`MemoryPressure` / `DiskPressure` node conditions are the trail. A cluster evicting regularly is
+a cluster whose requests are wrong, not one that needs higher thresholds.

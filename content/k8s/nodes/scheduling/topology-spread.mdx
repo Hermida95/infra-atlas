@@ -1,0 +1,67 @@
+---
+id: topology-spread
+title: "Topology spread constraints"
+type: concept
+domain: scheduling
+summary: "Spread Pods evenly across zones or nodes with an explicit tolerance. The modern answer to 'do not put all my replicas in one place'."
+level: intermediate
+access: free
+monogram: TSC
+exam: [ckad, cka]
+relations:
+  related: [pod-affinity, node-affinity]
+connects:
+  - to: pod-affinity
+    text: "It replaces most required anti-affinity: a skew of one across hostnames is one-per-node without the deadlock when nodes run out."
+  - to: scheduler
+    text: "Spread is evaluated in the score phase when ScheduleAnyway, and in the filter phase when DoNotSchedule, which is what decides whether a Pod can be Pending."
+  - to: pdb
+    text: "Spreading across zones only helps if voluntary disruption is also bounded, so a budget is the other half of surviving a zone drain."
+  - to: cluster-autoscaler
+    text: "A DoNotSchedule constraint that cannot be met is what makes an autoscaler add a node in the under-represented zone."
+lead: "Four fields, and the two that decide whether this is a hard rule or a hint."
+parts:
+  - name: "topologyKey"
+    kind: zones
+    text: "The node label whose distinct values are the buckets: zone for cross-zone spread, hostname for cross-node."
+  - name: "maxSkew"
+    kind: bars
+    text: "The largest permitted difference between the busiest and emptiest bucket. 1 is even; a larger number tolerates imbalance."
+  - name: "whenUnsatisfiable"
+    kind: gate
+    text: "DoNotSchedule makes it a filter, so a Pod can stay Pending. ScheduleAnyway makes it a preference -- usually what you want."
+  - name: "labelSelector"
+    kind: meta
+    text: "Which Pods are counted. Usually the workload's own labels, so the constraint is about its replicas and nothing else."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A topology spread constraint says: looking at the Pods matching this selector, grouped by this
+node label, the difference between the fullest group and the emptiest must not exceed
+`maxSkew`. It is the direct, quantitative form of "spread my replicas out", and it fixed the two
+problems with anti-affinity -- it degrades gracefully and it is cheap to evaluate.
+
+**The pair of constraints most production workloads want** is zone spread with
+`maxSkew: 1` and `ScheduleAnyway`, plus hostname spread with `maxSkew: 1` and
+`ScheduleAnyway`. That gets replicas distributed across availability zones and across nodes
+within them, while still allowing the Pod to be placed when the cluster is lopsided -- during a
+zone outage, say, which is exactly when you do not want your scheduler refusing to run things.
+
+**`DoNotSchedule` is a deliberate choice with a real cost.** It is the right call when imbalance
+is genuinely unacceptable -- a quorum that must not have two members in one zone -- and it means
+accepting `Pending` Pods when the topology cannot satisfy it. On a cluster with a node
+autoscaler that is often the correct trigger: the pending Pod is the signal that a node is needed
+in the empty zone. On a fixed cluster it is a trap.
+
+**Two fields change the arithmetic in ways worth knowing.**
+`nodeAffinityPolicy` and `nodeTaintsPolicy` decide whether nodes your Pod could not use anyway
+are counted in the buckets -- without `Honor`, a tainted or non-matching node makes a zone look
+emptier than it is to you. And `minDomains` lets you require a minimum number of distinct
+domains, which is how you say "this must actually be in three zones" rather than "evenly spread
+across however many zones currently have nodes".
+
+**Cluster-level defaults exist and are easy to miss.** The scheduler's own configuration can
+apply default constraints to every Pod, and managed clusters often ship some. If your Pods are
+spreading in a way nobody asked for, `kubectl get pod -o yaml` shows the effective constraints
+after defaulting -- which is where that behaviour will be visible.

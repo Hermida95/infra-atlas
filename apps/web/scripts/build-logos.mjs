@@ -10,8 +10,10 @@ if (!fs.existsSync("src/data/graph.json")) {
   console.error("src/data/graph.json is missing. Run `make content` (uv run brain graph) from the repo root first.");
   process.exit(1);
 }
-// Both graphs share one logo file: the AWS atlas reuses the same marks the journey map does.
-const GRAPHS = ["src/data/graph.json", "src/data/aws.json"].filter((f) => fs.existsSync(f));
+// All three graphs share one logo file: each atlas reuses the marks the journey map already has.
+const GRAPHS = ["src/data/graph.json", "src/data/aws.json", "src/data/k8s.json"].filter((f) =>
+  fs.existsSync(f),
+);
 const nodes = GRAPHS.flatMap((file) => JSON.parse(fs.readFileSync(file, "utf8")).nodes);
 const bySlug = new Map(
   Object.values(si)

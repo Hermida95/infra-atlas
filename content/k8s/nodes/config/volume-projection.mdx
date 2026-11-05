@@ -1,0 +1,51 @@
+---
+id: volume-projection
+title: "Projected volumes"
+type: concept
+domain: config
+summary: "Several config sources combined into one directory: Secrets, ConfigMaps, the ServiceAccount token and Pod metadata, each at a path you choose."
+level: intermediate
+access: free
+monogram: PRJ
+exam: [ckad, cka]
+relations:
+  related: [configmap, secret]
+connects:
+  - to: service-account
+    text: "The automatic token is a projected source with an audience and an expiry, which the kubelet refreshes before it runs out."
+  - to: downward-api
+    text: "Pod name, namespace, labels and resource limits can be projected as files, which is how a process learns about itself without an env var."
+  - to: secret
+    text: "A projected Secret is updated in place like any mounted one, so rotation does not need a Pod restart."
+reviewed: 2026-11-05
+---
+
+A `projected` volume takes several sources -- `secret`, `configMap`, `serviceAccountToken`,
+`downwardAPI` -- and lays them out as one directory, with each item mapped to a path you choose.
+It solves the practical problem that an application wants
+`/etc/app/config.yaml`, `/etc/app/tls.crt` and `/var/run/secrets/token` to be in sensible places,
+rather than three separate mounts whose directories cannot overlap.
+
+**`serviceAccountToken` is the source that changed how identity works.** The old model stored a
+non-expiring JWT in a Secret, which meant a leaked token was valid forever. The projected version
+is minted by the kubelet for a specific `audience`, with an
+`expirationSeconds`, and refreshed in place before it expires -- so a token that escapes is
+useful for an hour at most, and only against the audience it was issued for. Every Pod gets one
+automatically; naming an explicit audience is what you do when a workload authenticates to
+something other than the API server (a cloud provider's OIDC, Vault, another cluster).
+
+**File permissions are available here and worth using.** `defaultMode` and per-item
+`mode` let you project a private key as `0400`, which matters because several tools refuse to use
+a key file that is group- or world-readable -- SSH and some database clients among them. The mode
+is also subject to `fsGroup` on the Pod's security context, which is the usual explanation for a
+file whose permissions are not what the manifest says.
+
+**Updates propagate to all sources except via subPath.** The same rule as elsewhere: a projected
+volume mounted normally is refreshed by the kubelet when any source object changes; a `subPath`
+mount of one file within it is frozen. For a TLS certificate rotated by cert-manager, that
+difference decides whether a renewal reaches the application or quietly does not.
+
+**It is also the right tool for the token-exchange patterns.** A projected token with a custom
+audience is how a Pod gets a credential for a cloud role, a service mesh identity or a secret
+store, with no static credential anywhere in the cluster -- and `kubectl exec` into the Pod
+showing a fresh, expiring JWT at the path you chose is the proof it works.

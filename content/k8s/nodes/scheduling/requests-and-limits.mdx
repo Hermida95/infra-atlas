@@ -1,0 +1,71 @@
+---
+id: requests-and-limits
+title: "Requests & limits"
+type: concept
+domain: scheduling
+hub: true
+summary: "Requests buy you a place on a node; limits are a cap the kernel enforces. They do completely different jobs, and CPU and memory behave nothing alike."
+level: core
+access: free
+monogram: RL
+exam: [ckad, cka]
+relations:
+  related: [qos-classes, cgroups]
+connects:
+  - to: scheduler
+    text: "The scheduler only ever adds up requests. A node whose Pods request everything is full, whatever its actual usage is."
+  - to: cgroups
+    text: "A limit becomes a cgroup value: memory.max is a wall enforced by the OOM killer, cpu.max is a quota that throttles instead of killing."
+  - to: qos-classes
+    text: "Whether requests equal limits is what assigns the QoS class, and the class decides eviction order under node pressure."
+  - to: hpa
+    text: "CPU utilisation for an HPA is measured against the request, so a wrong request makes autoscaling target the wrong number."
+  - to: limit-range
+    text: "A LimitRange fills in defaults for Pods that declare nothing, which is how a namespace avoids BestEffort workloads by accident."
+lead: "Four fields that answer two different questions. Mixing them up is the most expensive mistake in a Kubernetes bill."
+parts:
+  - name: "cpu request"
+    kind: bars
+    text: "A reservation for scheduling, and a weight when the CPU is contended. Measured in cores or millicores; 100m is a tenth of a core."
+  - name: "cpu limit"
+    kind: gate
+    text: "A hard quota per 100ms period. Exceeding it throttles the process -- latency, not a crash, and invisible unless you watch the throttling metric."
+  - name: "memory request"
+    kind: sheet
+    text: "A reservation for scheduling. It is also the number eviction compares your usage against when the node is under pressure."
+  - name: "memory limit"
+    kind: shell
+    text: "A wall. Allocate past it and the kernel kills the process: OOMKilled, exit code 137, no application log of the cause."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Requests and limits are not two ends of a range; they answer different questions. A request is
+what the scheduler reserves for you -- it decides whether your Pod fits on a node, and nothing
+else can use what you reserved. A limit is what the kernel will not let you exceed at runtime.
+A Pod can request 100m of CPU, be scheduled on that basis, and happily use two whole cores if the
+node is idle and its limit allows.
+
+**CPU and memory enforce differently, and the asymmetry drives the standard advice.** Exceeding a
+memory limit kills the container immediately. Exceeding a CPU limit throttles it: the kernel
+stops scheduling your threads until the next period, which shows up as p99 latency with no error
+anywhere. The most common real-world damage comes from the second -- a JVM or a Go runtime that
+sizes its thread pool from the number of visible cores, given a 500m limit, spends most of its
+time throttled. Hence the widely used pattern: **always set memory requests and limits equal,
+always set a CPU request, and think twice before setting a CPU limit at all.**
+
+**Requests are what cost money.** The scheduler packs nodes by request, so a cluster where every
+workload requests twice what it uses needs twice the nodes, permanently, while every dashboard
+shows 30% utilisation. Measuring actual usage over a week and setting requests near the p95 is
+the single highest-return piece of cluster work there is -- and the Vertical Pod Autoscaler in
+recommendation mode exists to produce exactly those numbers.
+
+**The units bite once per career.** CPU is cores: `1` is one core, `1000m` is the same thing,
+`100m` is a tenth. Memory is bytes with binary suffixes: `Mi` is 1024-based, `M` is 1000-based,
+and `500m` of memory means half a byte -- a typo the API accepts and nothing warns about. CPU is
+compressible and memory is not, which is the underlying reason they are enforced so differently.
+
+**A Pod with neither** is BestEffort: it schedules anywhere, is throttled by nothing, and is the
+first thing killed when the node fills. That is a reasonable choice for a nightly batch job and
+a bad one for anything serving traffic, which is why a LimitRange with sensible defaults is worth
+having in every namespace.

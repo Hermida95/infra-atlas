@@ -1,0 +1,73 @@
+---
+id: rbac
+title: "RBAC"
+type: concept
+domain: security
+hub: true
+summary: "Verbs on resources, granted to subjects by a binding. Purely additive with no deny, so the only way to take away access is to remove the grant."
+level: core
+access: free
+monogram: RB
+exam: [cka, cks]
+relations:
+  related: [role-and-clusterrole, rolebinding]
+connects:
+  - to: role-and-clusterrole
+    text: "A Role is a list of permissions and nothing else: it says what, never who, and it grants nothing until a binding references it."
+  - to: rolebinding
+    text: "The binding is what grants: it joins subjects to a role, and its own kind decides the scope of the grant."
+  - to: service-account
+    text: "Workload identity goes through a ServiceAccount, which is the subject most bindings in a cluster actually name."
+  - to: apiserver
+    text: "Authorisation runs after authentication and before admission, so a 403 means no rule matched rather than a broken application."
+  - to: namespace
+    text: "A Role and RoleBinding only reach one namespace, which is why the namespace is the unit a team is granted."
+lead: "Four objects, and the one rule that explains every surprise."
+parts:
+  - name: "Role"
+    kind: sheet
+    text: "Namespaced permissions: apiGroups, resources, verbs, optionally resourceNames. A list of what, with no who."
+  - name: "ClusterRole"
+    kind: shell
+    text: "The same list, cluster-scoped. Needed for nodes, PVs, CRDs and namespaces, and reusable from any namespace."
+  - name: "RoleBinding"
+    kind: gate
+    text: "Grants a Role -- or a ClusterRole -- to subjects, within one namespace. The common case."
+  - name: "ClusterRoleBinding"
+    kind: ring
+    text: "Grants a ClusterRole everywhere. The object to audit first, because this is where cluster-admin gets handed out."
+  - name: "Additive only"
+    kind: split
+    text: "No deny rules, no ordering, no precedence. Effective access is the union of every binding that names you."
+layout: stack
+reviewed: 2026-11-05
+---
+
+RBAC answers one question: may this subject perform this verb on this resource. A Role or
+ClusterRole lists permissions; a RoleBinding or ClusterRoleBinding attaches them to subjects --
+users, groups or ServiceAccounts. Kubernetes stores no users, so a "user" is whatever
+authentication produced, which is why you cannot list them and why group-based grants from an
+OIDC provider are the normal shape for humans.
+
+**It is purely additive, and that explains most confusion.** There are no deny rules. Effective
+permission is the union of every binding that matches you, so narrowing access always means
+finding and removing a grant, never adding a restriction. Someone with a ClusterRoleBinding to
+`cluster-admin` cannot be restricted in one namespace by any object you can write.
+
+**The one combination worth memorising** is a RoleBinding that references a ClusterRole: it grants
+that ClusterRole's permissions *only within the binding's namespace*. That is how you reuse the
+built-in `view`, `edit` and `admin` roles per team without writing them again, and it is the most
+useful idiom in the system.
+
+**`kubectl auth can-i` is the answer to every access question**, and it is underused.
+`kubectl auth can-i create deployments -n team-a` for yourself,
+`--as=system:serviceaccount:team-a:ci` for someone else, and `--list` for everything a subject
+can do. It asks the API server to run the real evaluation, so it is not an approximation.
+
+**The escalation paths are the part that matters for CKS**, and they are not obvious from the
+verbs. `create pods` in a namespace lets you mount any Secret in it and run as any ServiceAccount
+in it -- so it is effectively equivalent to reading those secrets. `escalate` and
+`bind` let a subject grant permissions it does not itself have. `impersonate` is becoming someone
+else. `get` on `pods/exec` is a shell in any Pod. And `patch nodes` or write access to a
+mutating webhook configuration is cluster-wide control. Auditing a cluster means looking for
+those, not for the word admin.

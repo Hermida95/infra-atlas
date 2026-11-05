@@ -1,0 +1,69 @@
+---
+id: pod-affinity
+title: "Pod affinity & anti-affinity"
+type: concept
+domain: scheduling
+summary: "Placement relative to other Pods rather than to node labels. Powerful, and the required form is expensive enough to need care in a big cluster."
+level: intermediate
+access: free
+monogram: PA
+exam: [ckad, cka]
+relations:
+  related: [node-affinity, topology-spread]
+  alternative_to: [topology-spread]
+connects:
+  - to: topology-spread
+    text: "Spread constraints replace most required anti-affinity: they express even distribution with a tolerance instead of an absolute ban."
+  - to: labels
+    text: "Both halves select Pods by label, so the rule is written in application terms and survives every rollout."
+  - to: scheduler
+    text: "Evaluating these rules means comparing against every other Pod in the topology domain, which is the reason the required form scales badly."
+lead: "The two halves, the topology key that scopes them, and the cost."
+parts:
+  - name: "podAffinity"
+    kind: pod
+    text: "Schedule near Pods matching a selector. Rare in practice: its best use is co-locating a cache with the workload reading it."
+  - name: "podAntiAffinity"
+    kind: split
+    text: "Schedule away from Pods matching a selector. The common one -- spreading replicas so one node or zone failure does not take them all."
+  - name: "topologyKey"
+    kind: zones
+    text: "The node label that defines the domain: hostname for one-per-node, zone for one-per-zone. Required, and the field that defines the whole rule."
+  - name: "Cost"
+    kind: bars
+    text: "Required anti-affinity makes the scheduler compare a candidate against all Pods in each domain. Noticeable above a few thousand Pods."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Pod affinity places a Pod relative to other Pods: near ones matching a label selector, or away
+from them. The `topologyKey` decides what "near" and "away" mean -- `kubernetes.io/hostname` for
+per-node, `topology.kubernetes.io/zone` for per-zone -- and without it the rule is meaningless,
+which is why the field is mandatory.
+
+**Anti-affinity is the half everyone uses.** "No two replicas of this Deployment on the same
+node" is the classic high-availability rule, written as required anti-affinity on
+`app: myapp` with `topologyKey: kubernetes.io/hostname`. It works, and it has a sharp edge: with
+three replicas and two nodes, the third Pod is `Pending` forever, because required means
+required. On a cluster that scales nodes, that is fine. On a fixed three-node cluster during a
+node upgrade, it is an outage you built deliberately.
+
+**Which is why topology spread constraints largely replaced it.** `maxSkew` expresses "spread
+these evenly, with a tolerance" rather than "never together", and
+`whenUnsatisfiable: ScheduleAnyway` degrades instead of blocking. For the common goal --
+replicas across zones and nodes, without pinning yourself into a corner -- spread is the better
+tool and the scheduler evaluates it far more cheaply.
+
+**The remaining good uses of required anti-affinity** are the cases where co-location is actually
+unacceptable: etcd or ZooKeeper members that must not share a failure domain, two Pods competing
+for the same local disk or the same host port. For everything else, `preferred` anti-affinity
+with a high weight gets you spread without the deadlock.
+
+**Affinity (the positive form) is genuinely rare**, and worth questioning when you see it. The
+legitimate case is latency: a sidecar-less cache or a sharded store where the reader must be on
+the same node as its shard. The illegitimate case is trying to recreate a Pod -- if two things
+must always be together, they belong in one Pod.
+
+Watch the performance note in large clusters: required pod affinity rules are evaluated against
+every Pod in each candidate topology domain, and a cluster with tens of thousands of Pods and
+widespread required rules measurably slows scheduling for everyone.

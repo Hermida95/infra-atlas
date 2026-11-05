@@ -1,0 +1,51 @@
+---
+id: owner-references
+title: "Owner references"
+type: concept
+domain: fundamentals
+summary: "The parent pointer that makes cascading deletion work. Deleting a Deployment removes its Pods because of a field in each Pod, not because the Deployment did anything."
+level: intermediate
+access: free
+monogram: OWN
+exam: [ckad, cka]
+relations:
+  related: [object, finalizers]
+connects:
+  - to: deployment
+    text: "A Deployment owns its ReplicaSets and each ReplicaSet owns its Pods, so the chain of ownership is also the chain of deletion."
+  - to: finalizers
+    text: "Garbage collection and finalizers are the two halves of deletion: one decides what goes with the parent, the other decides when it may go at all."
+  - to: job
+    text: "A Job's Pods are owned by it, which is how ttlSecondsAfterFinished can clean up both at once."
+  - to: operator
+    text: "An operator sets itself as the owner of what it creates, so uninstalling the custom resource takes its Deployments and Services with it."
+reviewed: 2026-11-05
+---
+
+Each object can carry `metadata.ownerReferences`, a list of parents. The garbage collector in
+the controller-manager watches for objects whose owners have all been deleted and removes them.
+That is the whole mechanism behind "deleting a Deployment deletes its Pods" -- the Deployment
+does not go around deleting things, it just stops existing, and a separate controller notices
+the orphans.
+
+**Cascade modes decide who waits for whom.** `--cascade=background` (the default) deletes the
+parent immediately and lets the collector catch up, so the command returns before the Pods are
+gone. `--cascade=foreground` puts a `foregroundDeletion` finalizer on the parent, so it stays
+visible in `Terminating` until every dependent is gone -- which is what you want in a script
+that must not proceed early. `--cascade=orphan` strips the references and leaves the children
+running, which is occasionally the right tool for migrating Pods between controllers and
+otherwise a way to create resources nobody owns.
+
+**A reference is namespace-local and one-directional.** A namespaced object cannot be owned by
+an object in another namespace, and a cluster-scoped object cannot be owned by a namespaced one;
+Kubernetes will treat the reference as invalid and delete the child. This bites when an operator
+in its own namespace creates something in a tenant namespace and sets itself as owner: the
+object appears, then disappears, with an event nobody reads as the explanation.
+
+**`blockOwnerDeletion`** on a reference makes foreground deletion of the parent wait for that
+specific child. Operators use it to guarantee cleanup order -- drain before the StatefulSet
+goes, deregister before the Service goes.
+
+For debugging, `kubectl get <kind> <name> -o jsonpath='{.metadata.ownerReferences}'` answers
+"what created this thing", which is the first question when you find a ReplicaSet nobody
+remembers applying.

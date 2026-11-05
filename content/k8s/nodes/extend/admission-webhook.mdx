@@ -1,0 +1,72 @@
+---
+id: admission-webhook
+title: "Admission webhooks"
+type: concept
+domain: extend
+summary: "Your HTTPS service called on every matching write. The most powerful extension point and the easiest way to make a cluster reject everything."
+level: advanced
+access: free
+monogram: AWH
+exam: [cka, cks]
+relations:
+  related: [admission, policy-engine]
+connects:
+  - to: admission
+    text: "Mutating webhooks run in sequence and can patch the object; validating ones run in parallel and can only accept or reject."
+  - to: policy-engine
+    text: "Kyverno and Gatekeeper are webhooks with a policy language on top, which is almost always better than writing your own."
+  - to: validating-admission-policy
+    text: "In-process CEL covers simple validation with none of the availability risk, so a webhook is for mutation and real logic."
+  - to: certificate-rotation
+    text: "The API server verifies the webhook's certificate against the caBundle, so an expired or unrotated certificate fails every write it matches."
+lead: "The fields that decide whether this webhook is safe to run."
+parts:
+  - name: "rules"
+    kind: lanes
+    text: "Which operations, groups, versions and resources trigger the call. The narrower this is, the smaller the blast radius."
+  - name: "failurePolicy"
+    kind: gate
+    text: "Fail rejects the request when the webhook is unreachable; Ignore lets it through. The whole availability decision, in one field."
+  - name: "namespaceSelector"
+    kind: shell
+    text: "Excluding kube-system and the webhook's own namespace is what keeps a broken webhook recoverable."
+  - name: "timeoutSeconds"
+    kind: trigger
+    text: "Up to 30, and it is added to the latency of every matching request. Small is better; one or two seconds is usually right."
+  - name: "caBundle"
+    kind: ring
+    text: "How the API server trusts the webhook's TLS certificate. Usually injected by cert-manager, and a silent failure when it is stale."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An admission webhook is an HTTPS service the API server calls with an AdmissionReview containing
+the object being written. A mutating webhook may return a JSON patch; a validating one may return
+allowed or not allowed with a message. This is how sidecar injection, policy enforcement, image
+digest pinning and defaulting are all implemented.
+
+**It is a dependency of every write it matches**, and this is the source of every webhook horror
+story. With `failurePolicy: Fail` and a service that is down, every matching request is rejected.
+If the match rule is broad enough to include the webhook's own Deployment, or the kube-system
+namespace, or Pods generally, you cannot deploy the fix -- the cluster will not accept the write
+that would repair it. Recovery then means deleting the webhook configuration directly, which
+requires an identity that still works.
+
+**So the safety rules are mechanical and worth treating as non-negotiable.** Scope `rules` to the
+specific resources and operations you need. Exclude kube-system and the webhook's own namespace
+with a `namespaceSelector`. Keep `timeoutSeconds` to one or two. Run at least two replicas with a
+PodDisruptionBudget and a topology spread. Use `Ignore` unless the policy genuinely must be
+unbypassable, and when it must, accept that you have coupled cluster writability to that
+service's uptime and plan accordingly.
+
+**Latency is cumulative and invisible.** Every matching request waits for the webhook. Several
+webhooks matching Pod creation, each taking 200ms, adds nearly a second to every Pod creation in
+the cluster -- which shows up as slow scaling and slow rollouts with no obvious cause. The API
+server's `apiserver_admission_webhook_admission_duration_seconds` metric is where that is
+visible.
+
+**Before writing your own, check whether you need to.** ValidatingAdmissionPolicy handles
+validation in-process with no service to run. Kyverno and Gatekeeper handle mutation and
+generation with a policy language, tested by many clusters. A hand-written webhook is justified
+when the logic is genuinely specific to your organisation -- and even then, the hard parts are
+certificate rotation, idempotent patches and ordering, not the business rule.

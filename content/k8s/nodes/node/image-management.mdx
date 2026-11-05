@@ -1,0 +1,68 @@
+---
+id: image-management
+title: "Images on the node"
+type: concept
+domain: node
+summary: "Pull policy, pull secrets and garbage collection. Where ImagePullBackOff comes from, and why a tag is a worse way to deploy than a digest."
+level: core
+access: free
+monogram: IM
+exam: [ckad, cka, cks]
+relations:
+  related: [containerd, image-signing]
+connects:
+  - to: containerd
+    text: "The pull, the layer store and the garbage collection are all the runtime's. The kubelet only asks and reports the result."
+  - to: secret
+    text: "A private registry needs an imagePullSecret of type dockerconfigjson, referenced by the Pod or attached to its ServiceAccount."
+  - to: image-signing
+    text: "Verifying a signature before running is a node or admission concern, and a digest is what makes the verification meaningful."
+  - to: eviction
+    text: "Disk pressure triggers image garbage collection first, so an unused image is deleted before any Pod is."
+lead: "The three settings that decide whether your Pod gets the image you meant."
+parts:
+  - name: "Image reference"
+    kind: meta
+    text: "`repo:tag` is mutable and resolves to whatever is behind the tag today. `repo@sha256:...` is immutable and is what a reproducible deploy uses."
+  - name: "imagePullPolicy"
+    kind: trigger
+    text: "`IfNotPresent` by default, `Always` when the tag is `latest`. With a mutable tag and IfNotPresent, two nodes can run two different builds."
+  - name: "imagePullSecrets"
+    kind: shell
+    text: "Registry credentials, per Pod or via the ServiceAccount. Missing one gives ImagePullBackOff with an authentication error, not a missing-image error."
+  - name: "Garbage collection"
+    kind: discs
+    text: "The kubelet asks the runtime to delete unused images between a high and low disk threshold, oldest-unused first."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Pulling an image is the first thing that happens to a Pod on a node and the first thing that can
+go wrong. The kubelet asks the runtime, the runtime talks to the registry, and anything in
+between -- DNS, a proxy, credentials, a rate limit -- surfaces as `ImagePullBackOff` with the
+real reason in `kubectl describe pod`. It is worth reading that message rather than guessing:
+`manifest unknown` is a wrong tag, `unauthorized` is a missing or wrong pull secret,
+`toomanyrequests` is Docker Hub's anonymous limit hit by a whole cluster sharing one IP.
+
+**Tags are the problem and digests are the fix.** A tag is a mutable pointer, so `app:1.4.2`
+can mean two different builds on two nodes depending on when each pulled and what the pull
+policy was. With `IfNotPresent`, a node that already has the tag cached never checks again. The
+discipline that removes the whole class of problem is deploying by digest --
+`app@sha256:...` -- which your CI knows after it pushes, and which makes the manifest an exact
+statement of what will run. It also makes signature verification meaningful, since a signature
+covers a digest and not a name.
+
+**`latest` deserves its reputation.** It flips the default pull policy to `Always`, so every Pod
+start is a registry round trip and a registry outage becomes an inability to restart anything,
+and it makes rollback impossible because there is no earlier reference to roll back to.
+
+**Pull secrets are usually attached in the wrong place.** Putting `imagePullSecrets` on the
+ServiceAccount rather than on each Pod means every workload in the namespace gets it, including
+ones added later by someone who does not know the registry is private. For nodes in a cloud,
+the better answer is an identity the node or the workload already has -- ECR via the instance
+role, Artifact Registry via Workload Identity -- so no credential exists in the cluster at all.
+
+At scale, a pull-through cache or a registry mirror configured in the runtime is what keeps
+image pulls off the public internet, keeps scaling events fast, and keeps you out of rate
+limits. Pre-pulling images onto node images is the other half for workloads that must start in
+seconds.

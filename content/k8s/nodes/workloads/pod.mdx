@@ -1,0 +1,78 @@
+---
+id: pod
+title: "Pod"
+type: concept
+domain: workloads
+hub: true
+summary: "One network identity, one lifecycle, one or more containers. The smallest thing you can schedule, and the thing every other workload object exists to produce."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka, cks]
+relations:
+  related: [pod-lifecycle, deployment]
+connects:
+  - to: init-containers
+    text: "Init containers run to completion in order before any app container starts, which is how a Pod does setup without baking it into the image."
+  - to: sidecar-containers
+    text: "A sidecar shares the Pod's network and volumes, so a proxy or a log shipper sees localhost and the same files as the app."
+  - to: volume
+    text: "Volumes belong to the Pod, not the container, which is how two containers share files and how data outlives a restart."
+  - to: service-account
+    text: "Every Pod gets a ServiceAccount token projected in, which is its identity to the API server whether it uses it or not."
+  - to: requests-and-limits
+    text: "The Pod's requests are the sum of its containers, and that sum is what the scheduler has to fit on a node."
+  - to: security-context
+    text: "The user, group, capabilities and seccomp profile a Pod runs with are declared here and applied by the runtime."
+lead: "What a Pod actually holds. Five of these are shared by every container inside it, which is the whole reason the Pod exists."
+parts:
+  - name: "App containers"
+    kind: pod
+    text: "One or more, started together after the init containers finish. All restart independently, but they live and die as a group with the Pod."
+  - name: "Init containers"
+    kind: trigger
+    text: "Run in sequence to completion before the rest. Failure here means the Pod never starts, with its own backoff."
+  - name: "Shared network namespace"
+    kind: ring
+    text: "One IP, one port space, one loopback. Containers in a Pod reach each other on localhost and must not clash on ports."
+  - name: "Volumes"
+    kind: cylinder
+    text: "Declared on the Pod and mounted per container, which is the only supported way for two containers to share a filesystem."
+  - name: "ServiceAccount token"
+    kind: shell
+    text: "Projected automatically: a short-lived, audience-bound JWT. The Pod's identity, and a credential worth disabling when unused."
+  - name: "Shared IPC and optional PID"
+    kind: bus
+    text: "Shared memory works between containers by default; a shared process namespace is opt-in and lets a sidecar see the app's processes."
+layout: cluster
+reviewed: 2026-11-05
+---
+
+A Pod is a group of containers that share a network namespace, a set of volumes and a fate. It
+exists because some things genuinely need to be co-located and co-scheduled -- a proxy in front
+of an app, an agent reading its files -- and because a scheduling unit needs a single IP. On
+Linux it is implemented as a sandbox (a `pause` container holding the namespaces) with your
+containers joining it.
+
+**You almost never write one.** A bare Pod is not restarted if its node dies, not replaced if
+it is deleted, and not rolled when its image changes -- nothing is watching it. Deployments,
+StatefulSets, DaemonSets and Jobs all exist to create Pods from a template and keep doing so.
+The exceptions are debugging (`kubectl run --rm -it`) and a genuinely one-shot task.
+
+**Pods are immutable in the ways that matter.** You cannot change the image, the resources or
+almost any field of a running Pod -- the API rejects it. The workload controller handles this by
+creating a new Pod and deleting the old one, which is why "updating" a Deployment means replacing
+every Pod it owns. In-place resource resize is arriving but is still narrow. The practical
+consequence: anything that must survive a Pod replacement belongs in a PersistentVolume or
+outside the cluster, and anything with an identity that must survive belongs in a StatefulSet.
+
+**Multi-container Pods have a narrow correct use.** Containers in one Pod scale together, are
+scheduled together, and fail together -- so two services with different scaling needs do not
+belong in one Pod, however convenient the localhost call looks. The legitimate patterns are the
+sidecar (proxy, log shipper, secret refresher), the adapter and the ambassador, all of which are
+infrastructure attached to one app rather than another app.
+
+**Terminating a Pod is a sequence worth knowing**, because getting it wrong is the cause of
+dropped requests during every deploy: the Pod is marked for deletion, removed from endpoints,
+sent `SIGTERM`, given `terminationGracePeriodSeconds` to finish, then `SIGKILL`. Endpoint removal
+and SIGTERM race, which is why a `preStop` sleep is the standard mitigation.

@@ -1,0 +1,48 @@
+---
+id: conversion-webhook
+title: "Conversion webhooks"
+type: concept
+domain: extend
+summary: "How a CRD serves two versions of the same object. Required as soon as your custom API evolves, and a dependency of every read of those objects."
+level: advanced
+access: free
+monogram: CVW
+exam: [cka]
+relations:
+  related: [crd, admission-webhook]
+connects:
+  - to: crd
+    text: "One version is stored; any other served version must be converted on the way in and out, which is what this webhook does."
+  - to: api-groups
+    text: "It is the same problem the built-in APIs solve internally: one storage version, several served ones, conversion in between."
+  - to: admission-webhook
+    text: "It carries the same availability and certificate concerns, and it affects reads as well as writes."
+reviewed: 2026-11-05
+---
+
+A CRD stores its objects in exactly one version. If it serves more than one, something has to
+translate between them: that is a conversion webhook, called by the API server whenever a client
+asks for a version other than the stored one, in both directions.
+
+**`strategy: None` works only while the schemas are compatible.** With no conversion, the API
+server serves the stored object with the apiVersion label changed and nothing else -- fine when
+`v1beta1` and `v1` differ only by added optional fields, and silently wrong the moment a field is
+renamed or restructured, because clients get an object missing the data they asked for.
+
+**It affects reads, which makes it heavier than an admission webhook.** An admission webhook is
+in the path of writes; a conversion webhook is in the path of every read and list of those objects
+in a non-storage version -- including the ones your own controller performs, and including
+`kubectl get`. If it is unavailable, those objects become unreadable, and a controller that
+cannot read its own resources stops reconciling. There is no `failurePolicy` to soften this.
+
+**The migration pattern is the useful part to know.** Add the new version as served but not
+stored, with a conversion webhook in place. Update clients and controllers to the new version.
+Switch the storage version, and then rewrite every existing object so it is stored in the new
+version -- `kubectl get <kind> -A -o yaml | kubectl replace -f -` or the storage version migrator.
+Only then can the old version be marked unserved, and the
+`status.storedVersions` field on the CRD is what tells you whether any object is still stored in
+it.
+
+**The way to avoid all of this** is to design the schema with room: optional fields, no renames,
+additive changes only, and an honest `v1alpha1` while you are still learning the shape. Most CRDs
+that need a conversion webhook needed it because something was declared stable too early.

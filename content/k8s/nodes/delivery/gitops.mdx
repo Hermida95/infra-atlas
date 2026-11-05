@@ -1,0 +1,54 @@
+---
+id: gitops
+title: "GitOps"
+type: pattern
+domain: delivery
+summary: "A controller in the cluster pulling desired state from git, instead of a pipeline pushing it. It makes drift visible and makes cluster credentials unnecessary in CI."
+logo: argo
+level: intermediate
+access: free
+monogram: GO
+exam: [ckad]
+relations:
+  related: [argocd, flux]
+connects:
+  - to: argocd
+    text: "The implementation with a UI and an application-centric model, which makes it the easier one to adopt across many teams."
+  - to: flux
+    text: "The implementation built as a set of composable controllers, which fits teams that prefer everything as custom resources."
+  - to: reconciliation
+    text: "It is the same loop applied to a repository: compare what is in git with what is in the cluster, and close the gap continuously."
+  - to: external-secrets
+    text: "Secrets cannot be in git, so a GitOps repository holds references and an operator fetches the values."
+  - to: server-side-apply
+    text: "Field ownership is what lets a GitOps controller and an autoscaler both write to one Deployment without fighting."
+reviewed: 2026-11-05
+---
+
+GitOps inverts deployment. Instead of a pipeline that holds cluster credentials and pushes
+manifests, a controller inside the cluster watches a git repository and continuously reconciles
+the cluster towards it. The repository is the desired state; the controller closes the gap; drift
+is detected and either reported or corrected.
+
+**The security change is the most underrated part.** CI no longer needs cluster access -- it
+builds an image, pushes it, and commits a tag or digest to a repository. The only thing with
+write access to the cluster is a controller inside it, pulling. That removes the
+cluster-admin kubeconfig from CI variables, which is one of the most commonly over-privileged
+credentials in any organisation.
+
+**Drift becomes visible, which changes behaviour.** When someone runs
+`kubectl edit` in production, the controller notices the difference and either flags it or reverts
+it. That makes the repository genuinely authoritative rather than nominally authoritative, and it
+turns "the cluster does not match the manifests" from a slow mystery into a dashboard item.
+
+**Secrets are the problem it does not solve.** You cannot commit them. The workable answers are
+Sealed Secrets (encrypted with the cluster's public key, safe in git), SOPS with a KMS key (Flux
+decrypts on apply), or -- the most common now -- External Secrets Operator, where git holds a
+reference and the real value stays in a secret manager. Choosing one of these before rolling out
+GitOps avoids the inevitable repository with a base64 password in it.
+
+**Two practices distinguish the setups that work.** Separate the application source repository
+from the deployment manifest repository, so a config change does not rebuild an image and a
+rebuild does not need a manifest change. And deploy by digest rather than by tag, updated by an
+image automation controller, so what is running is exactly identifiable from the repository --
+which is the property that makes a rollback a `git revert`.

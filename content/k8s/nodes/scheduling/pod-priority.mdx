@@ -1,0 +1,57 @@
+---
+id: pod-priority
+title: "Priority & preemption"
+type: concept
+domain: scheduling
+summary: "A number on a Pod that decides who gets the last slot, and whether a pending Pod may have others evicted to make room for it."
+level: intermediate
+access: free
+monogram: PP
+exam: [cka]
+relations:
+  related: [scheduler, pdb]
+connects:
+  - to: scheduler
+    text: "Priority orders the scheduling queue, and preemption is the scheduler evicting lower-priority Pods when a high-priority one cannot be placed."
+  - to: pdb
+    text: "Preemption tries to respect a PodDisruptionBudget, but will violate it rather than leave a high-priority Pod pending forever."
+  - to: daemonset
+    text: "System agents use system-node-critical so they are never the ones evicted to make room for a workload."
+  - to: cluster-autoscaler
+    text: "Low-priority placeholder Pods are the standard trick for keeping warm capacity: they are preempted the moment real work arrives."
+reviewed: 2026-11-05
+---
+
+A `PriorityClass` is a cluster-scoped object holding a name and an integer. A Pod referencing one
+via `priorityClassName` gets that value in `spec.priority`, and two things follow: the scheduler
+orders its queue by priority, so higher-priority pending Pods are considered first; and if a
+high-priority Pod cannot be placed anywhere, the scheduler may evict lower-priority Pods to make
+space for it.
+
+**Preemption is the part that surprises people.** It is not an administrative tool -- it happens
+automatically. The scheduler picks a node where evicting some set of lower-priority Pods would
+let the pending Pod fit, deletes them with their grace periods, and schedules. The evicted Pods
+go back to `Pending` and are rescheduled if there is room, which there may not be. So setting a
+high priority on a workload is a statement that other people's workloads may be killed for it.
+
+**It respects PodDisruptionBudgets on a best-effort basis only.** The scheduler prefers victims
+whose budgets would not be violated, but if no such set exists it will violate a budget rather
+than leave the high-priority Pod pending. This is documented, deliberate, and worth knowing
+before you rely on a PDB as a guarantee.
+
+**The two built-in classes are for the cluster, not for you.**
+`system-cluster-critical` and `system-node-critical` sit above everything and are meant for the
+control plane and node agents -- CoreDNS, kube-proxy, the CNI. Using them for an application
+means your app can preempt the networking its own Pods depend on, which fails in an entertaining
+way.
+
+**The best trick it enables is warm capacity.** Create a very low (even negative) priority class,
+run a Deployment of Pods that do nothing but request resources, and size it to one node's worth.
+The cluster looks full, the autoscaler keeps that extra node, and the instant a real Pod needs
+room the placeholders are preempted -- giving you a node already running rather than a
+three-minute wait for an instance to boot. It is the standard answer to "the autoscaler is too
+slow for our traffic spikes".
+
+A sane scheme is three or four classes with wide gaps: batch below default, default, and
+latency-critical above. Dozens of finely graded priorities produce preemption cascades nobody can
+reason about.

@@ -1,0 +1,55 @@
+---
+id: resource-quota
+title: "ResourceQuota"
+type: concept
+domain: scheduling
+summary: "A hard cap per namespace on compute, storage and object counts. Enforced at admission, which is why exceeding it fails the controller rather than the Pod."
+level: intermediate
+access: free
+monogram: RQ
+exam: [cka]
+relations:
+  related: [limit-range, namespace]
+connects:
+  - to: namespace
+    text: "A quota is per namespace, which makes the namespace the only unit a team's consumption can be capped in."
+  - to: limit-range
+    text: "A quota on CPU or memory requires every Pod to declare them, so a LimitRange with defaults is what stops bare Pods being rejected outright."
+  - to: admission
+    text: "Enforcement happens at admission, so the create request itself is refused and the error ends up in the ReplicaSet, not in a Pod."
+  - to: replicaset
+    text: "A Deployment that produces no Pods at all, with no Pending to show, is usually a quota denial recorded in the ReplicaSet's conditions."
+reviewed: 2026-11-05
+---
+
+A ResourceQuota caps what a namespace may consume: total CPU and memory requests and limits,
+storage by StorageClass, and counts of objects -- how many Pods, Services, Secrets,
+LoadBalancers, PersistentVolumeClaims. The sums are maintained in the quota's own status, and the
+API server refuses any create or update that would exceed them.
+
+**The failure mode is the thing to learn.** Because enforcement is at admission, the rejection
+lands on whoever made the request. When that is you, you get a clear error. When it is a
+ReplicaSet controller trying to create the fourth Pod, you get a Deployment that reports 3 of 4
+ready, no Pending Pod to inspect, and nothing in `kubectl get pods` to explain it. The answer is
+in `kubectl describe rs` as a `FailedCreate` event with the words `exceeded quota`, and nowhere
+more obvious. Knowing where to look saves a long search.
+
+**A compute quota makes resource declarations mandatory.** If a quota limits
+`requests.cpu`, then any Pod that does not declare a CPU request is rejected -- the quota
+accounting cannot work otherwise. That is correct behaviour and it breaks every manifest in the
+namespace that was relying on defaults. Pairing every ResourceQuota with a LimitRange that
+supplies defaults is therefore not optional in practice; it is how the quota becomes usable.
+
+**Object counts matter more than people expect.** `count/pods`,
+`count/services.loadbalancers` and `count/secrets` cap the things that cost money or consume
+cluster-wide resources: a namespace that can create unlimited LoadBalancer Services can create
+unlimited cloud load balancers. And `count/configmaps` or `count/secrets` is a reasonable brake
+on a controller stuck in a loop generating objects.
+
+**Scopes let one namespace hold two policies.** A quota with
+`scopeSelector` on `PriorityClass` can give best-effort batch work a generous allowance and
+interactive workloads a tight one, inside the same namespace --
+`BestEffort`, `NotBestEffort`, `Terminating` and `NotTerminating` being the other scopes.
+
+`kubectl describe quota` shows used against hard for every tracked resource, and it is the first
+thing to check when a namespace mysteriously stops scaling.

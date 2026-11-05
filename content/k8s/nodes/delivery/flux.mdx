@@ -1,0 +1,53 @@
+---
+id: flux
+title: "Flux"
+type: tool
+domain: delivery
+summary: "GitOps as a set of small composable controllers, all driven by custom resources. No UI by design, which makes it fit teams that want everything declarative."
+logo: flux
+level: intermediate
+access: free
+monogram: FL
+exam: [ckad]
+relations:
+  related: [gitops, argocd]
+  alternative_to: [argocd]
+connects:
+  - to: gitops
+    text: "The same pattern, assembled from separate controllers for sources, kustomizations, Helm releases and image automation."
+  - to: argocd
+    text: "The alternative has a UI and an application-centric model; this one is configured entirely through custom resources in git."
+  - to: helm
+    text: "Its HelmRelease controller manages a chart as a resource, so a chart upgrade is a git commit rather than a helm command."
+  - to: image-signing
+    text: "It can verify commit signatures and image signatures before applying, which closes the loop from source to running workload."
+reviewed: 2026-11-05
+---
+
+Flux is several controllers rather than one application: a source controller that fetches git
+repositories, OCI artefacts and Helm repositories; a kustomize controller that renders and
+applies; a Helm controller that manages releases; notification and image automation controllers.
+Each is driven by its own custom resource, so the entire deployment setup is itself YAML in git.
+
+**That composability is the design choice that distinguishes it.** There is no Application
+abstraction and no UI -- a `GitRepository` plus a `Kustomization` is the equivalent, and you watch
+it with `flux get kustomizations` or by reading status conditions. For teams that want every piece
+of configuration to be a reconciled object with no out-of-band state, that is exactly right. For
+teams that want to show a deployment to someone who does not know Kubernetes, the absence of a UI
+is a real cost.
+
+**Image automation is its stand-out feature.** The image reflector and automation controllers scan
+a registry for new tags matching a policy, and commit the updated digest back to the repository.
+So a successful build results in a commit, and the commit results in a deployment -- with the
+whole chain visible in git history and no pipeline step holding cluster credentials. Argo CD
+needs the Image Updater for the equivalent.
+
+**Supply-chain verification is first-class.** It can require that a git commit is signed by a key
+in a known set, and that a container image's signature verifies, before applying -- which turns
+"only reviewed, signed code runs here" into a controller's job rather than a policy document.
+
+**Multi-tenancy works through ownership rather than a separate model.** A `Kustomization` can be
+given a ServiceAccount, and it then applies with that account's RBAC -- so a team's repository
+can only create what that team is permitted to create, enforced by the API server rather than by
+the GitOps tool. That is a cleaner story than any tool-level permission system, and it is the
+reason some platform teams prefer Flux for shared clusters.

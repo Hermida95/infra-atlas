@@ -1,0 +1,50 @@
+---
+id: cluster-backup
+title: "Object & volume backup"
+type: concept
+domain: day2
+summary: "Backing up what is in the cluster rather than the cluster itself: objects by namespace plus volume snapshots. The restore story a managed cluster actually has."
+level: intermediate
+access: free
+monogram: CB
+exam: [cka]
+relations:
+  related: [etcd-backup, volume-snapshot]
+  alternative_to: [etcd-backup]
+connects:
+  - to: etcd-backup
+    text: "An etcd snapshot is all-or-nothing control plane state; this is selective, per namespace, and works on a managed cluster where etcd is not yours."
+  - to: volume-snapshot
+    text: "Objects without their data are not a restore, so a backup tool drives CSI snapshots for the volumes at the same time."
+  - to: gitops
+    text: "If the objects are already in git, what you actually need backed up is the data and the things nobody declared."
+reviewed: 2026-11-05
+---
+
+Object-level backup -- Velero being the usual tool -- reads the objects of selected namespaces
+through the API, stores them in object storage, and triggers CSI snapshots or filesystem backups
+for their volumes. Restores can be selective: one namespace, one label selector, into the same
+cluster or a different one.
+
+**This is the backup that works on a managed cluster**, where etcd is the provider's and you have
+no snapshot access. It is also more useful even where you do have etcd access, because the unit of
+recovery is a namespace or a workload rather than the whole cluster, and restoring one team's
+objects does not involve stopping the control plane.
+
+**The objects alone are not enough and that is the common mistake.** Restoring a
+StatefulSet and its PersistentVolumeClaims gives you Pods pointing at volumes that do not exist,
+or worse, empty ones. The volume data has to be part of the same backup -- CSI snapshots where the
+driver supports them, or a filesystem copy (Velero's file-system backup) where it does not. And
+the same crash-consistency caveat applies: for a database, the database's own backup is the
+authoritative one and the volume snapshot is a complement.
+
+**A GitOps cluster changes what you need to back up.** If every object comes from a repository, the
+objects are already safe, and a cluster can be rebuilt by pointing a new one at the same
+repository. What is left is the data in volumes and the things nobody declared -- the objects an
+operator generated, the Secrets fetched from a manager, the state a controller wrote. That is a
+much smaller and much more honest backup scope.
+
+**Restore to another cluster is the test worth running.** It validates the backup, the procedure
+and the assumptions in one exercise, and it is the thing you will actually be asked to do -- a
+region outage, a cluster that cannot be upgraded, a migration. A backup that has only ever been
+restored into the cluster it came from has not been tested against the scenario that motivated it.

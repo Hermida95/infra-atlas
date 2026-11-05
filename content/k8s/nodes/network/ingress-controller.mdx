@@ -1,0 +1,54 @@
+---
+id: ingress-controller
+title: "Ingress controller"
+type: service
+domain: network
+summary: "The proxy that actually serves the traffic: usually nginx, Traefik, Envoy or a cloud load balancer controller. The Ingress object is only its configuration."
+logo: nginx
+level: intermediate
+access: free
+monogram: IC
+exam: [ckad, cka]
+relations:
+  related: [ingress]
+connects:
+  - to: ingress
+    text: "It watches Ingress objects, resolves their Services to endpoints, and reloads its own configuration -- which is where annotation support comes from."
+  - to: loadbalancer-service
+    text: "The controller itself is exposed by one LoadBalancer Service, which is how many hostnames end up behind a single cloud load balancer."
+  - to: secret
+    text: "TLS certificates are read from Secrets named by the Ingress, which is the handover point with cert-manager."
+  - to: annotations
+    text: "Each controller defines its own annotation vocabulary, which is both its feature set and the reason Ingress is not portable."
+reviewed: 2026-11-05
+---
+
+An Ingress controller is a real proxy running in or beside the cluster, plus a control loop that
+turns Ingress objects into its configuration. Install nothing and your Ingress objects sit there
+with no address and no effect -- a surprisingly common first-cluster puzzle, because nothing
+reports an error.
+
+**The choice falls into two families.** An *in-cluster proxy* -- ingress-nginx, Traefik, Envoy
+Gateway, HAProxy -- runs as a Deployment, is exposed through one LoadBalancer Service, and does
+the routing itself. A *cloud controller* -- the AWS Load Balancer Controller, GKE's ingress --
+translates the object into a managed load balancer, so the data path never enters the cluster.
+The first gives you more features and a component to operate; the second gives you a managed
+data plane and the cloud's own feature set and quotas.
+
+**IngressClass is how several of them coexist.** Each controller claims an
+`IngressClass`, and an Ingress names one in `spec.ingressClassName`. One class can be marked
+default for objects that name nothing. Running an internal and an external controller with
+different classes is the standard way to expose some routes to the internet and some only to the
+VPC, and forgetting the class is why an Ingress is sometimes picked up by nobody or by both.
+
+**Reloads are the thing to watch on ingress-nginx.** It renders a full nginx configuration and
+reloads on change, so a cluster with hundreds of Ingresses and constant endpoint churn spends
+real CPU on reloads and can briefly drop connections during them. Watching endpoints via its own
+Lua path rather than reloading mitigates it, and the Envoy-based controllers avoid the model
+altogether by updating routes over xDS.
+
+**Two security notes.** It is a cluster-wide traffic funnel, so its own Pods want tight resource
+requests, a PodDisruptionBudget, and more than one replica. And on ingress-nginx specifically,
+the `configuration-snippet` family of annotations allows arbitrary nginx configuration from
+anyone who can create an Ingress in any namespace -- which is a privilege escalation path, and
+the reason those annotations are disabled by default in recent versions.

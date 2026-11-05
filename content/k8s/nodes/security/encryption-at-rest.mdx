@@ -1,0 +1,52 @@
+---
+id: encryption-at-rest
+title: "Encryption at rest"
+type: concept
+domain: security
+summary: "An API server setting that encrypts Secrets before they reach etcd. Without it, an etcd backup is a plain-text copy of every credential in the cluster."
+level: advanced
+access: free
+monogram: EAR
+exam: [cks]
+relations:
+  related: [secret, etcd]
+connects:
+  - to: etcd
+    text: "Secrets are stored base64-encoded, not encrypted, unless this is configured: anyone with the etcd data or a snapshot of it has them all."
+  - to: apiserver
+    text: "The configuration lives on the API server, since it is the only component that reads and writes etcd."
+  - to: etcd-backup
+    text: "A snapshot inherits whatever protection was configured, which is what makes an unencrypted backup in object storage such a common finding."
+reviewed: 2026-11-05
+---
+
+By default the API server writes Secrets to etcd as base64-encoded plain text. An
+`EncryptionConfiguration` file passed to the API server changes that: resources you list are
+encrypted with a provider before being stored, and decrypted on read. It is the single most
+important control over the most sensitive data in a cluster.
+
+**The providers differ in what they actually protect against.** `aescbc` and the preferred
+`aesgcm` use a key in the configuration file -- which sits on the control plane node's disk, so
+it protects an etcd snapshot but not a compromised control plane host. A `kms` provider keeps the
+key in an external KMS (AWS KMS, Cloud KMS, Vault) and asks it to unwrap a data encryption key,
+so the key never lives on the node and its use is logged and revocable. KMS v2 made this
+performant by caching the unwrapped DEK, which removed the latency argument against it.
+`secretbox` is an alternative cipher; `identity` is no encryption and, placed first, is how you
+turn it off.
+
+**Order in the provider list is the operational subtlety.** The first provider is used for
+writing; all of them are tried for reading. So enabling encryption means adding the real provider
+first and keeping `identity` afterwards, so existing unencrypted objects can still be read. And
+nothing is re-encrypted automatically: after changing the configuration you must rewrite every
+object, which is exactly what `kubectl get secrets --all-namespaces -o json | kubectl replace -f -`
+does.
+
+**Key rotation is the same dance.** New key first in the list, old key second, rewrite everything,
+then remove the old key. Skipping the rewrite leaves objects that only the removed key can
+decrypt, which is an unrecoverable loss of those Secrets.
+
+**On a managed cluster this is partly done for you** -- EKS, GKE and AKS encrypt etcd volumes and
+offer envelope encryption of Secrets with your own KMS key, which is worth enabling because the
+default disk encryption does not protect against an attacker who can read through the API server's
+own path. On a self-managed cluster, this plus an encrypted, access-controlled backup destination
+is the difference between a stolen snapshot being an inconvenience and being a full compromise.

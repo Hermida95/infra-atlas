@@ -1,0 +1,51 @@
+---
+id: finalizers
+title: "Finalizers"
+type: concept
+domain: fundamentals
+summary: "A list of names that blocks deletion until each one is removed. The reason a namespace or a PVC can sit in Terminating forever with nothing obviously wrong."
+level: intermediate
+access: free
+monogram: FIN
+exam: [cka]
+relations:
+  related: [owner-references, object]
+connects:
+  - to: persistent-volume-claim
+    text: "The kubernetes.io/pvc-protection finalizer keeps a claim alive while a Pod still mounts it, so deleting the claim cannot pull a volume out from under a running process."
+  - to: operator
+    text: "An operator adds its own finalizer to run cleanup outside the cluster -- deregister a node, drop a database -- before the object is allowed to disappear."
+  - to: namespace
+    text: "A namespace will not finish deleting until every object inside it has, so one stuck finalizer holds the whole namespace in Terminating."
+  - to: troubleshooting
+    text: "Clearing a finalizer by hand is the standard escape, and it skips the cleanup that finalizer existed to do."
+reviewed: 2026-11-05
+---
+
+`metadata.finalizers` is a list of arbitrary strings. When you delete an object that has any,
+the API server does not remove it: it sets `deletionTimestamp` and waits. Each controller that
+put a name on the list is expected to do its cleanup and then take its own name off. When the
+list is empty, the object is finally deleted. Until then it is visible, `Terminating`, and still
+has to be reconciled.
+
+**This is a correctness feature, not an obstacle.** `kubernetes.io/pvc-protection` is why
+deleting a PersistentVolumeClaim that a Pod is still using does not rip the volume away.
+A LoadBalancer Service's finalizer is why its cloud load balancer and security group are
+deleted rather than left behind, billing. An operator's finalizer is how it deregisters an
+external resource -- a DNS record, a cloud database, a cluster member -- before Kubernetes
+forgets the object existed.
+
+**The failure mode is a finalizer nobody will ever clear.** Uninstall an operator and its
+custom resources keep its finalizer, so they can never be deleted, so the namespace holding
+them can never finish terminating. The same thing happens with an admission webhook whose
+service is gone: the controller cannot update the object to remove the finalizer, because
+every write is rejected by a webhook that times out.
+
+**The escape hatch and its cost.** `kubectl patch <kind> <name> -p '{"metadata":{"finalizers":null}}'
+--type=merge` removes them and lets the deletion complete. It also skips exactly the cleanup the
+finalizer was there to perform -- so the cloud load balancer stays up, the external database
+survives, the node stays registered. Use it knowing what you are leaking, and prefer
+reinstalling the controller long enough for it to clean up properly.
+
+Diagnosing one is mechanical: `kubectl get <kind> <name> -o jsonpath='{.metadata.finalizers}'`
+tells you which controller is being waited on, and the name almost always says who owns it.

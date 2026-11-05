@@ -1,0 +1,53 @@
+---
+id: logs
+title: "Logs"
+type: concept
+domain: observability
+summary: "stdout from the container, written to a file on the node and rotated by the kubelet. Nothing ships them off the node, so anything beyond the last restart needs a collector."
+logo: fluentbit
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [events, metrics]
+connects:
+  - to: kubelet
+    text: "kubectl logs reads the node's log file through the kubelet, which is why logs vanish when the Pod is deleted or the node is gone."
+  - to: daemonset
+    text: "A collector as a DaemonSet reading /var/log/containers is the standard shipping pattern, one copy per node rather than per Pod."
+  - to: eviction
+    text: "Container logs live on the node's disk, so an application logging heavily is a cause of disk pressure and eviction."
+  - to: ephemeral-containers
+    text: "A distroless image with no shell still gives logs, but anything beyond them needs a debug container attached."
+reviewed: 2026-11-05
+---
+
+A container's stdout and stderr are captured by the runtime and written to a file on the node,
+under `/var/log/containers`. `kubectl logs` asks the kubelet to read that file. There is no log
+storage in Kubernetes, no search, and no retention beyond what the node holds -- which is the
+first thing to internalise, because it means logs are lost when a Pod is deleted or its node
+disappears.
+
+**`--previous` is the flag that solves CrashLoopBackOff.** The current container has just started
+and has nothing interesting in it; the error is in the one that died.
+`kubectl logs --previous` reads the last terminated container's file, and it is where the actual
+stack trace is. Together with `-f` to follow, `--since=10m`, `--tail=100` and
+`-l app=foo --all-containers` for a whole workload, that covers nearly all day-to-day use.
+
+**Rotation is the kubelet's and it is small by default.** Typically 10 MiB per file with five
+files kept, so a chatty application can lose its own history in minutes, and
+`kubectl logs` will only ever show you what survives. The limits are kubelet flags, and raising
+them trades node disk for history.
+
+**Shipping is a DaemonSet, not a sidecar.** One collector per node -- Fluent Bit, Vector,
+Promtail -- reading the node's log directory and adding Kubernetes metadata from the API, is the
+standard pattern: one copy per node instead of one per Pod, and it captures the logs of Pods that
+have already died. A sidecar per Pod is the fallback for an application that insists on writing
+to a file inside the container rather than stdout, and the better fix for that is to make it log
+to stdout.
+
+**Structured output is what makes the pipeline worth having.** JSON lines with a level, a
+timestamp, a message and the identity fields from the downward API (`pod`, `namespace`, `node`)
+can be indexed and queried; free-form text can only be grepped. And a trace or request id in
+every line is what connects a log to a span, which is the difference between reading logs and
+debugging a distributed system.

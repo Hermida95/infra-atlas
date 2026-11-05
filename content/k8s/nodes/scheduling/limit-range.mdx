@@ -1,0 +1,50 @@
+---
+id: limit-range
+title: "LimitRange"
+type: concept
+domain: scheduling
+summary: "Per-namespace defaults and bounds for container resources. It is what stops a Pod that declares nothing from becoming the most fragile thing in the cluster."
+level: intermediate
+access: free
+monogram: LR
+exam: [cka]
+relations:
+  related: [resource-quota, requests-and-limits]
+connects:
+  - to: requests-and-limits
+    text: "It fills in requests and limits a Pod did not declare, so the Pod is Burstable rather than BestEffort without anyone editing a manifest."
+  - to: resource-quota
+    text: "A compute quota rejects Pods with no declared resources, so the two objects are almost always deployed together."
+  - to: admission
+    text: "It is a mutating admission plugin: the defaults are written into the Pod before it is stored, which is why kubectl get shows values nobody typed."
+reviewed: 2026-11-05
+---
+
+A LimitRange applies to containers created in its namespace and does two separate things: it
+injects defaults for `requests` and `limits` that were not specified, and it rejects anything
+outside the minimum and maximum it allows. It is a mutating admission plugin, so the Pod stored
+in etcd has the defaults filled in -- which is why `kubectl get pod -o yaml` shows resources
+nobody wrote.
+
+**`defaultRequest` and `default` are the useful half.** Without them, a Pod with no resources is
+BestEffort: it reserves nothing, so the scheduler treats it as free, and it is first in line for
+eviction. With a modest default of, say, 100m CPU and 128Mi memory, every workload in the
+namespace is at least accounted for. That one object prevents a whole category of "why did my
+Pod get killed" questions from teams that never set resources.
+
+**`max`, `min` and `maxLimitRequestRatio` are the guard rails.** A maximum stops a single Pod
+requesting an entire node's worth of memory and sitting Pending forever while someone wonders
+why. A ratio cap (`maxLimitRequestRatio: 4`) stops the pattern where a team requests 100m and
+limits 4 cores -- which schedules as if it were tiny and behaves as if it were huge, making the
+whole node's capacity planning fiction.
+
+**It applies at creation, not retroactively.** Adding a LimitRange does nothing to Pods already
+running; the defaults appear on the next Pod created. So rolling out resource hygiene means
+applying the object and then restarting the workloads, and the second step is the one people
+forget before declaring the policy effective.
+
+**It is not a substitute for real numbers.** Defaults are a floor for safety, not a sizing
+exercise -- a database given 128Mi because nobody thought about it is still going to be
+OOM-killed. The useful division of labour is a LimitRange so nothing is unaccounted for, VPA
+recommendations so the real numbers are known, and a policy engine if you want to *require*
+teams to set their own rather than inherit a default.

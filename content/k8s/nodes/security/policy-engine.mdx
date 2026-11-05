@@ -1,0 +1,68 @@
+---
+id: policy-engine
+title: "Policy engines"
+type: tool
+domain: security
+summary: "Kyverno or Gatekeeper as admission webhooks, enforcing rules the built-ins cannot express -- and mutating objects, which is their real advantage."
+level: advanced
+access: free
+monogram: POL
+exam: [cks]
+relations:
+  related: [admission, validating-admission-policy]
+  alternative_to: [validating-admission-policy]
+connects:
+  - to: admission
+    text: "They are webhooks, so they are a dependency of every matching write and their failurePolicy is a cluster-availability decision."
+  - to: validating-admission-policy
+    text: "In-process CEL now covers simple validation with no webhook, so an engine is for mutation, generation and cross-object rules."
+  - to: pod-security-admission
+    text: "PSA gives three fixed levels; an engine is what you reach for when you need a fourth, or an exception for one namespace."
+  - to: image-signing
+    text: "Verifying a signature and rewriting the reference to a digest at admission is one of the strongest things an engine does."
+lead: "What an engine does that nothing built in can."
+parts:
+  - name: "Validate"
+    kind: bell
+    text: "Reject what does not comply. Increasingly also doable with in-process CEL policies and no webhook at all."
+  - name: "Mutate"
+    kind: split
+    text: "Rewrite the object: add a security context, inject a sidecar, pin an image to its digest, add required labels."
+  - name: "Generate"
+    kind: trigger
+    text: "Create companion objects -- a default NetworkPolicy and LimitRange for every new namespace, kept in sync."
+  - name: "Cross-object rules"
+    kind: graph
+    text: "Decisions that need to look at other objects, like refusing an Ingress whose hostname another namespace already claims."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A policy engine is an admission webhook with a policy language. Kyverno uses Kubernetes-style
+YAML, which makes it approachable for anyone who writes manifests; Gatekeeper uses Rego through
+OPA, which is more powerful and considerably steeper. Both validate, both mutate, and both
+produce reports of what would fail.
+
+**Mutation is the capability worth adopting one for.** Validation says no; mutation makes the
+right thing happen by default. Adding a `securityContext` to every Pod that lacks one, pinning
+every image to its digest, injecting required labels, setting a default
+`ServiceAccount` with no token mount -- these turn policy from an obstacle into a platform
+feature, and nothing built into Kubernetes can do them.
+
+**Generation is the underrated one.** A rule that creates a default-deny NetworkPolicy, a
+LimitRange and a ResourceQuota in every new namespace, and keeps them in sync, means a new team's
+namespace is safe on the first day rather than after a review. That single policy is often the
+whole justification for installing an engine.
+
+**For plain validation, check whether you still need the webhook.**
+ValidatingAdmissionPolicy evaluates CEL in the API server: no deployment, no certificates, no
+availability risk, no latency. "Every Pod must set resource limits", "no `latest` tags", "images
+only from our registry" are all one short expression. Keeping the webhook for the things only it
+can do, and moving simple rules in-process, is the direction the ecosystem is going.
+
+**And remember what a webhook costs.** It sits in the write path for everything it matches, so it
+needs multiple replicas, a tight timeout, a narrow match rule, and
+`kube-system` excluded -- or a bad day for the engine becomes a cluster that accepts no writes.
+Running policies in `Audit` mode first is how you learn what would break without finding out the
+hard way; both engines produce a report object listing every violation in the cluster, which is
+also the fastest way to assess a cluster you have just inherited.

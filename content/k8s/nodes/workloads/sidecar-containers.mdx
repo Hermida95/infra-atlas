@@ -1,0 +1,51 @@
+---
+id: sidecar-containers
+title: "Sidecar containers"
+type: pattern
+domain: workloads
+summary: "A helper that shares the Pod with the app. Since the native sidecar field, it starts before the app and stops after it, which fixes a decade of Job and shutdown bugs."
+level: intermediate
+access: free
+monogram: SC
+exam: [ckad, cka]
+relations:
+  related: [pod, init-containers]
+connects:
+  - to: pod
+    text: "The shared network namespace is what makes the pattern work: the proxy listens on localhost and the app never knows it is there."
+  - to: service-mesh
+    text: "A mesh is sidecars at cluster scale, injected by a mutating webhook rather than written into the manifest."
+  - to: job
+    text: "A classic sidecar never exits, so a Job with one never completes. A native sidecar is terminated for you when the main container finishes."
+  - to: secrets-store-csi
+    text: "A sidecar that refreshes a short-lived credential into a shared volume is the usual alternative to restarting the Pod for rotation."
+reviewed: 2026-11-05
+---
+
+The sidecar pattern is as old as Kubernetes: put a second container in the Pod to do something
+for the first one -- terminate TLS, ship logs, refresh a token, proxy outbound traffic -- and let
+the shared network namespace and shared volumes do the integration. Nothing in the app changes,
+which is exactly why service meshes and log pipelines adopted it.
+
+**For years it was a pattern with no support, and it showed.** An ordinary container in a Pod has
+no ordering: the app could start and begin serving before the proxy was listening, dropping
+traffic for a second or two on every Pod start. At the other end, a container that never exits
+keeps a Job's Pod alive forever, so every batch workload with a mesh sidecar needed a hack to
+kill it. And on shutdown, the proxy could die before the app had drained.
+
+**The native sidecar is an init container with `restartPolicy: Always`**, and that one field
+changes the semantics completely: it starts in the init sequence (so it is up before the app
+containers), it is allowed to keep running instead of having to exit, and it is terminated only
+after the main containers finish. That makes the ordering correct in both directions and makes
+sidecars safe in Jobs -- the two problems that generated most of the workarounds in the
+ecosystem.
+
+**The cost is still per Pod.** A sidecar's CPU and memory requests are added to every replica, so
+a 100 MiB proxy across 200 Pods is 20 GiB of cluster memory doing plumbing. That arithmetic is
+the main argument behind ambient or node-level mesh modes, and the reason a log shipper is
+usually better as one DaemonSet than as a sidecar per Pod.
+
+**Choosing between sidecar and DaemonSet** comes down to whether the helper needs the app's
+network identity and files. A proxy enforcing mTLS per workload does; a node log collector
+reading `/var/log/containers` does not, and a DaemonSet costs one copy per node instead of one
+per Pod.

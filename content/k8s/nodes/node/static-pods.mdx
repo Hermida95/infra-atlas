@@ -1,0 +1,52 @@
+---
+id: static-pods
+title: "Static Pods"
+type: concept
+domain: node
+summary: "A Pod manifest in a directory on the node, run by the kubelet with no API server involved. It is how the control plane starts before there is a control plane."
+level: intermediate
+access: free
+monogram: SP
+exam: [cka]
+relations:
+  related: [kubelet, kubeadm]
+connects:
+  - to: kubelet
+    text: "The kubelet watches /etc/kubernetes/manifests directly and runs whatever is there, which is the one case where it needs no API server at all."
+  - to: kubeadm
+    text: "kubeadm installs the API server, etcd, scheduler and controller-manager as static Pods, which is why they can start before the cluster exists."
+  - to: apiserver
+    text: "A mirror Pod is created in the API once it is reachable, so the control plane is visible with kubectl even though kubectl never created it."
+  - to: troubleshooting
+    text: "Editing a file in the manifests directory restarts that control plane component, which is the recovery path when the API server itself is broken."
+reviewed: 2026-11-05
+---
+
+A static Pod is a Pod the kubelet runs because it found a YAML file in a watched directory,
+typically `/etc/kubernetes/manifests`. There is no controller, no scheduler, no API server in the
+path. Write the file and the Pod starts; delete it and the Pod stops; edit it and the kubelet
+restarts the container. This is the bootstrap primitive: a chicken-and-egg solution for running
+the API server itself as a Pod.
+
+**Mirror Pods are what you see in kubectl.** Once the kubelet can reach an API server, it creates
+a read-only copy of each static Pod so the cluster can observe it -- which is why
+`kubectl -n kube-system get pods` lists `kube-apiserver-<node>` even though nobody applied it.
+Deleting that mirror Pod does nothing useful: the kubelet recreates it, because the real
+definition is the file on disk. This is a regular source of confusion during an incident.
+
+**It is also the recovery path when the control plane is down.** If the API server will not
+start after a bad flag or an expired certificate, the fix is to SSH to the control plane node and
+edit `/etc/kubernetes/manifests/kube-apiserver.yaml`; the kubelet notices the change in a second
+or two and restarts it. `crictl ps -a` and `crictl logs` are how you read what happened, since
+`kubectl logs` needs the thing you are trying to fix. Keeping a copy of those manifests before
+changing them is the cheapest insurance in cluster administration.
+
+**For workloads, use a DaemonSet instead.** Static Pods cannot be managed, updated, rolled or
+observed through the API; they require filesystem access to every node. The legitimate
+remaining uses are the control plane itself and a very small category of node agents that must
+run before the cluster is reachable.
+
+From a security standpoint, write access to that directory is root on the cluster: a static Pod
+can mount the host filesystem and bypasses admission control entirely, because admission is an
+API server feature and no API call is being made. That is exactly why Pod Security and policy
+engines cannot be your only line of defence on the control plane nodes.

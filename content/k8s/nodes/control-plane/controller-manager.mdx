@@ -1,0 +1,71 @@
+---
+id: controller-manager
+title: "kube-controller-manager"
+type: service
+domain: control-plane
+summary: "One binary running about forty reconciliation loops. The Deployment, Node, Job and garbage-collection controllers are all in here, sharing one leader election."
+logo: kubernetes
+level: core
+access: free
+exam: [cka]
+relations:
+  related: [reconciliation, leader-election]
+connects:
+  - to: reconciliation
+    text: "Every loop inside is the same pattern: watch a kind, compare spec with the world, write status. The built-ins are the reference implementation."
+  - to: leader-election
+    text: "Only one replica is active at a time, holding a Lease. Running three of them is for failover, not throughput."
+  - to: owner-references
+    text: "The garbage collector lives here, which is why deleting a parent eventually deletes its children without the parent doing anything."
+  - to: node-conditions
+    text: "The node lifecycle controller marks a node NotReady when its kubelet stops reporting, and starts evicting after the toleration window."
+  - to: service-account
+    text: "The token and ServiceAccount controllers keep the projected token machinery and the default ServiceAccount in every namespace working."
+lead: "A handful of the loops inside, picked because their behaviour is the behaviour people have to debug."
+parts:
+  - name: "Deployment and ReplicaSet"
+    kind: loop
+    text: "Creates a ReplicaSet per Pod template hash and moves replicas between them. Every rolling update you watch is these two loops."
+  - name: "Node lifecycle"
+    kind: node
+    text: "Watches heartbeats, sets NotReady, adds the unreachable taint and evicts after the toleration seconds. The reason a dead node takes minutes, not seconds."
+  - name: "Garbage collector"
+    kind: trigger
+    text: "Deletes objects whose owners are gone, and runs the foreground and orphan cascade modes."
+  - name: "Endpoint and EndpointSlice"
+    kind: services
+    text: "Turns a Service's selector plus Pod readiness into the list kube-proxy and every mesh actually programs."
+  - name: "PersistentVolume binder"
+    kind: cylinder
+    text: "Matches claims to volumes, calls out to provisioning, and keeps the protection finalizers honest."
+layout: cluster
+reviewed: 2026-11-05
+---
+
+The controller-manager is a single process hosting dozens of independent controllers, each a
+loop over one resource kind. There is nothing special about them: they use the same API, the
+same watches and the same status-writing discipline an operator you write would use. Reading
+their behaviour as "Kubernetes does X" hides the fact that some specific loop does X, with its
+own timings and its own failure modes.
+
+**Leader election, not sharding.** All the loops run in one elected leader, which holds a Lease
+object and renews it. The other replicas sit idle waiting for the lease to expire. So HA here
+means failover in a few seconds, not more throughput, and a controller-manager that is CPU-bound
+needs a bigger node rather than another replica.
+
+**Its timings explain things that look like bugs.** A node that loses its kubelet is not marked
+`NotReady` instantly -- it is marked after the heartbeat grace period, and its Pods are not
+deleted until the `node.kubernetes.io/unreachable` toleration expires, which defaults to five
+minutes. That five minutes is why a hard node failure takes so much longer to heal than a Pod
+crash, and why workloads that need faster failover shorten
+`tolerationSeconds` themselves rather than waiting for the default.
+
+**It needs very wide permissions**, because it acts on behalf of every controller inside it,
+and it is the reason cloud credentials used to sit in the control plane: the cloud-specific
+loops were originally in here. Those have moved out into the cloud-controller-manager, which is
+why a modern cluster can run the generic control plane with no provider credentials at all.
+
+For debugging, `kubectl -n kube-system logs <controller-manager-pod>` plus the controller name
+in the log line tells you which loop is unhappy, and its `/metrics` endpoint exposes per-loop
+work queue depth and retry rates -- the honest measure of whether the control plane is keeping
+up with the cluster.

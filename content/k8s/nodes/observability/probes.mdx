@@ -1,0 +1,73 @@
+---
+id: probes
+title: "Probes"
+type: concept
+domain: observability
+hub: true
+summary: "Three checks with three different jobs. Readiness controls traffic, liveness controls restarts, startup buys time -- and confusing the first two causes outages."
+level: core
+access: free
+monogram: PRB
+exam: [ckad, cka]
+relations:
+  related: [pod-lifecycle, service]
+connects:
+  - to: service
+    text: "Only Ready Pods are in a Service's endpoints, which makes the readiness probe the switch that puts a Pod in and out of rotation."
+  - to: kubelet
+    text: "Probes are executed by the kubelet on the node, so they keep working when the control plane is unreachable."
+  - to: rolling-update
+    text: "A rollout advances as new Pods become Ready, so a permissive readiness probe lets a broken version roll through every replica."
+  - to: graceful-shutdown
+    text: "Failing readiness on SIGTERM is the clean way to drain: the Pod leaves the endpoints before it stops accepting work."
+lead: "The three probes, and what each one does when it fails."
+parts:
+  - name: "readinessProbe"
+    kind: gate
+    text: "Fails: the Pod is removed from Service endpoints. Does not restart anything. The one that controls traffic."
+  - name: "livenessProbe"
+    kind: trigger
+    text: "Fails: the container is killed and restarted. Only useful for states a restart actually fixes, like a deadlock."
+  - name: "startupProbe"
+    kind: loop
+    text: "Runs first and suspends the other two until it passes, so a slow start does not need a huge liveness threshold."
+  - name: "Handlers"
+    kind: plugin
+    text: "httpGet, tcpSocket, exec, or gRPC. A tcpSocket check passes as soon as the port is open, which is usually too early."
+layout: row
+reviewed: 2026-11-05
+---
+
+Probes are health checks the kubelet runs against a container. There are three, they have
+completely different consequences, and almost every probe-related incident comes from using the
+wrong one.
+
+**Readiness controls traffic.** When it fails, the Pod is taken out of its Service's endpoints and
+stops receiving requests -- and nothing else happens. That makes it the right place to express
+"I cannot serve right now": a dependency is down, a cache is warming, the queue backlog is too
+deep. It is also what a rolling update waits on, which makes it the only thing standing between a
+broken new version and all your replicas.
+
+**Liveness controls restarts, and it should be used sparingly.** When it fails past its threshold,
+the container is killed. The only conditions it should detect are those a restart genuinely
+fixes -- a deadlock, a wedged event loop. Pointing a liveness probe at an endpoint that checks
+the database is the classic self-inflicted outage: the database has a bad minute, every replica
+fails liveness, every replica restarts simultaneously, and now you have a cold fleet hammering a
+struggling database. **Liveness should never check a dependency.**
+
+**Startup probes exist because the other two have one set of timings.** A JVM that takes ninety
+seconds to start needs either a liveness `failureThreshold` high enough to cover it -- which then
+also applies forever, making real failures slow to detect -- or a startup probe, which runs with
+its own generous budget and hands over to the normal probes once it passes. Any slow-starting
+application should have one.
+
+**The handler choice matters more than the timings.** A `tcpSocket` probe succeeds the moment the
+port is bound, which for most frameworks is before the application can answer anything -- so it
+reports ready far too early. An `httpGet` to a real endpoint is what you want, and the endpoint
+should check the things the Pod needs to serve *this* request, not the health of the whole
+system. Two endpoints, `/healthz` for liveness (is the process sane) and `/readyz` for readiness
+(can I serve), is the pattern worth implementing.
+
+**Having no readiness probe is the most expensive default.** A Pod with none is Ready as soon as
+the container starts, so it receives traffic before it can serve it, and a rollout completes
+regardless of whether the new version works at all.

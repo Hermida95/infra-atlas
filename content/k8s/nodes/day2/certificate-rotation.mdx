@@ -1,0 +1,53 @@
+---
+id: certificate-rotation
+title: "Certificate rotation"
+type: howto
+domain: day2
+summary: "A kubeadm cluster is held together by certificates that expire after a year. The failure is total, sudden, and on a date nobody wrote down."
+level: advanced
+access: free
+monogram: CRT
+exam: [cka]
+relations:
+  related: [authentication, kubeadm]
+connects:
+  - to: kubeadm
+    text: "kubeadm certs check-expiration lists every certificate and its date, and kubeadm certs renew all renews them on a control plane node."
+  - to: authentication
+    text: "Client certificates authenticate components and administrators, and an expired one is a 401 on a configuration that worked yesterday."
+  - to: static-pods
+    text: "Renewing control plane certificates means restarting the static Pods that use them, which is done by touching their manifests."
+  - to: admission-webhook
+    text: "A webhook's own serving certificate expires too, and when it does every write it matches is rejected."
+reviewed: 2026-11-05
+---
+
+A kubeadm-built cluster uses mutual TLS everywhere: API server serving certificate, API server to
+etcd, API server to kubelet, controller-manager and scheduler clients, the front proxy, and the
+admin kubeconfig. Most of them are issued for one year. The CA is good for ten, which is why a
+cluster built and forgotten works perfectly for twelve months and then stops completely.
+
+**The symptoms are unambiguous once you have seen them and baffling the first time.**
+`kubectl` returns a TLS error or a 401 against a kubeconfig that has not changed. The API server
+will not start, or starts and cannot reach etcd. Nodes go `NotReady` because the kubelet's client
+certificate expired. Nothing in the cluster explains it, because the component that would tell you
+is the one that cannot authenticate.
+
+**The commands are short.** `kubeadm certs check-expiration` on a control plane node prints every
+certificate with its residual time -- the single most useful preventive check in cluster
+administration, and worth running from cron with an alert. `kubeadm certs renew all` reissues
+them, and then the control plane static Pods must be restarted to pick them up, which is done by
+moving their manifests out of `/etc/kubernetes/manifests` and back. A `kubeadm upgrade` renews
+them as a side effect, which is why clusters upgraded regularly never hit this.
+
+**Kubelet certificates rotate themselves if you let them.**
+`rotateCertificates` plus `serverTLSBootstrap` makes the kubelet request renewal through the
+certificates API, leaving only the control plane set to manage. The CSRs then need approving --
+automatically by the signer, or by a controller -- and a cluster where nobody approves them has
+nodes that will fail in a year regardless of the setting.
+
+**The other expiring certificates are not kubeadm's.** Every admission and conversion webhook has
+a serving certificate, usually issued by cert-manager; when one expires, every write it matches
+is rejected and the cluster looks broken in a way that has nothing to do with Kubernetes
+certificates. Ingress certificates expire too, though at least those fail visibly. An inventory of
+what expires when, with alerts at thirty days, is the whole of the preventive work.

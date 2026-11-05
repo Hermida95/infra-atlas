@@ -1,0 +1,67 @@
+---
+id: authentication
+title: "Authentication"
+type: concept
+domain: security
+summary: "How the API server decides who you are. Kubernetes has no user database, so every human identity comes from somewhere else."
+level: intermediate
+access: free
+monogram: AUT
+exam: [cka, cks]
+relations:
+  related: [rbac, kubeconfig]
+connects:
+  - to: apiserver
+    text: "It is the first stage of the request chain: it produces a username and groups, or a 401, before any permission is evaluated."
+  - to: rbac
+    text: "RBAC binds to the username and groups authentication produced, which is why group claims from an identity provider are the practical unit."
+  - to: service-account
+    text: "Workloads authenticate with a projected token signed by the cluster, which is the one identity type Kubernetes issues itself."
+  - to: certificate-rotation
+    text: "A client certificate cannot be revoked and expires on its own schedule, which is why it is a bootstrap credential and not an access model."
+lead: "The methods a cluster can accept, and what each is appropriate for."
+parts:
+  - name: "Client certificates"
+    kind: shell
+    text: "A cert signed by the cluster CA; its CN is the username and its O entries are groups. Cannot be revoked, so for bootstrap and break-glass only."
+  - name: "ServiceAccount tokens"
+    kind: meta
+    text: "JWTs signed by the cluster, audience-scoped and expiring. The identity of workloads, and the only kind Kubernetes mints."
+  - name: "OIDC"
+    kind: ring
+    text: "An external identity provider issues the token; the API server validates it and reads username and groups from claims. The right answer for humans."
+  - name: "Webhook and exec plugins"
+    kind: plugin
+    text: "The API server asks an external service, or kubectl runs a binary to fetch a token. How every managed cloud cluster authenticates."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Authentication establishes a username and a set of groups, and then stops. It makes no decision
+about access -- that is RBAC's job -- and the separation is clean enough that you can reason about
+them independently. There is no User object in Kubernetes: the API server validates a credential
+and produces strings.
+
+**Client certificates are the mechanism to understand and then stop using.** The CN becomes the
+username and each O becomes a group, signed by the cluster CA. They work with no external
+dependency, which is why kubeadm bootstraps with them. They also cannot be revoked -- there is no
+CRL check -- so a leaked certificate is valid until it expires, and the only remedy is rotating
+the CA, which invalidates every certificate in the cluster. One per administrator, as break-glass,
+stored properly.
+
+**OIDC is the correct model for people.** The identity provider authenticates, issues a token with
+username and group claims, and the API server validates its signature and maps the claims. Then
+joining and leaving the company is a change in one place, MFA is the provider's problem, and RBAC
+binds to groups rather than to individuals. Managed clusters wrap this in their own IAM -- EKS
+with access entries, GKE with Google identities -- reached through an
+`exec` credential plugin in the kubeconfig that mints a short-lived token per command.
+
+**Anonymous access exists and should be off.** `--anonymous-auth=true` gives unauthenticated
+requests the username `system:anonymous` in group `system:unauthenticated`, which is harmless
+only as long as nothing is bound to that group -- and a surprising number of quickstart guides
+bind something. Likewise any binding to `system:authenticated` grants every identity in the
+cluster, including every ServiceAccount.
+
+**Anything you accept, log.** The audit log records the authenticated user on every request,
+which is what makes an incident reconstructable. Without it you have RBAC decisions and no record
+of who made them.

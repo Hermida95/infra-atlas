@@ -1,0 +1,66 @@
+---
+id: validating-admission-policy
+title: "ValidatingAdmissionPolicy"
+type: concept
+domain: security
+summary: "CEL expressions evaluated inside the API server. Policy with no webhook, no certificates and no way to take the cluster down with it."
+level: advanced
+access: free
+monogram: VAP
+exam: [cks]
+relations:
+  related: [admission, policy-engine]
+  alternative_to: [policy-engine]
+connects:
+  - to: admission
+    text: "It runs in-process in the validating phase, so there is no network call and no failurePolicy problem to reason about."
+  - to: policy-engine
+    text: "It covers validation only. Mutation, generation and cross-object rules still need a webhook engine."
+  - to: crd
+    text: "The same CEL validation rules can be embedded in a CRD schema, which is how an operator validates its own resources without a webhook."
+lead: "Three objects, and the variables a CEL expression has to work with."
+parts:
+  - name: "ValidatingAdmissionPolicy"
+    kind: sheet
+    text: "The rule: which resources it matches and the CEL expressions that must evaluate true, with a message for each."
+  - name: "ValidatingAdmissionPolicyBinding"
+    kind: gate
+    text: "Where it applies -- which namespaces, and whether in Deny, Warn or Audit mode. One policy, many bindings."
+  - name: "paramKind"
+    kind: meta
+    text: "An optional parameter object, so one policy can be bound several times with different limits."
+  - name: "CEL variables"
+    kind: code
+    text: "object, oldObject, request, authorizer, params. Enough for most rules, and deliberately without network or cluster lookups."
+layout: stack
+reviewed: 2026-11-05
+---
+
+ValidatingAdmissionPolicy moves policy into the API server. You write CEL expressions --
+`object.spec.containers.all(c, has(c.resources.limits))` -- and the API server evaluates them
+during admission. No webhook, no Deployment, no TLS certificate to rotate, no timeout, and no
+possibility of a policy outage making the cluster unwritable.
+
+**That last property is the reason it exists.** The standard failure story of policy engines is a
+webhook with `failurePolicy: Fail` whose Pods are unschedulable, which rejects every matching
+write -- including the write that would fix it. In-process evaluation has no such mode. For
+rules that are just "this field must be set", that is a strictly better place to run them.
+
+**The separation of policy and binding is genuinely useful.** The policy is the rule; the binding
+says where and how hard. The same "resources must be set" policy can be bound as
+`Deny` in production namespaces, `Warn` in staging and `Audit` everywhere else, and with
+`paramKind` it can carry different thresholds per binding -- one policy object, many enforcement
+levels, which is what makes a gradual rollout practical.
+
+**CEL is deliberately limited.** Expressions are side-effect free and bounded in cost, with no
+network access and no reading of other objects, so they cannot be slow or unpredictable. That
+rules out "no two Ingresses may claim the same hostname", which needs a cluster lookup, and
+anything requiring external data. The `authorizer` variable is the one escape: it lets a policy
+ask whether the requesting user has a particular permission, which is how you write
+"only someone who can do X may set field Y".
+
+**It cannot mutate.** MutatingAdmissionPolicy is following the same path, and until it lands,
+anything that needs to *change* an object -- inject defaults, pin digests, add a security context
+-- is still a webhook. The practical arrangement for most clusters is Pod Security Admission for
+the standard profiles, CEL policies for the cluster's own validation rules, and a policy engine
+kept for mutation and generation.

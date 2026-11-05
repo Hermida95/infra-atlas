@@ -1,0 +1,52 @@
+---
+id: access-modes
+title: "Access modes"
+type: concept
+domain: storage
+summary: "ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod. A property of the storage technology, not a preference, and the usual reason two replicas cannot share a volume."
+level: core
+access: free
+monogram: AM
+exam: [ckad, cka]
+relations:
+  related: [persistent-volume-claim]
+connects:
+  - to: persistent-volume-claim
+    text: "The claim asks for a mode and binding fails if no volume or driver can provide it, so the mode decides what is even possible."
+  - to: deployment
+    text: "A Deployment scaling past one replica with a ReadWriteOnce volume means every Pod after the first is stuck unless they share a node."
+  - to: statefulset
+    text: "Per-Pod claims are the correct answer to ReadWriteOnce: each replica gets its own volume rather than fighting over one."
+reviewed: 2026-11-05
+---
+
+An access mode describes how many nodes can mount a volume, and how. It is a capability of the
+underlying storage, so asking for something the driver cannot do means the claim never binds --
+not a degraded mount, not a warning.
+
+**The four modes, and what they really mean.**
+`ReadWriteOnce` (RWO): read-write by Pods on **one node** -- note node, not Pod, so two Pods on
+the same node can share it. This is what every cloud block device offers: EBS, Persistent Disk,
+Azure Disk.
+`ReadOnlyMany` (ROX): read-only from many nodes, usually only for pre-populated volumes.
+`ReadWriteMany` (RWX): read-write from many nodes, which needs a network filesystem -- NFS, EFS,
+Azure Files, CephFS.
+`ReadWriteOncePod` (RWOP): exactly one Pod in the whole cluster, which is the stricter guarantee a
+single-writer database actually wants, and the one worth using for them.
+
+**The Deployment-plus-RWO problem is the most common storage confusion in Kubernetes.** A
+Deployment with `replicas: 3` and one RWO claim: the first Pod mounts it, and the other two
+either land on the same node and work, or land elsewhere and sit in `ContainerCreating` with a
+multi-attach error. It appears to work in a one-node test cluster and fails in production. There
+are only three real answers: use a StatefulSet so each replica has its own volume; use an RWX
+filesystem if the application genuinely supports concurrent writers; or keep the state out of the
+cluster entirely.
+
+**Most applications are not safe for RWX anyway.** Two writers on the same files need file
+locking that works over the network, and NFS locking is a long-standing source of corruption and
+hangs. SQLite on NFS is a classic data-loss setup. "Shared storage" is often a sign that the
+application should be using object storage or a database rather than a filesystem.
+
+**RWX is also slower and more expensive**, with worse latency characteristics than a block
+device, so reaching for it to avoid a design change is a trade that shows up later as a
+performance problem.

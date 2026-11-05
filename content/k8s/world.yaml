@@ -1,0 +1,18 @@
+# The Kubernetes atlas: what is inside a cluster, read from the object outwards (decision 14).
+#
+# Third world through the same pipeline. `exams` is its own certification vocabulary -- the three
+# CNCF exams -- which is why `exam` is no longer a Literal of AWS ids in the shared schema:
+# `brain validate` accepts these three ids here and rejects saa or sap, and the web builds the
+# filter chips of /k8s from this list.
+id: k8s
+name: "Inside Kubernetes"
+exams:
+  - id: ckad
+    label: "CKAD"
+    name: "Certified Kubernetes Application Developer"
+  - id: cka
+    label: "CKA"
+    name: "Certified Kubernetes Administrator"
+  - id: cks
+    label: "CKS"
+    name: "Certified Kubernetes Security Specialist"

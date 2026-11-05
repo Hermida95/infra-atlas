@@ -1,0 +1,51 @@
+---
+id: dynamic-provisioning
+title: "Dynamic provisioning"
+type: concept
+domain: storage
+summary: "A claim causes a volume to be created to fit it. It is what makes storage self-service, and what makes an abandoned namespace an ongoing bill."
+level: core
+access: free
+monogram: DP
+exam: [ckad, cka]
+relations:
+  related: [storage-class, persistent-volume-claim]
+connects:
+  - to: storage-class
+    text: "The class is the recipe: which driver, which disk type, which reclaim policy the new volume will inherit."
+  - to: csi
+    text: "The external-provisioner sidecar watches claims and calls CreateVolume on the driver, which is where the real disk comes from."
+  - to: reclaim-policy
+    text: "Whether deleting the claim also deletes the disk is the difference between self-service storage and an unbounded cost."
+  - to: resource-quota
+    text: "A quota on requests.storage per class is the only thing standing between self-service and someone claiming a terabyte."
+reviewed: 2026-11-05
+---
+
+Dynamic provisioning is the loop that makes a PersistentVolumeClaim produce storage: the
+external-provisioner sidecar sees a claim naming a StorageClass, calls `CreateVolume` on the CSI
+driver with the class's parameters, and creates a matching PersistentVolume bound to the claim.
+No administrator is involved, which is the entire point.
+
+**It turns storage into self-service**, and that is both the benefit and the risk. A developer
+asking for 100Gi gets 100Gi, billed monthly, with no approval step. The controls that make this
+sustainable are a ResourceQuota limiting `requests.storage` (optionally per class, so the
+expensive class is capped tighter), and classes that encode sensible defaults rather than
+offering the most expensive disk by accident.
+
+**`WaitForFirstConsumer` is the setting that makes it correct in a multi-zone cluster.** With
+immediate binding, the volume is created before anything knows where the Pod will run, so the
+Pod becomes pinned to whatever zone the provisioner picked -- and if that zone is full, the Pod
+is unschedulable with a volume already paid for. Deferring the creation until the scheduler has
+chosen inverts the dependency properly.
+
+**Deleting is where the money goes.** With `reclaimPolicy: Delete`, removing the claim removes
+the disk -- clean, and dangerous for data. With `Retain`, the disk survives as a
+`Released` volume that no new claim will bind to, which is safe and leaves orphans that have to
+be found and deleted by hand. Teams that pick `Retain` for safety and never do the second part
+accumulate a long tail of cost, and an inventory check of unbound volumes is worth scheduling.
+
+**The remaining case for static provisioning** is storage that already exists: a volume restored
+from a snapshot, an NFS export managed elsewhere, a disk with data you cannot afford to have
+recreated. Then you write the PersistentVolume by hand and a claim with a matching
+`volumeName`, and dynamic provisioning stays out of it.

@@ -1,0 +1,75 @@
+---
+id: version-upgrade
+title: "Version upgrades"
+type: howto
+domain: day2
+hub: true
+summary: "Three minor releases a year and a finite support window, so this is a quarterly task forever. Control plane first, nodes second, add-ons third, deprecated APIs before any of it."
+level: intermediate
+access: free
+monogram: UPG
+exam: [cka]
+relations:
+  related: [api-deprecation, node-drain]
+connects:
+  - to: api-deprecation
+    text: "The work that actually breaks things is finding manifests using an API the new version removes, and that has to happen before the upgrade."
+  - to: node-drain
+    text: "Upgrading nodes means draining them one at a time, which is where PodDisruptionBudgets and graceful shutdown are tested for real."
+  - to: etcd-backup
+    text: "A snapshot before touching the control plane is the only rollback for a control plane upgrade that goes wrong."
+  - to: kubeadm
+    text: "On a self-managed cluster this is kubeadm upgrade plan and apply, control plane node by control plane node."
+lead: "The order, and why each step comes where it does."
+parts:
+  - name: "Audit for removed APIs"
+    kind: sheet
+    text: "Before anything else. pluto or kubent against manifests and live objects, because a removed API breaks applies after the upgrade, not during it."
+  - name: "Back up etcd"
+    kind: cylinder
+    text: "A snapshot, and the certificates to restore it. The only way back from a control plane upgrade that fails."
+  - name: "Control plane"
+    kind: core
+    text: "One node at a time, API server first. It must be upgraded before the nodes: a newer kubelet than the API server is unsupported."
+  - name: "Nodes"
+    kind: node
+    text: "Drain, upgrade, uncordon, one at a time. Or replace them entirely, which is better if your nodes are immutable."
+  - name: "Add-ons"
+    kind: plugin
+    text: "CNI, CSI drivers, CoreDNS, kube-proxy, metrics-server, ingress controller. Each has its own compatibility matrix with the new version."
+layout: row
+reviewed: 2026-11-05
+---
+
+Kubernetes ships three minor versions a year and supports roughly the last three, which means a
+cluster has to be upgraded two or three times a year, forever. There is no steady state. Teams
+that treat it as a project rather than a routine end up several versions behind, at which point
+the upgrade is genuinely hard because it has to be done repeatedly in sequence -- you cannot skip
+minor versions.
+
+**The version skew rules constrain the order.** The kubelet may be up to three minor versions
+behind the API server but never ahead; the controller-manager and scheduler may not be ahead of
+the API server either. So: control plane first, nodes after. On a multi-node control plane, one
+node at a time, and the API server before the rest on each.
+
+**The work that matters happens before the upgrade.** Removed APIs are what break things, and they
+break *after* the upgrade, when a pipeline applies a manifest the server no longer understands --
+long after the maintenance window closed. `pluto` or `kubent` against your manifest repositories
+and your live objects produces the list, and the audit log filtered by removed API version tells
+you which clients are still calling them. Fixing that list is the upgrade; the rest is mechanical.
+
+**Nodes: upgrade in place or replace.** In place means cordon, drain, upgrade the kubelet and
+runtime, uncordon -- and it leaves a node whose OS has accumulated state. Replacement means a new
+node from a new image joins and the old one is drained and deleted, which is cleaner, tests your
+ability to lose a node, and is what managed node groups and Karpenter do anyway. Replacement is
+the better default if your workloads can take it, and the thing that proves they can is
+PodDisruptionBudgets plus graceful shutdown.
+
+**Add-ons are the step that is forgotten and then blamed on Kubernetes.** The CNI, the CSI
+drivers, the ingress controller, CoreDNS, metrics-server and every operator have their own
+supported ranges. Checking each one's compatibility matrix before the upgrade, and after, is
+tedious and is where the surprises actually live -- a cluster that upgraded cleanly and lost its
+storage driver is an upgrade that was not finished.
+
+**Do it in a staging cluster first, and do it often.** The cost of each upgrade falls sharply
+when they are small and frequent, and the cost of falling behind compounds.

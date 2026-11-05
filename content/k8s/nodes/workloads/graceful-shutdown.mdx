@@ -1,0 +1,72 @@
+---
+id: graceful-shutdown
+title: "Graceful shutdown"
+type: concept
+domain: workloads
+summary: "SIGTERM, a grace period, then SIGKILL -- while endpoint removal races the signal. This is why requests are lost during a perfectly normal deploy."
+level: intermediate
+access: free
+monogram: GS
+exam: [ckad, cka]
+relations:
+  related: [pod-lifecycle, rolling-update]
+connects:
+  - to: endpointslice
+    text: "Endpoint removal and SIGTERM are concurrent, and the removal takes time to reach every node, so a dying Pod can still receive new connections."
+  - to: rolling-update
+    text: "Every rollout terminates every Pod, so a shutdown bug shows up as errors on each deploy and nowhere else."
+  - to: pod-lifecycle
+    text: "Terminating is this sequence in progress: the Pod has a deletionTimestamp and the clock is running."
+  - to: statefulset
+    text: "Ordered termination in reverse ordinal is what lets a cluster member leave cleanly before the next one goes."
+lead: "What happens, in order, when a Pod is deleted. The first two steps happen at the same time, and that is the whole problem."
+parts:
+  - name: "deletionTimestamp set"
+    kind: trigger
+    text: "The Pod is marked. The endpoint controller starts removing it from EndpointSlices, and the kubelet starts shutting it down -- concurrently."
+  - name: "preStop hook"
+    kind: gate
+    text: "Runs before SIGTERM and blocks it. A sleep here is the standard way to keep serving while the endpoint deletion propagates."
+  - name: "SIGTERM"
+    kind: bell
+    text: "Sent to PID 1 of each container. If your process does not forward or handle it, nothing happens until the grace period ends."
+  - name: "Grace period"
+    kind: loop
+    text: "terminationGracePeriodSeconds, 30 by default, counted from the deletion -- and the preStop hook spends it too."
+  - name: "SIGKILL"
+    kind: split
+    text: "Unconditional. Connections drop, writes in flight are lost, and nothing is logged by the application."
+layout: row
+reviewed: 2026-11-05
+---
+
+Pod termination is a race that Kubernetes does not win for you. The moment a Pod is deleted, two
+things start at once: the endpoint controllers begin removing it from EndpointSlices, and the
+kubelet begins shutting it down. Endpoint removal then has to propagate to every node's
+kube-proxy or mesh proxy, which takes anywhere from milliseconds to seconds. In that window the
+Pod is still a valid target -- but it has already been told to stop.
+
+**So a well-behaved application that exits immediately on SIGTERM loses requests.** This is
+counter-intuitive and it is the explanation behind most "we see 502s on every deploy" reports.
+The fix is to keep serving for a few seconds after the signal: either a `preStop` hook with
+`sleep 5`, which delays SIGTERM entirely, or an application that handles SIGTERM by failing its
+readiness probe, waiting, and only then draining and exiting. Both work; the hook needs no code
+change, which is why it is the common answer.
+
+**PID 1 semantics catch people next.** A container whose entrypoint is a shell script (`sh -c
+"python app.py"`) has the shell as PID 1, and shells do not forward signals to children by
+default -- so SIGTERM is received and ignored, the app keeps running, and 30 seconds later
+everything is SIGKILLed. Running the process directly, using `exec` in the script, or adding a
+tiny init like `tini` all solve it. A clean deploy that always takes exactly 30 seconds per Pod
+is this bug, every time.
+
+**The grace period covers everything.** `terminationGracePeriodSeconds` is counted from deletion
+and includes the preStop hook, so a hook sleeping 20 seconds leaves 10 for the application. For
+work that genuinely takes longer -- finishing a long request, flushing a batch -- raise the
+period deliberately, and know that `kubectl delete --grace-period=0 --force` discards all of it
+and is unsafe for anything stateful.
+
+**Draining is more than closing the listener.** In-flight requests should be completed, long
+polls and websockets closed with a reason, consumers should commit their offsets and leave the
+group, and any lease or lock should be released. That is application work; Kubernetes only
+provides the window.

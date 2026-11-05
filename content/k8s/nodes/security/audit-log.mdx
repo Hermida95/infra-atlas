@@ -1,0 +1,66 @@
+---
+id: audit-log
+title: "Audit logging"
+type: concept
+domain: security
+summary: "The API server's record of who did what, when, and whether it was allowed. The only complete account of changes to a cluster, and off by default."
+level: intermediate
+access: free
+monogram: AUD
+exam: [cka, cks]
+relations:
+  related: [apiserver, authentication]
+connects:
+  - to: apiserver
+    text: "Audit is an API server feature: it records every request that reaches it, with the authenticated identity and the decision."
+  - to: authentication
+    text: "The identity in each entry is what authentication produced, which is what makes an incident attributable to a person or a ServiceAccount."
+  - to: events
+    text: "Events are what controllers say about objects and are garbage-collected within the hour; the audit log is what the API server recorded, and it is kept."
+  - to: troubleshooting
+    text: "It answers who deleted it and when, which no other source in the cluster can."
+lead: "Four levels per rule, and the policy decides which applies to what."
+parts:
+  - name: "None"
+    kind: split
+    text: "Do not log. Used to drop the high-volume noise -- kubelet watches, leader election leases -- before it floods everything else."
+  - name: "Metadata"
+    kind: meta
+    text: "Who, what, when, verb, decision. No bodies. The right default for most traffic and for every read of a Secret."
+  - name: "Request"
+    kind: sheet
+    text: "Metadata plus the submitted object. Useful on writes to RBAC and workloads, where the content is the evidence."
+  - name: "RequestResponse"
+    kind: panel
+    text: "Both bodies. Expensive and the only thing that reconstructs exactly what changed -- worth it on a narrow set of resources."
+layout: row
+reviewed: 2026-11-05
+---
+
+Audit logging records every request the API server handles: the authenticated user, the verb, the
+resource, the source IP, the authorisation decision, and -- depending on the level -- the request
+and response bodies. Because every change in a cluster goes through the API server, this is the
+complete record. Nothing else comes close: Events are controller commentary and expire in an
+hour, and application logs know nothing about who called the API.
+
+**It is off by default on a self-managed cluster** and requires a policy file and flags on the API
+server, plus somewhere for the output to go (a file, rotated and shipped, or a webhook to a
+collector). On managed clusters it is a switch -- EKS sends it to CloudWatch, GKE to Cloud
+Logging -- and the common finding in an audit is that nobody turned it on.
+
+**Writing the policy is the whole task**, because logging everything at RequestResponse is
+unaffordable and logging nothing useful is the usual result of trying to be careful. A policy that
+works: drop the noise first (`None` for watches, for the kubelet's own reads, for leases),
+`RequestResponse` for a narrow high-value set (secrets, configmaps, RBAC objects, webhook
+configurations), `Request` for workload writes, and `Metadata` as the catch-all. Rules are
+evaluated in order and the first match wins, so the drops have to come first.
+
+**It is also the tool for migrations and deprecations.** Filtering the log for a removed API
+version tells you exactly which clients are still using it, with their user agents, which turns
+an upgrade from a guess into a list. The same trick finds who is still using a ServiceAccount you
+want to delete.
+
+**Two things to get right.** The log must leave the control plane node -- an audit log that an
+attacker with control plane access can edit is not evidence -- and it must be retained long
+enough to be useful, which for a security log usually means a year rather than the two weeks a
+default logging pipeline gives you.

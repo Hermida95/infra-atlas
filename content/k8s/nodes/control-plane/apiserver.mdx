@@ -1,0 +1,79 @@
+---
+id: apiserver
+title: "kube-apiserver"
+type: service
+domain: control-plane
+hub: true
+summary: "The only component that reads and writes etcd, and the only one anything else talks to. Every request walks the same chain before it becomes a stored object."
+logo: kubernetes
+level: core
+access: free
+exam: [cka, cks]
+relations:
+  related: [etcd, api-groups]
+  used_by: [scheduler, controller-manager, kubelet]
+connects:
+  - to: etcd
+    text: "The API server is the only client etcd has. Everything else in the cluster reads the world through the API, which is why etcd can stay on a private network."
+  - to: authentication
+    text: "Who you are is decided here, from a client certificate, a bearer token or a webhook, before any rule about what you may do is evaluated."
+  - to: rbac
+    text: "Authorisation runs after authentication and before admission: RBAC answers whether this user may perform this verb on this resource."
+  - to: admission
+    text: "The last stage before storage: mutating webhooks can rewrite the object and validating ones can reject it."
+  - to: api-priority-fairness
+    text: "Concurrency is bounded and fairly shared, so one controller hot-looping cannot starve the kubelets out of the API."
+  - to: audit-log
+    text: "Every request can be recorded with who, what, when and the decision, which is the only complete record of what happened to the cluster."
+lead: "A write is not stored until it has survived five stages, in this order, every time."
+parts:
+  - name: "Authentication"
+    kind: gate
+    text: "Client certificate, bearer token, ServiceAccount token or webhook. Produces a username and groups, or a 401. Kubernetes has no user objects."
+  - name: "Authorisation"
+    kind: shell
+    text: "Usually RBAC. Evaluates verb plus resource plus namespace against the identity. A 403 here is a missing rule, not a broken app."
+  - name: "Mutating admission"
+    kind: split
+    text: "Built-in plugins and MutatingWebhookConfigurations, in that order. Sidecar injection, defaulting and policy mutation all happen here."
+  - name: "Schema validation"
+    kind: meta
+    text: "OpenAPI validation and defaulting for built-ins, structural schema for CRDs. A field name typo dies here, which is why it is caught instantly."
+  - name: "Validating admission"
+    kind: bell
+    text: "ValidatingWebhookConfigurations and ValidatingAdmissionPolicy. The last chance to say no, and where a policy engine lives."
+  - name: "etcd write"
+    kind: cylinder
+    text: "Serialised, optionally encrypted at rest, and given a resourceVersion. Only now do watchers see it."
+layout: row
+reviewed: 2026-11-05
+---
+
+The API server is the cluster. Every other component -- the scheduler, the controllers, every
+kubelet, your kubectl, every operator -- is a client of it, and none of them talk to each other
+directly or to etcd. That single-front-door design is what makes the system auditable and
+extensible, and it is also why API server availability is cluster availability for anything
+that needs to change.
+
+**Requests walk a fixed chain:** authenticate, authorise, mutate, validate, validate again,
+store. Knowing the order turns error codes into diagnoses. A 401 means your identity did not
+resolve -- expired certificate, wrong token. A 403 means RBAC has no rule for that verb on that
+resource, and the message names them both. A 422 is schema validation. A rejection that mentions
+a webhook is admission, and that is the one that can fail for reasons entirely outside your
+manifest.
+
+**Running Pods do not need it.** If the API server is down, containers keep running, kubelets
+keep restarting what crashes locally, and kube-proxy keeps forwarding with the rules it already
+has. What stops is change: no scheduling, no scaling, no rollout, no new endpoints, no
+`kubectl`. This is a genuinely good property, and it is why "the control plane is down" is an
+incident but not necessarily an outage.
+
+**It is horizontally scalable and stateless.** Three replicas behind a load balancer is the
+normal HA shape, each talking to the same etcd quorum. The watch cache in each replica is what
+makes thousands of watching clients affordable; a client that polls `list` instead of watching
+is the classic way to melt a control plane, which is what API Priority and Fairness now
+contains.
+
+For security, three things on this component matter more than anything inside the cluster:
+encryption at rest for Secrets, an audit policy that actually records writes, and no anonymous
+or insecure port. Everything in CKS that is not about Pods is about this list.

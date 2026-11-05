@@ -1,0 +1,68 @@
+---
+id: metrics
+title: "Metrics"
+type: concept
+domain: observability
+summary: "Prometheus scraping the kubelet, kube-state-metrics and your applications. Two different things get called metrics, and only one of them has history."
+logo: prometheus
+level: core
+access: free
+exam: [cka]
+relations:
+  related: [metrics-server, kube-state-metrics]
+connects:
+  - to: metrics-server
+    text: "That component serves current usage for control loops; this is the monitoring stack with history, queries and alerts."
+  - to: kube-state-metrics
+    text: "Cluster object state -- replicas desired versus ready, Pod phase, container restarts -- comes from there rather than from the kubelet."
+  - to: cgroups
+    text: "Container CPU and memory figures are cgroup counters read via cAdvisor in the kubelet, which is why they match what the kernel enforces."
+  - to: hpa
+    text: "With the Prometheus Adapter an HPA can scale on any query, which is how requests per second becomes an autoscaling signal."
+lead: "Where the numbers in a Kubernetes dashboard actually come from."
+parts:
+  - name: "cAdvisor in the kubelet"
+    kind: bars
+    text: "Per-container CPU, memory, network and filesystem from cgroups. The source of container_* series, including CPU throttling."
+  - name: "kube-state-metrics"
+    kind: panel
+    text: "The state of API objects, not usage: desired versus ready replicas, Pod phase, PVC status, job completion."
+  - name: "Node exporter"
+    kind: node
+    text: "The node itself: disk, filesystem, load, kernel. What tells you the host is unwell rather than a container."
+  - name: "Application metrics"
+    kind: code
+    text: "Your own counters and histograms. Requests, errors, latency -- the only place the golden signals really come from."
+layout: stack
+reviewed: 2026-11-05
+---
+
+"Metrics" in Kubernetes means two different systems. The resource metrics API served by
+metrics-server gives the current CPU and memory of Pods, for control loops. A monitoring stack --
+Prometheus, or a managed equivalent -- scrapes many sources, keeps history, and lets you query
+and alert. Only the second is observability; confusing them is why some people think
+`kubectl top` is monitoring.
+
+**Four sources make up the Kubernetes part.** cAdvisor inside the kubelet exposes per-container
+cgroup counters, which is where `container_cpu_usage_seconds_total` and the crucial
+`container_cpu_cfs_throttled_seconds_total` come from. kube-state-metrics turns API objects into
+series, which is how you alert on "desired replicas not equal to ready replicas". Node exporter
+covers the host. And your own application exposes what actually matters to users.
+
+**The metrics that catch real problems** are not the obvious ones. CPU throttling, because a Pod
+can be at 40% of its limit and still throttled in bursts. Container restarts over time, because a
+Pod that is Running now may have restarted thirty times today. Pod phase counts, because Pending
+Pods are invisible in a usage dashboard. Volume fullness
+(`kubelet_volume_stats_available_bytes`), because a full PVC is an outage nobody predicted. And
+API server request latency by verb and resource, because control plane slowness manifests as
+mysterious slowness everywhere.
+
+**Cardinality is the operational trap.** A label with unbounded values -- a Pod name, a request
+id, a user id -- multiplies series, and Prometheus memory grows with series count. A cluster that
+recreates Pods often (a CronJob every minute) generates new `pod` label values forever, which is
+the usual cause of a monitoring system that falls over a month after it was installed. Dropping
+high-cardinality labels at scrape time is routine maintenance.
+
+**For autoscaling, the Prometheus Adapter closes the loop**: it serves the custom and external
+metrics APIs from Prometheus queries, so an HPA can scale on requests per second or queue depth
+instead of CPU. That is usually a better signal, and it is the same stack you already run.

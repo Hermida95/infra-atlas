@@ -1,0 +1,52 @@
+---
+id: device-plugins
+title: "Device plugins"
+type: concept
+domain: node
+summary: "How a GPU, a FPGA or an SR-IOV interface becomes a schedulable resource. The node advertises a countable extended resource and Pods request it like memory."
+level: advanced
+access: free
+monogram: DP
+exam: [cka]
+relations:
+  related: [kubelet, requests-and-limits]
+connects:
+  - to: kubelet
+    text: "A plugin registers over a socket in the device plugin directory and reports how many of its devices the node has, which the kubelet adds to capacity."
+  - to: requests-and-limits
+    text: "An extended resource like nvidia.com/gpu is integer-only and cannot be overcommitted: request and limit must be equal."
+  - to: daemonset
+    text: "The plugin itself ships as a privileged DaemonSet, which is why enabling GPUs on a cluster is an installation rather than a flag."
+  - to: taints-and-tolerations
+    text: "Expensive nodes are usually tainted so only workloads that ask for the device land on them, and nothing else wastes the hardware."
+reviewed: 2026-11-05
+---
+
+Kubernetes understands CPU, memory and ephemeral storage. Everything else a node might
+offer -- GPUs, high-performance NICs, FPGAs, hugepages -- arrives through the device plugin
+framework: a DaemonSet registers with the kubelet over a Unix socket in
+`/var/lib/kubelet/device-plugins`, tells it "this node has 4 of `nvidia.com/gpu`", and
+afterwards that string behaves like any other resource in the scheduler.
+
+**Extended resources are integers and cannot be overcommitted.** You request whole units, and
+`requests` must equal `limits` -- so there is no bursting, no fractional GPU, and a Pod asking
+for one GPU holds it exclusively for its lifetime. That is why GPU sharing needs something else
+entirely: time-slicing or MIG partitioning on the NVIDIA side, exposed as more countable units,
+or a scheduler-level queueing system when jobs must wait their turn.
+
+**The plugin does two jobs**: advertise the count, and prepare the container. On allocation it
+returns the device nodes, environment variables and mounts the container needs -- for NVIDIA
+that includes the driver libraries injected from the host, which is why the image does not need
+to carry them and why a driver/toolkit version mismatch on the node breaks Pods that look
+correctly specified.
+
+**Operationally these nodes are special and should be labelled and tainted as such.** A GPU node
+is an order of magnitude more expensive than a general one, so a taint
+(`nvidia.com/gpu=present:NoSchedule`) plus a matching toleration keeps everything that does not
+need the hardware off it, and node labels from the NVIDIA GPU Operator or Node Feature Discovery
+let a Pod ask for a specific model rather than any GPU at all.
+
+The diagnostic path when a GPU Pod stays `Pending` is short: `kubectl describe node` to see
+whether the resource is advertised at all (if not, the plugin DaemonSet is not running or the
+driver is missing), then the scheduler's message to see whether it is advertised but already
+fully allocated.

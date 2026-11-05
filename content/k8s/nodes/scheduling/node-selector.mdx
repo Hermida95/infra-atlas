@@ -1,0 +1,50 @@
+---
+id: node-selector
+title: "nodeSelector"
+type: concept
+domain: scheduling
+summary: "The simplest placement rule: a map of node labels that must all match. No operators, no preferences, no escape -- which is both its virtue and its limit."
+level: core
+access: free
+monogram: NS
+exam: [ckad, cka]
+relations:
+  related: [node-affinity, labels]
+  alternative_to: [node-affinity]
+connects:
+  - to: labels
+    text: "It matches node labels, so what you can select is whatever the cloud controller and your own automation put on the node."
+  - to: node-affinity
+    text: "Affinity is the superset: the same filter plus operators, multiple alternatives and soft preferences."
+  - to: taints-and-tolerations
+    text: "A selector pulls a Pod towards nodes; a taint pushes other Pods away. Dedicated hardware usually needs both."
+reviewed: 2026-11-05
+---
+
+`nodeSelector` is a map of labels that a node must have, all of them, for the Pod to be
+scheduled there. `nodeSelector: {disktype: ssd}` and that is the whole feature. It is a filter in
+the scheduler's first phase, so a Pod whose selector matches nothing stays `Pending` forever with
+`node(s) didn't match Pod's node affinity/selector`.
+
+**What you can select on is mostly given to you.** Cloud providers label nodes with
+`topology.kubernetes.io/zone` and `region`, `node.kubernetes.io/instance-type`, and
+`kubernetes.io/arch` and `os` -- so pinning a workload to a zone, an instance family or
+`arch: arm64` needs no extra setup. Everything beyond that is labels you apply yourself, through
+the node pool definition rather than `kubectl label`, which does not survive the node being
+replaced.
+
+**Its limitation is that it only pulls, it does not push.** A selector sends your Pod to the GPU
+nodes; it does nothing to stop every other Pod from landing there too. The complete pattern for
+dedicated hardware is a label plus a taint: the label lets the right Pods find the nodes, the
+taint keeps everything else off. Doing only half of it is why an expensive node pool ends up
+running the log shipper and three web replicas.
+
+**When to graduate to affinity.** `nodeSelector` cannot express "zone a or zone b", "any
+instance type except this one", or "prefer arm64 but accept amd64". Those need
+`nodeAffinity`, which is strictly more capable and considerably more verbose. The honest advice
+is to use the selector while it fits -- most workloads only need "put this on linux amd64 nodes
+in this pool" -- and reach for affinity when you actually need an operator or a preference.
+
+One field worth knowing alongside it: `nodeName`. Setting it bypasses the scheduler entirely --
+the kubelet on that node picks the Pod up directly, with no filtering, no resource check and no
+taint evaluation. It is a debugging tool and a foot-gun, not a placement strategy.

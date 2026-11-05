@@ -1,0 +1,73 @@
+---
+id: security-context
+title: "securityContext"
+type: concept
+domain: security
+summary: "The user, groups, capabilities and privilege settings a container runs with. The handful of fields that separate a container from a root shell on the node."
+level: core
+access: free
+monogram: SCX
+exam: [ckad, cka, cks]
+relations:
+  related: [pod-security-admission, capabilities]
+connects:
+  - to: pod-security-admission
+    text: "The three standard levels are defined almost entirely in terms of these fields, so complying is a matter of setting them."
+  - to: capabilities
+    text: "Dropping ALL and adding back only what is needed is the field that turns a root container into a nearly harmless one."
+  - to: seccomp
+    text: "seccompProfile RuntimeDefault here is the cheapest meaningful kernel-level restriction available."
+  - to: cri
+    text: "These fields become an OCI runtime spec applied by runc at container creation, so they are enforced by the kernel and not by Kubernetes."
+lead: "The fields that matter, and which level each one sits at."
+parts:
+  - name: "runAsNonRoot and runAsUser"
+    kind: shell
+    text: "Pod or container level. runAsNonRoot makes the kubelet refuse an image whose user is root, which catches the mistake at start rather than later."
+  - name: "allowPrivilegeEscalation"
+    kind: gate
+    text: "Container level. False sets no_new_privs, so a setuid binary inside cannot gain more than the process already has."
+  - name: "capabilities"
+    kind: chips
+    text: "Container level. drop ALL, then add back the one or two a process genuinely needs, usually NET_BIND_SERVICE or none at all."
+  - name: "readOnlyRootFilesystem"
+    kind: sheet
+    text: "Container level. Makes the image immutable at runtime; needs an emptyDir for whatever the process writes."
+  - name: "fsGroup and fsGroupChangePolicy"
+    kind: cylinder
+    text: "Pod level. Sets group ownership on mounted volumes so a non-root process can write to them -- and OnRootMismatch avoids a slow chown of a huge volume."
+  - name: "seccompProfile"
+    kind: ring
+    text: "Pod or container level. RuntimeDefault blocks the syscalls nothing legitimate uses, at essentially no cost."
+layout: stack
+reviewed: 2026-11-05
+---
+
+`securityContext` exists at two levels: on the Pod, where it sets defaults and the fields that are
+inherently Pod-wide (`fsGroup`, `runAsUser` defaults, `seccompProfile`, sysctls), and on each
+container, where it can override and where the capability and privilege-escalation settings live.
+Container-level values win.
+
+**The baseline every workload should have** is short and worth applying by default:
+`runAsNonRoot: true`, `allowPrivilegeEscalation: false`,
+`capabilities: {drop: ["ALL"]}`, `seccompProfile: {type: RuntimeDefault}` and
+`readOnlyRootFilesystem: true`. That is the `restricted` profile in practice, it breaks very
+little, and it removes the overwhelming majority of container escape techniques, which depend on
+a privileged context or a retained capability.
+
+**`privileged: true` is the field that cancels everything else.** It gives the container all
+capabilities, access to all devices, and disables the LSM and seccomp restrictions -- it is
+root on the node with extra steps. The legitimate users are CSI node plugins, CNI agents and a
+few monitoring agents. Anything else asking for it is asking for the cluster.
+
+**`runAsNonRoot` versus `runAsUser` is a useful distinction.** `runAsUser: 1000` forces a UID,
+which fails if the image's files are owned by someone else. `runAsNonRoot: true` only requires
+that the image does not run as root, which pushes the decision into the image where it belongs --
+the Dockerfile adds a `USER`, and the manifest asserts it. Using both is common; using only the
+second is cleaner.
+
+**The two fields that cause real friction** are the read-only root filesystem, which needs an
+`emptyDir` mounted wherever the process writes (`/tmp`, a cache directory, sometimes
+`/var/run`), and volume permissions: a non-root process cannot write to a freshly provisioned
+volume unless `fsGroup` is set. On a large volume, the resulting recursive chown can delay Pod
+start by minutes, which is what `fsGroupChangePolicy: OnRootMismatch` exists to avoid.

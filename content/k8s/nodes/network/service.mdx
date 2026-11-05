@@ -1,0 +1,73 @@
+---
+id: service
+title: "Service"
+type: concept
+domain: network
+hub: true
+summary: "A stable name and address in front of a changing set of Pods. It is a label selector plus a port, and everything else about it is a consequence of that."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [clusterip, endpointslice]
+connects:
+  - to: endpointslice
+    text: "The Service holds the selector; a controller turns it into EndpointSlices of ready Pod IPs, and that list is what traffic actually follows."
+  - to: kube-proxy
+    text: "Nothing listens on a ClusterIP. kube-proxy programs rules on every node that rewrite the destination to a Pod IP."
+  - to: coredns
+    text: "The Service's name resolves through cluster DNS, which is the part your application code actually uses."
+  - to: labels
+    text: "A selector matching nothing is perfectly valid, so a Service with no endpoints is a typo rather than an error."
+  - to: probes
+    text: "Only Ready Pods appear in the endpoints, which is how a readiness probe takes a Pod out of rotation without killing it."
+lead: "The four types, and what each one actually creates."
+parts:
+  - name: "ClusterIP"
+    kind: ring
+    text: "A virtual IP reachable only inside the cluster. The default, and the base every other type builds on."
+  - name: "NodePort"
+    kind: gate
+    text: "A high port opened on every node that forwards to the ClusterIP. Crude, and the foundation under cloud load balancers."
+  - name: "LoadBalancer"
+    kind: disc
+    text: "A NodePort plus a real load balancer created by the cloud controller, with its address written back into status."
+  - name: "ExternalName"
+    kind: shell
+    text: "No proxying at all: just a CNAME in cluster DNS to an outside hostname. Useful for migrations, surprising when TLS does not match."
+  - name: "Headless"
+    kind: satellites
+    text: "clusterIP None: DNS returns the Pod IPs directly, with no load balancing. How StatefulSet members address each other."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Service solves one problem: Pod IPs change constantly and nothing should have to track them.
+It holds a label selector, a controller keeps the matching ready Pods in EndpointSlices, and the
+Service gets a stable virtual IP and a DNS name that front that list. The indirection is what
+makes rolling updates, scaling and node failures invisible to callers.
+
+**Nothing is listening on a ClusterIP.** This is the detail that makes Kubernetes networking
+click. The address is virtual: it exists only as rules in every node's iptables, nftables or IPVS
+tables, programmed by kube-proxy, that rewrite the destination of outgoing packets to one of the
+Pod IPs. There is no proxy process in the path, no single point of failure, and no latency hop --
+and also no way to ping a ClusterIP or run `tcpdump` on it, which confuses people debugging for
+the first time.
+
+**The failure everyone meets first is a Service with no endpoints.** `kubectl get endpointslices`
+showing nothing means the selector matches no ready Pods, and there are only three causes:
+the labels do not match the selector, the Pods are not Ready, or the Pods are not there.
+`kubectl get pods --show-labels` next to `kubectl describe svc` resolves it in seconds. The
+second most common is a `targetPort` that does not match the container's actual port -- the
+Service exists, has endpoints, and connects to a closed port.
+
+**`port` and `targetPort` are different things** and naming the target is the better habit:
+`targetPort: http` resolves against the container's named port, so changing the application's
+listening port is one edit in the Deployment rather than two in two objects.
+
+**Traffic policies decide whether locality matters.**
+`internalTrafficPolicy: Local` and `externalTrafficPolicy: Local` keep traffic on the receiving
+node -- which preserves the client IP and avoids a cross-zone hop, and silently blackholes
+traffic arriving at a node with no local Pod. Topology-aware routing is the gentler version of
+the same idea, preferring same-zone endpoints while still falling back.

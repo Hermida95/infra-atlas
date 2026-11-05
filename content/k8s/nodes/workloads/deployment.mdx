@@ -1,0 +1,76 @@
+---
+id: deployment
+title: "Deployment"
+type: concept
+domain: workloads
+hub: true
+summary: "A Pod template plus a replica count, with rollout and rollback built on top. It does not manage Pods directly -- it manages a ReplicaSet per template version."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [replicaset, rolling-update]
+connects:
+  - to: replicaset
+    text: "Each Pod template produces a hashed ReplicaSet, and a rollout is the Deployment moving replicas from the old one to the new one."
+  - to: rolling-update
+    text: "maxSurge and maxUnavailable are the two numbers that decide how fast the move happens and whether capacity dips during it."
+  - to: labels
+    text: "Its selector is immutable: it defines which Pods it owns, so changing it would orphan them and is rejected by the API."
+  - to: hpa
+    text: "An HPA writes spec.replicas, so a manifest that also declares replicas is two writers fighting over one field."
+  - to: probes
+    text: "A rollout only progresses as new Pods become Ready, which makes the readiness probe the thing that decides whether a bad version is noticed."
+  - to: pdb
+    text: "A PodDisruptionBudget protects these Pods from voluntary disruption like a node drain, independently of the rollout settings."
+lead: "Three objects and two numbers. Almost every rollout question is answered by one of them."
+parts:
+  - name: "Pod template"
+    kind: pod
+    text: "The spec new Pods are stamped from. Any change to it, even an annotation, hashes to a new ReplicaSet and triggers a rollout."
+  - name: "Selector"
+    kind: meta
+    text: "Which Pods this Deployment owns. Immutable after creation, and the one field you cannot fix in place."
+  - name: "Strategy"
+    kind: lanes
+    text: "RollingUpdate with maxSurge and maxUnavailable, or Recreate -- which kills everything first and accepts downtime."
+  - name: "Revision history"
+    kind: discs
+    text: "Old ReplicaSets kept at zero replicas so rollback is instant. revisionHistoryLimit decides how many."
+  - name: "Conditions"
+    kind: panel
+    text: "Progressing, Available and ReplicaFailure, plus progressDeadlineSeconds, which is what makes a stuck rollout report itself as failed."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Deployment is the standard way to run a stateless application, and it is a controller of a
+controller: it creates a ReplicaSet for each distinct Pod template and manages the replica counts
+across them. Understanding that indirection is what makes rollouts predictable --
+`kubectl get rs` during a deploy shows the old ReplicaSet draining and the new one filling, which
+is the deploy, visible.
+
+**Any change to the Pod template starts a rollout.** The controller hashes the template into
+`pod-template-hash` and, if no ReplicaSet has that hash, creates one. This is why
+`kubectl rollout restart` works by adding a timestamp annotation to the template: nothing
+functional changes, but the hash does, so every Pod is replaced. It is also why editing something
+outside the template -- `replicas`, the strategy -- does not cause a rollout.
+
+**Rollback is cheap because the old ReplicaSet is still there** at zero replicas.
+`kubectl rollout undo` scales it back up and the new one down, so reverting a bad image takes as
+long as one rolling update and needs no registry access and no pipeline. The limit is
+`revisionHistoryLimit` (ten by default), and it is worth keeping rather than trimming to save a
+handful of objects.
+
+**A stuck rollout reports itself if you let it.** `progressDeadlineSeconds` (ten minutes by
+default) makes the controller set `Progressing=False` with reason
+`ProgressDeadlineExceeded` when no progress has been made, which is what CI should wait on:
+`kubectl rollout status --timeout` returns non-zero and the pipeline fails instead of declaring
+success over a broken deploy. Without a readiness probe, new Pods are Ready the moment they
+start, so the rollout completes regardless of whether the application works -- which is the
+single most common reason a "successful" deploy takes a service down.
+
+**What a Deployment is not for:** anything needing stable names, stable storage or ordered
+startup, which is a StatefulSet; anything needing one Pod per node, which is a DaemonSet; and
+anything that should run to completion, which is a Job.

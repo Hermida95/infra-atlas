@@ -1,0 +1,757 @@
+# Real situations inside a cluster, and the ways to solve them. A case lights up every object it
+# touches on the Kubernetes map; each option lights up only its own, so switching between them is
+# a diff you can see. Exactly one option per case is `best` -- checked by `brain validate`, so a
+# case can never sit on the fence.
+#
+#   nodes     every object the case touches, whichever option you take
+#   asks      what the situation is really asking for, in the words an exam question uses
+#   options   verdict `best`, `works` (right in some conditions) or `avoid` (looks right, is not)
+#   watch     what breaks, costs or surprises you later. Required on an `avoid`.
+
+- id: pod-stuck-pending
+  title: "A Pod that will not leave Pending"
+  exam: [ckad, cka]
+  scenario: >-
+    A Deployment reports two of three replicas ready. The third Pod has been Pending for twenty
+    minutes. The cluster dashboard shows nodes at 35% CPU, so there is obviously room, and
+    restarting the Deployment changes nothing.
+  asks:
+    - "Find out which component is stuck before changing anything"
+    - "Distinguish a scheduling failure from a kubelet failure"
+    - "Fix the cause, not the symptom"
+  nodes: [pod, pod-lifecycle, scheduler, requests-and-limits, allocatable, taints-and-tolerations,
+          node-affinity, topology-spread, resource-quota, replicaset, troubleshooting, events,
+          cluster-autoscaler, karpenter, persistent-volume-claim, storage-class, kubelet,
+          node-conditions, limit-range]
+  options:
+    - id: read-the-scheduler
+      name: "Read the scheduler's own reason, then fix that"
+      verdict: best
+      nodes: [pod, pod-lifecycle, scheduler, troubleshooting, events, requests-and-limits,
+              allocatable, taints-and-tolerations, node-affinity, resource-quota, replicaset]
+      why: >-
+        `kubectl describe pod` ends with one line per rejection reason and a node count, and that
+        line is the diagnosis. `Insufficient cpu` means the sum of *requests* already allocated
+        fills the node -- usage is irrelevant, which is why a 35% dashboard and a full cluster are
+        perfectly consistent. `untolerated taint` means a toleration is missing. `didn't match Pod's
+        node affinity` means the selector matches no labelled node. If no Pod appears at all and
+        the ReplicaSet reports `FailedCreate`, it is a quota or an admission rejection instead.
+      cost: "Nothing. One command, then a change to requests, tolerations or quota."
+      watch:
+        - "Requests, not usage, are the currency. Over-requesting is the most common cause and the most expensive."
+        - "With a PVC involved, check `describe pvc` too: WaitForFirstConsumer looks like a failure and is not."
+    - id: scale-the-cluster
+      name: "Let a node autoscaler add capacity"
+      verdict: works
+      nodes: [pod, scheduler, cluster-autoscaler, karpenter, requests-and-limits, allocatable,
+              node-conditions]
+      why: >-
+        The right answer when the reason genuinely is insufficient resources and the requests are
+        honest: a Pending Pod is exactly the signal a node autoscaler acts on. Karpenter will launch
+        an instance shaped for the pending Pod; the Cluster Autoscaler will grow a node group whose
+        shape fits it.
+      cost: "One more node, for as long as the work needs it."
+      watch:
+        - "Two to five minutes from Pending to Running -- instance launch, registration and image pulls."
+        - "It cannot help a Pod blocked by a taint, an affinity rule or a quota, and will log that it cannot."
+        - "A Pod requesting more than any instance type offers stays Pending forever with no node added."
+    - id: raise-the-limits
+      name: "Raise the limits so the Pod fits"
+      verdict: avoid
+      nodes: [requests-and-limits, limit-range, pod]
+      why: >-
+        Limits have nothing to do with scheduling. The scheduler sums `requests`; changing `limits`
+        changes what the kernel enforces at runtime and leaves the Pod exactly as unschedulable as
+        it was.
+      watch:
+        - "Nothing changes, and the time is spent before anyone reads the actual reason."
+        - "Raising the *request* does fit the Pod on a node -- in the wrong direction, by making it larger."
+    - id: delete-and-hope
+      name: "Delete the Pod and let it be recreated"
+      verdict: avoid
+      nodes: [pod, replicaset, troubleshooting]
+      why: >-
+        Scheduling is level-triggered: the replacement Pod is evaluated against the same cluster
+        with the same constraints and reaches the same conclusion. The only thing deleted is the
+        `describe` output that explained the problem.
+      watch:
+        - "The new Pod is Pending for the same reason, and the event history that named it is gone."
+        - "It appears to work when the real cause was transient, which teaches the wrong lesson."
+  teaches: >-
+    Pending splits in two and `spec.nodeName` tells you which: empty means the scheduler could not
+    place it and `describe` says why; assigned means the kubelet is working and the cause is an
+    image or a volume. Requests, not usage, decide whether a Pod fits.
+
+- id: requests-lost-during-rollout
+  title: "Every deploy drops a few hundred requests"
+  exam: [ckad, cka]
+  scenario: >-
+    The rollout is green every time and `kubectl rollout status` returns success in ninety seconds.
+    The load balancer's own metrics show a burst of 502s on every deploy, a few hundred requests,
+    always during the rollout and never otherwise.
+  asks:
+    - "No connection errors during a rolling update"
+    - "New Pods must not receive traffic before they can serve it"
+    - "Old Pods must finish what they already accepted"
+  nodes: [deployment, rolling-update, probes, graceful-shutdown, endpointslice, service, pod,
+          pod-lifecycle, kube-proxy, kubelet, pdb, progressive-delivery, ingress-controller,
+          service-mesh, metrics]
+  options:
+    - id: probes-and-drain
+      name: "A real readiness probe, a preStop delay and a grace period"
+      verdict: best
+      nodes: [probes, graceful-shutdown, rolling-update, deployment, endpointslice, service,
+              pod-lifecycle]
+      why: >-
+        Two separate bugs produce this one symptom, and both need fixing. On the way in, a
+        readiness probe that only passes when the application can actually serve -- an `httpGet` to
+        a real endpoint, not a `tcpSocket` that succeeds the moment the port is bound -- stops new
+        Pods receiving traffic early. On the way out, endpoint removal and `SIGTERM` happen
+        concurrently and the endpoint change takes time to reach every node, so a `preStop` hook
+        sleeping about five seconds keeps the Pod serving while that propagates, with a
+        `terminationGracePeriodSeconds` long enough to finish in-flight requests.
+      cost: "A few seconds per Pod on each rollout. No infrastructure."
+      watch:
+        - "Check PID 1: a shell entrypoint swallows SIGTERM, so every Pod takes the full grace period and is then killed."
+        - "`minReadySeconds` above zero stops a Pod that passes one probe and dies from advancing the rollout."
+        - "maxUnavailable 0 with maxSurge 1 keeps full capacity throughout, if the cluster has room."
+    - id: surge-slower
+      name: "Roll more slowly, one Pod at a time"
+      verdict: works
+      nodes: [rolling-update, deployment, pdb, probes]
+      why: >-
+        Lowering `maxUnavailable` to zero and `maxSurge` to one, with `minReadySeconds`, reduces how
+        much of the fleet is affected at once and gives a bad version more chance to be noticed.
+        Worth doing, and it belongs with the fix rather than instead of it.
+      cost: "A longer rollout. Capacity for one extra Pod."
+      watch:
+        - "It reduces the number of dropped requests without removing the cause, so the errors remain."
+        - "A Pod with no readiness probe is Ready instantly, so slowing down protects nothing."
+    - id: canary-with-analysis
+      name: "Progressive delivery with metric analysis"
+      verdict: works
+      nodes: [progressive-delivery, probes, metrics, service-mesh, ingress-controller, deployment]
+      why: >-
+        The right answer to the larger problem -- a release that starts successfully and serves
+        errors. Argo Rollouts or Flagger shift a small share of traffic, query error rate and
+        latency, and roll back automatically. It also happens to narrow the blast radius of the
+        shutdown bug.
+      cost: "A controller to run, traffic splitting to configure, and analysis queries to write."
+      watch:
+        - "It needs something that can weight routes: a mesh, a capable ingress controller or Gateway API."
+        - "At 5% traffic a 60-second window may see too few requests to conclude anything."
+        - "It does not fix the drain: the shifted-away Pods are still terminated the same way."
+    - id: more-replicas
+      name: "Run more replicas so losing a few matters less"
+      verdict: avoid
+      nodes: [deployment, rolling-update, pod]
+      why: >-
+        Every replica is replaced during a rolling update, so more replicas means more terminations
+        and more dropped connections, not fewer. It scales the bug.
+      watch:
+        - "The error count goes up roughly in proportion to the replica count."
+        - "The cost is permanent and the problem is unchanged."
+  teaches: >-
+    A rolling update is not zero-downtime on its own. Readiness decides when a Pod starts receiving
+    traffic, and a preStop delay plus a real grace period decides whether it finishes what it
+    already accepted -- because endpoint removal and SIGTERM race.
+
+- id: oomkilled-versus-throttling
+  title: "One service is killed, another just gets slow"
+  exam: [ckad, cka]
+  scenario: >-
+    Two services are unhealthy after a traffic increase. The first restarts several times an hour
+    with exit code 137 and nothing in its own logs. The second never restarts, never logs an error,
+    and its p99 latency has gone from 80ms to 4 seconds.
+  asks:
+    - "Explain two different failures from the same traffic increase"
+    - "Set resources so neither recurs"
+    - "Find the right numbers rather than guessing"
+  nodes: [requests-and-limits, cgroups, qos-classes, eviction, pod-lifecycle, metrics, vpa,
+          kubelet, limit-range, hpa, metrics-server, troubleshooting, logs, downward-api]
+  options:
+    - id: memory-wall-cpu-quota
+      name: "Memory requests equal to limits, a CPU request and no CPU limit"
+      verdict: best
+      nodes: [requests-and-limits, cgroups, qos-classes, metrics, vpa, downward-api, pod-lifecycle]
+      why: >-
+        The two symptoms are the two enforcement mechanisms. A memory limit is `memory.max`, a wall
+        the kernel enforces by killing the process -- exit code 137, `OOMKilled` in the container's
+        last state, and no application log because the process was not asked to stop. A CPU limit
+        is `cpu.max`, a quota per 100ms period: exceed it and your threads are simply not scheduled
+        until the next period, which is latency with no error anywhere. So: set memory request and
+        limit equal (Guaranteed, evicted last, no surprise ceiling), set an honest CPU request, and
+        leave the CPU limit off unless you specifically need to cap a noisy neighbour. Use VPA in
+        recommendation mode to get the numbers from a week of real usage rather than guessing.
+      cost: "Slightly higher reservations, which is the point: the scheduler now knows the truth."
+      watch:
+        - "`container_cpu_cfs_throttled_seconds_total` is the metric that proves throttling; without it this is invisible."
+        - "A runtime sizing its thread pool from the node's core count needs the limit passed in via the downward API."
+        - "No CPU limit means a burst can take a whole node's spare capacity -- acceptable with honest requests, not without."
+    - id: raise-memory-limit
+      name: "Raise the memory limit and move on"
+      verdict: works
+      nodes: [requests-and-limits, cgroups, metrics, limit-range]
+      why: >-
+        Legitimate when the limit was simply set too low for the new traffic, and the usage curve is
+        flat at the higher level. Measure first: if usage grows without bound, this buys time and
+        the next kill is a leak.
+      cost: "More memory reserved per replica."
+      watch:
+        - "A limit above the request leaves the Pod Burstable, so it is still evicted before a Guaranteed one."
+        - "If memory grows steadily, the fix is in the application and a higher limit only delays it."
+    - id: autoscale-instead
+      name: "Add an HPA so load is spread over more replicas"
+      verdict: works
+      nodes: [hpa, metrics-server, requests-and-limits, metrics]
+      why: >-
+        Helps the throttled service genuinely: more replicas means less work each, so less time
+        against the quota. It does nothing for the OOM kill, where one replica's working set exceeds
+        its own limit regardless of how many others exist.
+      cost: "More replicas at peak."
+      watch:
+        - "HPA CPU utilisation is a percentage of the *request*, so a wrong request makes it target the wrong number."
+        - "Memory is a poor HPA signal: usage that never falls pins the replica count at the maximum."
+    - id: remove-all-limits
+      name: "Remove requests and limits so nothing is constrained"
+      verdict: avoid
+      nodes: [requests-and-limits, qos-classes, eviction, kubelet]
+      why: >-
+        It removes both enforcement mechanisms and both protections. The Pod becomes BestEffort:
+        reserving nothing, so the scheduler treats it as free and packs nodes as if it did not
+        exist, and first in line to be evicted the moment the node is under pressure.
+      watch:
+        - "BestEffort Pods are killed first by node-pressure eviction, so the service gets less reliable."
+        - "With nothing reserved, the scheduler overcommits the node and the whole node becomes unstable."
+        - "Capacity planning becomes impossible, because the sum of requests no longer describes the cluster."
+  teaches: >-
+    Memory is incompressible and CPU is not, so the kernel enforces them differently: a memory limit
+    kills, a CPU limit throttles silently. Memory request equal to limit, an honest CPU request, and
+    a CPU limit only when you mean it.
+
+- id: stateful-database-in-cluster
+  title: "The team wants PostgreSQL inside the cluster"
+  exam: [ckad, cka]
+  scenario: >-
+    A product team needs a relational database for a new service, and would rather keep it in the
+    cluster than wait for a managed instance. It will hold real customer data. Somebody has already
+    written a Deployment with a PersistentVolumeClaim.
+  asks:
+    - "Survive a node failure without losing data"
+    - "A restore path that has been tested"
+    - "Someone must own failover, backups and version upgrades"
+  nodes: [statefulset, deployment, persistent-volume-claim, storage-class, access-modes,
+          reclaim-policy, volume-snapshot, headless-service, pdb, operator, crd, custom-resource,
+          topology-spread, dynamic-provisioning, cluster-backup, probes, secret, external-secrets,
+          graceful-shutdown]
+  options:
+    - id: operator
+      name: "A database operator, or a managed database outside the cluster"
+      verdict: best
+      nodes: [operator, crd, custom-resource, statefulset, persistent-volume-claim, storage-class,
+              reclaim-policy, volume-snapshot, headless-service, pdb, cluster-backup, secret,
+              external-secrets]
+      why: >-
+        The question is not whether a database can run in Kubernetes -- it can -- but who answers
+        the operational questions: which replica is primary, how a failover is decided, how a
+        consistent backup is taken, how a restore works, how a major version upgrade proceeds. A
+        mature operator (CloudNativePG and the like) encodes answers that have been tested by people
+        who were paged for them, exposed as a custom resource. If nobody on the team wants to own
+        that, a managed database outside the cluster is the honest alternative and not a defeat.
+      cost: "An operator to keep upgraded, or a managed instance's monthly price."
+      watch:
+        - "Read the operator's ClusterRole before installing it: broad permissions, in the path of your data, from a third party."
+        - "Uninstall order matters: delete the custom resources first, let it clean up, then remove the operator and CRDs."
+        - "Use a Retain StorageClass, so deleting a namespace cannot delete the data in one command."
+    - id: statefulset-by-hand
+      name: "A StatefulSet with per-Pod volumes and a headless Service"
+      verdict: works
+      nodes: [statefulset, persistent-volume-claim, storage-class, headless-service, pdb,
+              topology-spread, volume-snapshot, probes, graceful-shutdown, access-modes]
+      why: >-
+        The correct primitive, and enough for a single-writer database with honest expectations:
+        stable names, a volume per ordinal that follows its Pod, ordered startup and shutdown, and a
+        headless Service so members have individual addresses. Reasonable for a development
+        database or one where downtime during a failover is acceptable.
+      cost: "Your own time for backup, failover and upgrade procedures."
+      watch:
+        - "A StatefulSet does not fail over. Promoting a replica is a human or a script, at 3am."
+        - "Its PVCs are deliberately not deleted with it, so scaling down leaves volumes billing."
+        - "A block volume is pinned to its zone, so WaitForFirstConsumer is required or the Pod cannot be placed after a zone failure."
+    - id: deployment-with-pvc
+      name: "The Deployment with a PersistentVolumeClaim that already exists"
+      verdict: avoid
+      nodes: [deployment, persistent-volume-claim, access-modes, statefulset]
+      why: >-
+        It works with one replica on a one-node test cluster and fails as soon as either of those
+        changes. A block volume is `ReadWriteOnce` -- one node at a time -- so a second replica on
+        another node cannot mount it, and a rolling update tries to start the new Pod before the old
+        one has released the volume.
+      watch:
+        - "Scaling to two replicas gives a multi-attach error, not a second instance."
+        - "A rolling update deadlocks: the new Pod waits for a volume the old Pod still holds."
+        - "Two Pods that do land on the same node both mount it read-write, which is how data gets corrupted."
+    - id: emptydir-for-speed
+      name: "Local disk via emptyDir, for the performance"
+      verdict: avoid
+      nodes: [persistent-volume-claim, statefulset, pdb]
+      why: >-
+        An `emptyDir` is created with the Pod and destroyed with it. The database appears to work for
+        weeks and the first node upgrade is a total data loss, with nothing to restore from.
+      watch:
+        - "Any reschedule -- node drain, eviction, node failure -- starts with an empty database."
+        - "It fills the node's disk, causing pressure and the eviction of unrelated Pods."
+        - "If local disk performance is genuinely required, a local PersistentVolume is the supported form, with node affinity the scheduler understands."
+  teaches: >-
+    Kubernetes gives stateful workloads identity and storage, and nothing else. Failover, consistent
+    backup and version upgrades are operational knowledge -- an operator is that knowledge as code,
+    and a managed database is buying it.
+
+- id: expose-external-traffic
+  title: "Twelve HTTP services need to be reachable from the internet"
+  exam: [ckad, cka]
+  scenario: >-
+    A cluster has twelve HTTP services to expose, each on its own hostname, all needing TLS. One of
+    them is a gRPC API and one is a Postgres listener for an external partner. The first service was
+    exposed with a LoadBalancer Service and the cloud bill now has a line nobody expected.
+  asks:
+    - "One address and one certificate story for many hostnames"
+    - "TLS termination without wiring each service separately"
+    - "A protocol that is not HTTP also has to be exposed"
+  nodes: [service, loadbalancer-service, nodeport, ingress, ingress-controller, gateway-api,
+          clusterip, endpointslice, secret, annotations, cloud-controller-manager, resource-quota,
+          network-policy, service-mesh]
+  options:
+    - id: gateway-api
+      name: "Gateway API, with routes owned by each team"
+      verdict: best
+      nodes: [gateway-api, ingress-controller, service, endpointslice, secret, clusterip,
+              cloud-controller-manager]
+      why: >-
+        One Gateway, one address, one certificate store, and an `HTTPRoute` per service living in
+        that team's own namespace -- with the platform team deciding which namespaces may attach.
+        The things that were controller-specific annotations on Ingress (rewrites, redirects,
+        timeouts, header matching, traffic weights) are typed, validated fields, so a mistake is
+        rejected at apply time rather than ignored at runtime. `GRPCRoute` covers the gRPC service
+        and `TCPRoute` the Postgres listener, so one object model serves all three protocols.
+      cost: "One load balancer for all the HTTP services, plus the gateway controller."
+      watch:
+        - "The CRDs are installed and versioned separately from Kubernetes -- check your implementation's conformance."
+        - "Implementations support different subsets; the conformance reports are the honest reference."
+        - "Routing is not authorisation: a route reaching a Service says nothing about NetworkPolicy."
+    - id: ingress
+      name: "An Ingress controller with one Ingress per service"
+      verdict: works
+      nodes: [ingress, ingress-controller, service, endpointslice, secret, annotations,
+              loadbalancer-service]
+      why: >-
+        The established answer, and entirely reasonable for twelve HTTP services: one controller
+        behind one LoadBalancer Service, host and path rules per service, TLS from Secrets that
+        cert-manager fills. Well understood by everyone and supported by every tool.
+      cost: "One load balancer, plus the controller's own Pods."
+      watch:
+        - "Everything beyond host, path and TLS is controller-specific annotations, so the manifests are not portable."
+        - "It is HTTP only. The gRPC service needs annotations and the Postgres listener needs something else entirely."
+        - "On ingress-nginx, anyone who can create an Ingress in any namespace can claim any hostname."
+    - id: lb-per-service
+      name: "A LoadBalancer Service for each one"
+      verdict: avoid
+      nodes: [loadbalancer-service, service, nodeport, cloud-controller-manager, resource-quota]
+      why: >-
+        Twelve cloud load balancers, twelve public addresses, twelve certificates to attach and
+        twelve monthly charges, to do a job one of them could do with host-based routing. It is the
+        right object for the Postgres listener and the wrong one for everything else here.
+      watch:
+        - "Cost scales linearly with the number of services, and nothing warns you."
+        - "Each one is configured through provider-specific annotations, unvalidated and not portable."
+        - "Force-removing the Service finalizer leaves an orphaned load balancer billing silently."
+        - "Cap it with a quota on count/services.loadbalancers before someone discovers this the expensive way."
+  teaches: >-
+    LoadBalancer is per Service and protocol-agnostic; Ingress and Gateway API share one address
+    across many hostnames. Gateway API is where the annotations became real fields and where
+    protocols other than HTTP finally fit.
+
+- id: distribute-secrets
+  title: "Database passwords and API keys for twenty services"
+  exam: [cka, cks]
+  scenario: >-
+    Credentials are currently base64 in a manifests repository, which everyone agrees has to stop.
+    Some have to be rotated quarterly, the security team wants to know who read what, and the
+    cluster is deployed with GitOps so nothing can be applied by hand.
+  asks:
+    - "Nothing sensitive in git"
+    - "Rotation without editing twenty manifests"
+    - "An audit trail of access, and per-secret access control"
+  nodes: [secret, external-secrets, secrets-store-csi, encryption-at-rest, service-account,
+          volume-projection, rbac, gitops, configmap, etcd, audit-log, namespace, immutable-config]
+  options:
+    - id: external-secrets-operator
+      name: "External Secrets Operator, with workload identity"
+      verdict: best
+      nodes: [external-secrets, secret, service-account, volume-projection, rbac, gitops,
+              encryption-at-rest, audit-log, namespace]
+      why: >-
+        The authoritative value stays in a dedicated manager -- Secrets Manager, Vault, Key Vault --
+        which has rotation, per-secret policies and an access log. The repository holds an
+        `ExternalSecret` naming the keys, never a value, so GitOps works unchanged. The operator
+        authenticates with a projected ServiceAccount token exchanged for a cloud role, so there is
+        no bootstrap credential in the cluster either. Workloads consume an ordinary Secret and need
+        no changes at all, which is why this is the one most teams can actually adopt.
+      cost: "An operator to run, plus the secret manager's per-secret charges."
+      watch:
+        - "The value does end up in etcd, so encryption at rest still matters."
+        - "Mount Secrets as files, not environment variables, or a rotated value never reaches the running Pod."
+        - "The operator becomes a dependency of every workload start; run more than one replica and alert on sync failures."
+        - "Per-secret access control only exists if someone writes narrow policies in the store."
+    - id: csi-driver
+      name: "Secrets Store CSI driver, mounted straight into the Pod"
+      verdict: works
+      nodes: [secrets-store-csi, service-account, volume-projection, rbac, gitops, audit-log]
+      why: >-
+        The stronger position: the value never becomes a Kubernetes object, so it is not in an etcd
+        backup and not readable by anyone with `get secrets` in the namespace. The right choice when
+        the threat model includes cluster-internal access, and when the applications can read files.
+      cost: "A privileged node driver in the path of every workload that uses it."
+      watch:
+        - "File-based consumption only. Its secret-syncing option gives back exactly the property you adopted it for."
+        - "Rotation updates the file, but the application still has to re-read it."
+        - "A mount failure means the Pod does not start, so the driver is a hard dependency."
+    - id: encrypt-in-git
+      name: "Sealed Secrets or SOPS, encrypted in the repository"
+      verdict: works
+      nodes: [secret, gitops, rbac, encryption-at-rest, immutable-config]
+      why: >-
+        A genuine improvement over plain text and the lightest option to adopt: the value is
+        encrypted with a key only the cluster holds, so git is safe. Reasonable for a small estate
+        with few rotations.
+      cost: "Nothing beyond a controller or a KMS key."
+      watch:
+        - "Rotation means re-encrypting and committing every affected secret -- exactly the work this case wanted to avoid."
+        - "No access audit: the repository records who committed, not who read the decrypted value."
+        - "The decryption key becomes the thing whose loss costs you every secret."
+    - id: configmaps
+      name: "Keep them in ConfigMaps so GitOps stays simple"
+      verdict: avoid
+      nodes: [configmap, secret, rbac, etcd]
+      why: >-
+        A ConfigMap has no encryption at rest, no separate RBAC resource, and is plain text in every
+        etcd snapshot and in git. It converts a secrets problem into a secrets problem that no tool
+        will ever flag.
+      watch:
+        - "Anyone with `get configmaps` in the namespace has every credential, and that verb is granted liberally."
+        - "Encryption at rest covers Secrets, not ConfigMaps, so a stolen snapshot reads them directly."
+        - "Nothing in the cluster distinguishes them from configuration, so they end up in logs and dumps."
+  teaches: >-
+    A Secret is base64, not encryption. Keeping the authoritative value in a dedicated manager buys
+    rotation, audit and per-secret access that the Secret API does not have -- and workload identity
+    means the cluster holds no credential for the manager either.
+
+- id: isolate-teams
+  title: "Six teams on one cluster, or six clusters"
+  exam: [cka, cks]
+  scenario: >-
+    Six product teams need somewhere to deploy. The platform team has one cluster and is being asked
+    to let everyone in. All six teams are employees of the same company, and one of them runs
+    customer-submitted code in a batch job.
+  asks:
+    - "One team cannot read another's secrets or take its capacity"
+    - "A cheap unit of isolation, repeatable per team"
+    - "Customer-submitted code must not share a kernel with anything else"
+  nodes: [namespace, rbac, role-and-clusterrole, rolebinding, resource-quota, limit-range,
+          network-policy, pod-security-admission, policy-engine, service-account, crd,
+          validating-admission-policy, secret, audit-log, cni, security-context, taints-and-tolerations]
+  options:
+    - id: hardened-namespaces
+      name: "A namespace per team, with quota, policy and default-deny"
+      verdict: best
+      nodes: [namespace, rbac, role-and-clusterrole, rolebinding, resource-quota, limit-range,
+              network-policy, pod-security-admission, policy-engine, service-account, audit-log,
+              validating-admission-policy]
+      why: >-
+        For teams inside one company, a namespace with the full set attached is the proportionate
+        answer: a RoleBinding to the built-in `edit` ClusterRole so the team is autonomous inside it
+        and nowhere else, a ResourceQuota so it cannot take the cluster's capacity, a LimitRange so
+        nothing is unaccounted for, a default-deny NetworkPolicy, and a `restricted` Pod Security
+        level. A policy engine's generation rules create all of that for every new namespace, which
+        is what makes it repeatable rather than a checklist.
+      cost: "One cluster to operate. A policy engine to run."
+      watch:
+        - "A namespace is a name scope, not a security boundary -- the four extra objects are what make it one."
+        - "Allow DNS egress explicitly, or the default-deny policy breaks every lookup in the namespace."
+        - "Cluster-scoped objects are shared: CRDs, ClusterRoles, PersistentVolumes, nodes. Do not grant them."
+        - "`create pods` in a namespace effectively grants read of every Secret in it, since a Pod can mount them."
+    - id: cluster-per-team
+      name: "A cluster per team"
+      verdict: works
+      nodes: [namespace, rbac, resource-quota, audit-log, crd]
+      why: >-
+        The strongest isolation available, and the right answer when teams need their own CRDs,
+        their own cluster-wide operators, incompatible Kubernetes versions, or a genuine
+        regulatory boundary. Also the answer when the platform team cannot carry the shared-cluster
+        policy work.
+      cost: "Six control planes, six upgrade cycles, six add-on stacks, and much worse bin packing."
+      watch:
+        - "Six clusters is six version upgrades a quarter and six sets of add-ons to keep compatible."
+        - "Utilisation falls sharply: each cluster needs its own headroom and its own DaemonSets."
+        - "It solves isolation and creates a fleet-management problem, which needs its own tooling."
+    - id: sandbox-the-untrusted-one
+      name: "Hardened namespaces, plus a sandboxed runtime for the untrusted job"
+      verdict: works
+      nodes: [namespace, pod-security-admission, security-context, taints-and-tolerations, cni,
+              network-policy, policy-engine]
+      why: >-
+        The correct treatment of the one genuinely different workload. Customer-submitted code shares
+        a kernel with everything on its node, and a namespace does nothing about that. A RuntimeClass
+        using gVisor or Kata gives each Pod its own kernel or a lightweight VM, on a tainted node
+        pool of its own.
+      cost: "A node pool and a runtime to maintain, plus some performance."
+      watch:
+        - "This is required for untrusted code, not optional: namespaces and Pod Security do not contain a kernel exploit."
+        - "Taint the pool and tolerate it, or ordinary workloads land on the expensive sandboxed nodes."
+    - id: namespaces-alone
+      name: "Just give each team a namespace"
+      verdict: avoid
+      nodes: [namespace, rbac, service-account]
+      why: >-
+        A namespace on its own is a name scope. Pods in different namespaces can reach each other by
+        default, there is no cap on what a team consumes, and nothing stops a Pod mounting a hostPath
+        and reading the node's credentials.
+      watch:
+        - "All Pods can talk to all Pods across namespaces until a NetworkPolicy says otherwise."
+        - "With no quota, one team's runaway Job starves the other five."
+        - "With no Pod Security level, a privileged Pod in any namespace is root on its node and therefore on the cluster."
+  teaches: >-
+    A namespace is a name scope with quota, RBAC and DNS attached -- it becomes a boundary only when
+    you add policy, quota and default-deny networking. For untrusted code, the kernel is shared, so
+    the answer is a sandboxed runtime or a separate cluster.
+
+- id: scale-the-nodes
+  title: "Capacity that follows the load, without paying for the peak"
+  exam: [cka]
+  scenario: >-
+    The cluster is sized for the busiest hour and idles at 20% for most of the day. Batch jobs
+    arrive in bursts and sit Pending for minutes. There are now nine node groups, each added for a
+    workload that did not fit the others.
+  asks:
+    - "Nodes appear when Pods cannot be scheduled and go away afterwards"
+    - "Right-sized instances rather than one shape per workload"
+    - "A spike absorbed faster than an instance can boot"
+  nodes: [cluster-autoscaler, karpenter, scheduler, requests-and-limits, allocatable, pdb,
+          pod-priority, node-drain, taints-and-tolerations, node-affinity, hpa, vpa, daemonset,
+          graceful-shutdown, topology-spread]
+  options:
+    - id: karpenter
+      name: "Karpenter, with warm capacity from low-priority placeholders"
+      verdict: best
+      nodes: [karpenter, scheduler, requests-and-limits, pdb, pod-priority, node-drain,
+              taints-and-tolerations, node-affinity, graceful-shutdown, vpa]
+      why: >-
+        Karpenter reads the pending Pods' real requirements -- CPU, memory, architecture, zone,
+        tolerations, volumes -- and launches an instance shaped for them, with no node groups to
+        maintain. Nine groups become one or two NodePools with constraints. Consolidation then
+        replaces underused nodes with cheaper ones, which is where the idle cost goes. For the spike
+        that arrives faster than an instance boots, a Deployment of very low priority Pods that
+        merely request resources keeps a node warm and is preempted the moment real work needs it.
+      cost: "Nodes follow the workload. The placeholder capacity is one node's worth, permanently."
+      watch:
+        - "Consolidation and expiry mean nodes come and go constantly, so PDBs and graceful shutdown are not optional."
+        - "Set a floor on instance size, or it picks something that technically fits and leaves no room for DaemonSets."
+        - "Right-sizing is only as good as your requests: VPA recommendations come first."
+    - id: cluster-autoscaler
+      name: "The Cluster Autoscaler on fewer, better-chosen node groups"
+      verdict: works
+      nodes: [cluster-autoscaler, scheduler, requests-and-limits, allocatable, pdb, node-drain,
+              taints-and-tolerations, hpa]
+      why: >-
+        Well understood, available everywhere, and adequate when the workload mix is stable. The
+        real improvement here is consolidating nine groups into three or four with sensible shapes,
+        and setting the expander to `least-waste`.
+      cost: "One more node per group when needed, and the groups to maintain."
+      watch:
+        - "It can only add more of a shape you already defined, so a new workload means a new group."
+        - "Scale-down stalls on bare Pods, local storage, tight PDBs and kube-system Pods with no budget."
+        - "Two to five minutes from Pending to Running, which is why the spike still waits."
+    - id: hpa-only
+      name: "Autoscale the Pods and leave the nodes alone"
+      verdict: avoid
+      nodes: [hpa, requests-and-limits, scheduler, pod-priority]
+      why: >-
+        An HPA adds replicas; if there is nowhere to put them they are Pending, which is the same
+        queue with more objects in it. Pod and node autoscaling are two halves of one mechanism.
+      watch:
+        - "At peak the extra replicas sit Pending and the service does not actually scale."
+        - "The idle cost is unchanged, because the nodes were never the thing being scaled."
+    - id: overprovision-permanently
+      name: "Keep the cluster sized for the peak"
+      verdict: avoid
+      nodes: [allocatable, requests-and-limits, daemonset, topology-spread]
+      why: >-
+        It is where the cluster already is: 80% of the capacity idle most of the day, paid for
+        continuously, and still Pending during bursts because the spare capacity is in the wrong
+        shape.
+      watch:
+        - "The bill is the peak, every hour of every day."
+        - "Per-node overhead -- reservations and DaemonSets -- is paid on every idle node too."
+        - "It still fails for a Pod that no existing node shape can hold."
+  teaches: >-
+    A node autoscaler reacts to Pending Pods, not to utilisation, so honest requests are the
+    prerequisite. Karpenter derives the instance from the workload instead of counting a shape you
+    chose in advance -- and nothing boots fast enough for a sudden spike, which is what preemptible
+    placeholder capacity is for.
+
+- id: encrypt-service-traffic
+  title: "Traffic between services has to be encrypted and authorised"
+  exam: [cka, cks]
+  scenario: >-
+    An audit requires that traffic between services inside the cluster is encrypted and that only
+    named services may call the payments API. There are about forty services in four languages, and
+    the teams will not all adopt a shared library.
+  asks:
+    - "Encryption in transit between Pods, with no application changes"
+    - "Authorisation by workload identity, not by IP address"
+    - "A floor that still applies when a proxy is missing"
+  nodes: [service-mesh, network-policy, cni, service-account, sidecar-containers, secret,
+          gateway-api, tracing, metrics, pod, clusterip, endpointslice, requests-and-limits,
+          security-context]
+  options:
+    - id: mesh-plus-policy
+      name: "Transparent mTLS at the node or CNI layer, over a NetworkPolicy floor"
+      verdict: best
+      nodes: [service-mesh, network-policy, cni, service-account, sidecar-containers, metrics,
+              tracing, clusterip, endpointslice]
+      why: >-
+        Encryption and identity-based authorisation are exactly what a mesh provides, and the
+        per-Pod sidecar is no longer the only way to get them: Istio's ambient mode handles mTLS and
+        L4 in a per-node component, and Cilium does it in eBPF with no proxy at all. Either gives
+        every workload a certificate tied to its ServiceAccount, so the payments rule is written as
+        "only these identities", which is what the audit asked for. Keep a default-deny
+        NetworkPolicy underneath: it applies whether or not a sidecar is present, which a
+        mesh-only policy does not.
+      cost: "Near zero per Pod in a sidecar-less mode; an L7 proxy only for namespaces that need it."
+      watch:
+        - "Roll out namespace by namespace with permissive mTLS first, or an un-meshed client breaks immediately."
+        - "A mesh owns the traffic path: an upgrade is a traffic event and a bad policy is an outage."
+        - "NetworkPolicy underneath is the point -- a Pod whose sidecar failed should not be a Pod with no policy."
+    - id: sidecar-mesh
+      name: "A full sidecar mesh, for the L7 features too"
+      verdict: works
+      nodes: [service-mesh, sidecar-containers, network-policy, service-account, tracing, metrics,
+              requests-and-limits]
+      why: >-
+        The right choice when you also want per-request retries, timeouts, circuit breaking and
+        weighted canaries across all forty services -- things no CNI gives you. Then the sidecar is
+        paying for more than encryption.
+      cost: "50-200 MiB and some CPU on every replica, plus two proxy hops of latency per call."
+      watch:
+        - "Across hundreds of Pods the memory is a real line in the bill, doing plumbing."
+        - "p99 latency moves, which matters for exactly the services that care about it."
+        - "It is a large amount of new vocabulary for everyone who debugs production."
+    - id: network-policy-only
+      name: "NetworkPolicy alone"
+      verdict: works
+      nodes: [network-policy, cni, pod, clusterip]
+      why: >-
+        Cheap, no new data path, and genuinely useful as the L3/L4 floor -- a default-deny per
+        namespace plus explicit allowances is the right baseline regardless of what else you do.
+      cost: "Nothing beyond a CNI that enforces it."
+      watch:
+        - "It does not encrypt anything, so half the audit requirement is unmet."
+        - "It authorises by Pod and namespace selector, not by identity: a compromised Pod in an allowed namespace passes."
+        - "Check the CNI actually enforces it -- Flannel ignores these objects silently."
+    - id: tls-in-every-app
+      name: "Have each team implement TLS in their own service"
+      verdict: avoid
+      nodes: [secret, pod, security-context, service-account]
+      why: >-
+        Forty services in four languages, each with its own certificate loading, rotation, trust
+        store and verification code -- and the premise of the case is that the teams will not adopt a
+        shared library. One service that skips verification satisfies the checklist and nothing else.
+      watch:
+        - "Certificate rotation becomes forty independent problems, and the one that lapses is an outage."
+        - "Verification is the part that gets skipped, and nothing in the cluster can tell."
+        - "There is no central way to answer who may call the payments API, which was the actual requirement."
+  teaches: >-
+    mTLS between workloads is now available without a sidecar per Pod, at the node or CNI layer, and
+    it authorises by ServiceAccount identity rather than by IP. Keep NetworkPolicy underneath as the
+    floor that applies even when the proxy is not there.
+
+- id: upgrade-without-downtime
+  title: "The cluster is three versions behind"
+  exam: [cka]
+  scenario: >-
+    Nobody has upgraded the cluster in fourteen months and it is now out of support. Workloads are
+    on it, the manifests live in several repositories of varying age, and the last person who did an
+    upgrade has left.
+  asks:
+    - "No service interruption during the upgrade"
+    - "Nothing breaks days later in someone's pipeline"
+    - "A way back if the control plane upgrade fails"
+  nodes: [version-upgrade, api-deprecation, node-drain, etcd-backup, pdb, graceful-shutdown,
+          kubeadm, certificate-rotation, audit-log, helm, cni, csi, cluster-backup,
+          topology-spread, daemonset, karpenter, troubleshooting]
+  options:
+    - id: audit-then-step
+      name: "Audit removed APIs first, then one minor version at a time"
+      verdict: best
+      nodes: [api-deprecation, version-upgrade, etcd-backup, node-drain, pdb, graceful-shutdown,
+              kubeadm, certificate-rotation, audit-log, helm, cni, csi]
+      why: >-
+        Minor versions cannot be skipped, so this is three upgrades in sequence, and each one starts
+        with the work that actually breaks things: finding manifests and clients using an API the
+        next version removes. `pluto` or `kubent` against the repositories and the live objects, plus
+        the audit log filtered by deprecated version to catch the clients nobody remembers. Then per
+        version: snapshot etcd, upgrade the control plane (API server first, one node at a time),
+        drain and upgrade nodes one by one, then check every add-on's compatibility -- CNI, CSI
+        drivers, CoreDNS, ingress controller, operators. PodDisruptionBudgets and graceful shutdown
+        are what make the node phase invisible to users.
+      cost: "Three maintenance windows, and the audit work before the first one."
+      watch:
+        - "Removed APIs fail *after* the upgrade, on the next apply, to a team that changed nothing."
+        - "Back up etcd and the PKI together: a restored etcd with a different CA authenticates nobody."
+        - "Rehearse on a staging cluster, especially the add-on matrix -- that is where the surprises are."
+        - "Check certificate expiry while you are there; an upgrade renews them, which is why upgraded clusters never hit that."
+    - id: replace-the-nodes
+      name: "The same, but replace nodes instead of upgrading them in place"
+      verdict: works
+      nodes: [version-upgrade, api-deprecation, node-drain, pdb, graceful-shutdown, karpenter,
+              daemonset, topology-spread, etcd-backup]
+      why: >-
+        For the node phase, a new node from a new image joining while the old one is drained and
+        deleted is cleaner than upgrading in place: no accumulated host state, and it exercises the
+        thing you want to be sure of anyway -- that losing a node is uneventful. This is what managed
+        node groups and Karpenter do by default.
+      cost: "Briefly more nodes than usual, during the roll."
+      watch:
+        - "It relies entirely on PDBs and graceful shutdown; without them it is a rolling outage."
+        - "It does not change the control plane order or remove the deprecated-API audit."
+        - "A workload pinned to a node by local storage has to be dealt with first."
+    - id: build-a-new-cluster
+      name: "Build a new cluster and migrate the workloads"
+      verdict: works
+      nodes: [version-upgrade, api-deprecation, cluster-backup, helm, cni, csi, troubleshooting]
+      why: >-
+        A reasonable answer when the cluster has accumulated enough history that nobody trusts it, or
+        when you want to change something an upgrade cannot -- the CNI, the service CIDR, the node
+        images. With GitOps and no in-cluster state it can be genuinely straightforward.
+      cost: "Two clusters for the duration, plus the data migration and a DNS cutover."
+      watch:
+        - "Stateful workloads are the whole difficulty: volumes do not move between clusters by themselves."
+        - "The deprecated-API work is the same, just discovered all at once on the new version."
+        - "Anything not in git -- objects an operator generated, secrets fetched at runtime -- has to be found."
+    - id: jump-to-latest
+      name: "Upgrade straight to the newest version"
+      verdict: avoid
+      nodes: [version-upgrade, api-deprecation, kubeadm, troubleshooting]
+      why: >-
+        Skipping minor versions is unsupported, and the version skew rules do not permit it: a
+        kubelet may trail the API server, never lead it, and the control plane components may not run
+        ahead of the API server either. The upgrade either refuses or leaves a cluster in a
+        combination nobody has tested.
+      watch:
+        - "kubeadm refuses the jump, and a forced one produces a control plane that will not converge."
+        - "Several releases of removed APIs land at once, so the post-upgrade breakage is unbounded."
+        - "There is no documented path back from an unsupported skew other than the etcd snapshot."
+  teaches: >-
+    The upgrade work that matters happens before the upgrade: removed APIs break the next apply, days
+    later, in someone else's pipeline. Control plane before nodes, one minor version at a time, and
+    add-ons have their own compatibility matrix.

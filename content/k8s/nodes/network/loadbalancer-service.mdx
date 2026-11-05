@@ -1,0 +1,52 @@
+---
+id: loadbalancer-service
+title: "LoadBalancer Service"
+type: concept
+domain: network
+summary: "One cloud load balancer per Service, created by the cloud controller. Simple, protocol-agnostic, and the reason a cluster with forty Services has a forty-line bill."
+level: core
+access: free
+monogram: LB
+exam: [ckad, cka]
+relations:
+  related: [service, ingress]
+  alternative_to: [ingress]
+connects:
+  - to: cloud-controller-manager
+    text: "This Service type does nothing without a cloud controller: it is the component that calls the cloud API and writes the address into status."
+  - to: ingress
+    text: "An Ingress shares one load balancer across many hostnames and paths, which is why it exists at all."
+  - to: nodeport
+    text: "In instance-target mode the load balancer points at a NodePort on every node, which is where the extra hop and the SNAT come from."
+  - to: gateway-api
+    text: "Gateway API models the same thing as a first-class object, so per-protocol listeners and cross-namespace routes stop needing annotations."
+reviewed: 2026-11-05
+---
+
+`type: LoadBalancer` asks the cloud provider for a load balancer in front of this Service. The
+cloud-controller-manager creates it, keeps its target list in sync with the nodes, and writes the
+resulting hostname or IP into `status.loadBalancer`. From the application's point of view that is
+all there is to it, which is the appeal.
+
+**It works for any TCP or UDP protocol**, which is the thing Ingress cannot claim. A Postgres
+Service, a Kafka listener, a game server on UDP, an MQTT broker -- these need a load balancer at
+L4, and this is the object for them. For HTTP, it is usually the wrong choice.
+
+**The reason is cost and multiplication.** Each LoadBalancer Service is a separate cloud resource
+with a separate public address, a separate certificate to attach, a separate set of
+annotations and a monthly charge. Ten HTTP services become ten load balancers and ten DNS
+records, where one Ingress or Gateway would serve all of them behind a single address with
+host-based routing. A quota on `count/services.loadbalancers` per namespace is a sensible thing
+to set before anyone discovers this the expensive way.
+
+**Its configuration lives in annotations, and that is the real weakness.** Internal versus
+internet-facing, the certificate ARN, the health check path, idle timeout, cross-zone balancing,
+proxy protocol -- all of it is provider-specific annotations on the Service, invisible to schema
+validation and not portable between clouds. This is precisely the problem Gateway API was created
+to solve.
+
+**Two operational notes.** It stays `<pending>` forever with no cloud provider, which on bare
+metal means installing MetalLB or kube-vip. And it carries a finalizer so that deleting the
+Service deletes the cloud resource -- so force-removing that finalizer leaves an orphaned load
+balancer billing quietly, which is one of the more common sources of unexplained cloud spend
+around Kubernetes.

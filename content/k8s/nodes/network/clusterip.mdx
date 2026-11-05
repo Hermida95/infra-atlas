@@ -1,0 +1,48 @@
+---
+id: clusterip
+title: "ClusterIP"
+type: concept
+domain: network
+summary: "A virtual address nothing listens on, reachable only inside the cluster. The default Service type and the substrate under every other one."
+level: core
+access: free
+monogram: CIP
+exam: [ckad, cka]
+relations:
+  related: [service, kube-proxy]
+connects:
+  - to: kube-proxy
+    text: "The address is implemented as DNAT rules on every node. Remove kube-proxy and the IP stops working everywhere at once."
+  - to: coredns
+    text: "A Service's A record points at this address, so DNS plus DNAT is the whole of in-cluster service discovery."
+  - to: network-policy
+    text: "Policy is evaluated on the Pod IPs after translation, which is why a policy allowing the Service address does not work."
+reviewed: 2026-11-05
+---
+
+A ClusterIP is an address from the service CIDR -- a range configured on the API server and
+belonging to no network interface anywhere. Its only existence is as rules on every node. A
+packet from a Pod to a ClusterIP is destination-NATed by the node's kernel to one of the
+Service's endpoint Pod IPs, then routed normally by the CNI.
+
+**Several consequences follow, and all of them come up in debugging.** You cannot ping it: ICMP
+is not forwarded by those rules even when TCP works. You will never see it in a packet capture
+on the receiving Pod, because by then the destination has been rewritten -- a Pod receiving
+traffic through a Service sees its own IP as the destination and the caller's Pod IP as the
+source. And a NetworkPolicy cannot usefully name a ClusterIP, because policy is enforced on Pod
+addresses after translation; policies are written with Pod and namespace selectors for exactly
+this reason.
+
+**Load balancing is per connection and effectively random.** The default iptables mode picks an
+endpoint probabilistically per new connection, with no awareness of load, latency or locality.
+So a long-lived connection stays pinned to one Pod for its lifetime -- which is why a gRPC or
+HTTP/2 client with connection reuse sends everything to one replica and your other replicas sit
+idle, and why that case needs client-side load balancing, a headless Service, or a mesh.
+
+**`sessionAffinity: ClientIP`** gives sticky routing by source address, with a configurable
+timeout. It is a blunt instrument -- behind a NAT, every client looks like one address -- and
+usually the wrong answer to a problem better solved by not keeping state in the Pod.
+
+**The service CIDR is fixed at cluster creation** and cannot be resized on most clusters, so
+running out of Service addresses is a cluster rebuild. It is also entirely separate from the Pod
+CIDR, which is why both have to be planned not to overlap with anything your VPC may ever route.

@@ -1,0 +1,67 @@
+---
+id: pdb
+title: "PodDisruptionBudget"
+type: concept
+domain: scheduling
+summary: "A floor on availability during voluntary disruption. It stops a node drain from taking your last healthy replica, and does nothing about a crash."
+level: intermediate
+access: free
+monogram: PDB
+exam: [cka]
+relations:
+  related: [node-drain, deployment]
+connects:
+  - to: node-drain
+    text: "Drain uses the eviction API, which is where the budget is enforced: a request that would breach it is rejected and the drain waits."
+  - to: cluster-autoscaler
+    text: "An autoscaler removing an underused node must evict its Pods, so a badly set budget is a common reason scale-down stalls."
+  - to: eviction
+    text: "Node-pressure eviction ignores budgets entirely. A node out of memory does not negotiate."
+  - to: statefulset
+    text: "For a quorum-based system the budget is what keeps a rolling node upgrade from taking two members at once."
+lead: "One of two fields, and the trap in each."
+parts:
+  - name: "minAvailable"
+    kind: bars
+    text: "How many Pods must stay up. As a number it does not track scaling; as a percentage it rounds up."
+  - name: "maxUnavailable"
+    kind: split
+    text: "How many may be down at once. Usually the better choice, because it stays correct when the replica count changes."
+  - name: "selector"
+    kind: meta
+    text: "Which Pods it covers. Two budgets matching one Pod is undefined behaviour and an eviction that may be refused by either."
+  - name: "unhealthyPodEvictionPolicy"
+    kind: gate
+    text: "Whether already-unhealthy Pods count against the budget. AlwaysAllow is what unblocks a drain stuck behind Pods that will never be Ready."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A PodDisruptionBudget says how much of a workload may be unavailable at once *because someone
+asked*. It is enforced by the eviction API, which is what `kubectl drain`, the cluster
+autoscaler, and most node upgrade tooling use -- so it is the mechanism that stops a cluster
+upgrade from rolling through your three replicas in thirty seconds.
+
+**Voluntary only, and the distinction is absolute.** A PDB has no effect on a Pod that crashes,
+a node that dies, a kernel OOM kill, or node-pressure eviction. It is not a guarantee of
+availability; it is a constraint on deliberate, tool-driven disruption. Reading it as the former
+is how people end up believing a budget protects them from a zone failure.
+
+**`maxUnavailable` is usually the right field.** `minAvailable: 2` on a Deployment that later
+scales to 10 still only protects 2, and on one that scales down to 2 blocks all disruption
+forever. `maxUnavailable: 1` keeps meaning the same thing at any size. And
+`minAvailable` equal to the replica count is the classic self-inflicted deadlock: no eviction is
+ever permitted, so no node holding one of those Pods can ever be drained, so cluster upgrades and
+scale-down stop.
+
+**The stuck-drain diagnosis is almost always a budget.** `kubectl drain` hanging with
+`Cannot evict pod as it would violate the disruption budget` means either the budget is too
+tight, or -- very commonly -- the workload is already below it because some of its Pods are
+unhealthy, so no further eviction is allowed even though those Pods are useless.
+`unhealthyPodEvictionPolicy: AlwaysAllow` is the field that was added for exactly this, and it
+belongs on most budgets.
+
+**Single-replica workloads should not have one.** A PDB over one Pod with
+`maxUnavailable: 0` makes the node undrainable; with `maxUnavailable: 1` it permits everything
+and the budget is decoration. If the workload matters, give it two replicas and then a budget; if
+it does not, leave the budget off so cluster maintenance can proceed.

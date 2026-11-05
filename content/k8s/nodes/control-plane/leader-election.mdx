@@ -1,0 +1,50 @@
+---
+id: leader-election
+title: "Leader election"
+type: pattern
+domain: control-plane
+summary: "How two replicas of a controller avoid both acting. A Lease object with a timestamp, renewed by the holder, is the whole mechanism."
+level: intermediate
+access: free
+monogram: LE
+exam: [cka]
+relations:
+  related: [controller-manager, operator]
+connects:
+  - to: controller-manager
+    text: "The controller-manager and the scheduler both hold a Lease in kube-system, which is why three replicas give failover rather than throughput."
+  - to: operator
+    text: "Any operator with more than one replica needs this, or two reconcile loops will fight over the same objects."
+  - to: apiserver
+    text: "The lease is an ordinary object, so election costs a write every few seconds and fails safe when the API server is unreachable."
+reviewed: 2026-11-05
+---
+
+Two copies of a controller running at once is not redundancy, it is a race: both read the same
+spec, both decide the same work is missing, both do it. So controllers that cannot be sharded
+elect a leader, and the losers wait.
+
+**The mechanism is deliberately boring.** A `Lease` object in `coordination.k8s.io` holds the
+current holder's identity and a renewal timestamp. The holder updates it every few seconds
+(`renewDeadline`); a candidate that sees the lease unrenewed for longer than `leaseDuration`
+takes it over by writing its own name. Optimistic concurrency on the object makes the takeover
+atomic -- two candidates writing at once, one gets a conflict and backs off. `kubectl -n
+kube-system get leases` shows who currently holds the scheduler and the controller-manager.
+
+**The timings are a trade-off you can see in an incident.** Short durations mean fast failover
+and more API writes, plus a real risk of a healthy-but-slow leader losing its lease during an
+API server hiccup and causing a needless handover. The defaults -- around fifteen seconds of
+lease with a ten-second renewal deadline -- mean a crashed controller leaves the cluster without
+that loop for up to fifteen seconds. For most controllers that is invisible; for one driving
+traffic it may not be.
+
+**It is not fencing.** A leader that is partitioned from the API server but still able to reach
+the thing it manages can keep acting after its lease has been taken: Kubernetes leases give you
+mutual exclusion against cooperating participants, not a guarantee against a split brain. A
+controller doing something genuinely dangerous -- mounting a volume, promoting a database --
+needs its own fencing at that resource, which is exactly why storage attachment is handled by
+the attach-detach controller and CSI rather than by whoever thinks they are the leader.
+
+If you write an operator with controller-runtime, this is one flag
+(`--leader-elect`) and a lease name. Turning it on before the second replica, not after the
+first duplicate-resource incident, is the cheap order.

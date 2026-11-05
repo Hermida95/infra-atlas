@@ -1,0 +1,70 @@
+---
+id: pod-security-admission
+title: "Pod Security Admission"
+type: concept
+domain: security
+summary: "Three standard levels -- privileged, baseline, restricted -- enforced from a namespace label. Built in, no webhook, and the replacement for PodSecurityPolicy."
+level: intermediate
+access: free
+monogram: PSA
+exam: [cka, cks]
+relations:
+  related: [security-context, admission]
+connects:
+  - to: admission
+    text: "It is a built-in admission plugin, so there is no deployment to run and no availability risk from it rejecting your Pods."
+  - to: namespace
+    text: "The level is a label on the namespace, which makes the namespace the unit of enforcement for what a Pod may ask for."
+  - to: security-context
+    text: "The levels are defined in terms of security context fields, so complying with restricted means setting those fields correctly."
+  - to: policy-engine
+    text: "PSA has exactly three levels and no customisation, so anything beyond them needs Kyverno, Gatekeeper or a CEL policy."
+lead: "Three levels and three modes, combined per namespace with labels."
+parts:
+  - name: "privileged"
+    kind: split
+    text: "No restrictions. Appropriate for namespaces holding node agents and CNI plugins, and for nothing else."
+  - name: "baseline"
+    kind: shell
+    text: "Blocks the known escapes: host namespaces, hostPath, privileged containers, most capabilities. Minimal friction, real value."
+  - name: "restricted"
+    kind: gate
+    text: "Hardened: non-root, no privilege escalation, drop ALL capabilities, a seccomp profile, read-only root recommended."
+  - name: "enforce, audit, warn"
+    kind: bell
+    text: "Reject, record in the audit log, or print a warning to the client. Running warn and audit before enforce is how you migrate safely."
+layout: row
+reviewed: 2026-11-05
+---
+
+Pod Security Admission applies one of three predefined Pod Security Standards to a namespace,
+selected by labels:
+`pod-security.kubernetes.io/enforce: restricted`, with optional
+`audit` and `warn` levels and a `*-version` suffix to pin the standard. It is compiled into the
+API server -- nothing to install, nothing to keep available, and no webhook that can lock you out
+of your own cluster.
+
+**The three levels are not configurable, by design.** PodSecurityPolicy failed partly because it
+tried to be a general policy engine with per-user resolution rules that nobody could predict.
+PSA replaces it with a small number of well-understood profiles. If you need "restricted but
+allow NET_BIND_SERVICE", PSA cannot express it; that is a policy engine's job, and the division
+of labour is deliberate.
+
+**`warn` and `audit` first, then `enforce`.** Labelling a namespace `warn: restricted` makes every
+non-compliant apply print a warning to the person running it, without blocking anything, and
+`audit` records violations in the audit log. Running both for a couple of weeks tells you exactly
+which workloads will break, which is far better than enforcing and discovering it during a
+deploy. The usual migration is baseline enforced everywhere, restricted warned, then restricted
+enforced namespace by namespace.
+
+**What `restricted` actually demands** is worth knowing before you promise it:
+`runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`,
+`seccompProfile.type: RuntimeDefault`, no host namespaces, no hostPath, and a volume type from
+the allowed list. Most images need only the security context fields added; the ones that break
+are those running as root or binding to port 80, and both have simple fixes (a user in the image,
+a port above 1024 with the Service mapping it).
+
+**It only sees Pod-shaped requests.** A Deployment with a non-compliant template is accepted, and
+the rejection appears when the ReplicaSet tries to create Pods -- as a `FailedCreate` event on
+the ReplicaSet, not an error on your apply. That indirection is the one thing to warn a team
+about before switching enforcement on.

@@ -1,0 +1,65 @@
+---
+id: etcd
+title: "etcd"
+type: service
+domain: control-plane
+summary: "A replicated key-value store with a strict quorum. It holds every object in the cluster, which makes it the one piece whose loss is unrecoverable without a backup."
+logo: etcd
+level: core
+access: free
+exam: [cka, cks]
+relations:
+  related: [apiserver]
+connects:
+  - to: etcd-backup
+    text: "A snapshot of etcd is a snapshot of the whole cluster. Without one, losing quorum permanently means rebuilding every object by hand."
+  - to: encryption-at-rest
+    text: "Secrets are stored base64-encoded, not encrypted, unless the API server is configured with an encryption provider: anyone with the etcd data has them."
+  - to: apiserver
+    text: "Only the API server connects, over mutual TLS with its own client certificate, which is the whole reason etcd is not exposed to the cluster network."
+lead: "A Raft cluster, and the four properties that decide how you operate it."
+parts:
+  - name: "Raft quorum"
+    kind: ring
+    text: "Writes need a majority. Three members tolerate one failure, five tolerate two. An even number adds no fault tolerance and adds latency."
+  - name: "Key space"
+    kind: cylinder
+    text: "`/registry/<resource>/<namespace>/<name>`, holding the serialised object. The whole cluster is a flat key-value tree."
+  - name: "Revisions"
+    kind: discs
+    text: "Every write bumps a global revision, which is what powers watches and resourceVersion. History is compacted and defragmented, or the database grows until it refuses writes."
+  - name: "Mutual TLS"
+    kind: shell
+    text: "Peer and client certificates, with their own CA. Access to etcd is complete access to the cluster, with no RBAC in between."
+layout: cluster
+reviewed: 2026-11-05
+---
+
+etcd is a strongly consistent, replicated key-value store, and in Kubernetes it holds every
+object there is. The API server serialises objects into keys under `/registry` and relies on
+etcd's revisions for watches and optimistic concurrency. Nothing else in the cluster has a
+database -- which is the reason Kubernetes behaves coherently, and the reason this one component
+deserves disproportionate care.
+
+**Quorum is the whole operational story.** Writes require a majority of members, so three
+members survive one loss and five survive two. Lose quorum and the cluster becomes read-only
+until it comes back; lose the data on a majority and the cluster is gone, with no way to
+reconstruct it from running Pods. Members should sit in different failure domains, on low-latency
+disks -- etcd is fsync-bound, and a slow disk shows up as API server latency, leader elections
+and flapping nodes long before anyone suspects storage.
+
+**Size and compaction matter more than people expect.** The default quota is a couple of
+gigabytes; exceed it and etcd goes into a read-only alarm state, which looks like a cluster that
+accepts no writes at all. Old revisions are compacted automatically, but compaction does not
+return disk space -- `etcdctl defrag` does. Clusters that churn objects quickly (lots of Events,
+lots of Jobs, a noisy operator) are the ones that hit this.
+
+**Security has no middle ground here.** There is no RBAC between etcd and the objects: read
+access to etcd is read access to every Secret, every ServiceAccount token, every ConfigMap.
+So it listens only to the API server over mutual TLS, it is never on the pod network, and
+encryption at rest is configured in the API server rather than in etcd. If an attacker reaches
+etcd, nothing else in your hardening matters.
+
+**Backups are the only real safety net.** `etcdctl snapshot save`, taken on a schedule, stored
+off the cluster, and -- the part teams skip -- restored at least once into a throwaway cluster
+so you know the procedure and the certificates work. A backup nobody has restored is a guess.

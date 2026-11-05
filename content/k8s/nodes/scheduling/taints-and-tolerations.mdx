@@ -1,0 +1,66 @@
+---
+id: taints-and-tolerations
+title: "Taints & tolerations"
+type: concept
+domain: scheduling
+summary: "A taint repels Pods from a node; a toleration is permission to ignore one. It is the only placement mechanism that can also evict a Pod already running."
+level: core
+access: free
+monogram: TT
+exam: [ckad, cka]
+relations:
+  related: [node-selector, node-conditions]
+connects:
+  - to: node-conditions
+    text: "Kubernetes taints nodes itself: unreachable, memory pressure, disk pressure, unschedulable. Those taints are how a sick node stops receiving work."
+  - to: daemonset
+    text: "A DaemonSet needs tolerations to reach tainted nodes, which is why a dedicated pool often has no log shipper on it."
+  - to: node-drain
+    text: "Draining a node taints it unschedulable and then evicts, so cordon and drain are these two mechanisms in sequence."
+  - to: device-plugins
+    text: "Expensive hardware is tainted so only Pods that ask for it land there, with a node label to pull the right ones in."
+lead: "Three effects, and only one of them touches a Pod that is already running."
+parts:
+  - name: "NoSchedule"
+    kind: gate
+    text: "New Pods without a matching toleration are not placed here. Running Pods are untouched."
+  - name: "PreferNoSchedule"
+    kind: bars
+    text: "A scoring penalty rather than a filter. The scheduler avoids the node if it can, and uses it if it must."
+  - name: "NoExecute"
+    kind: trigger
+    text: "New Pods are not placed and existing ones are evicted, immediately or after tolerationSeconds. The only placement rule that acts during execution."
+  - name: "tolerationSeconds"
+    kind: loop
+    text: "How long a Pod may stay on a NoExecute taint it tolerates. The default 300 on the unreachable taint is why a dead node takes five minutes to drain."
+layout: row
+reviewed: 2026-11-05
+---
+
+Taints and tolerations are the inverse of selectors: instead of a Pod asking for a kind of node,
+the node refuses Pods that have not been given permission. A taint is a key, an optional value
+and an effect, applied to the node. A toleration on a Pod matches a taint and cancels it. A node
+with three taints needs a Pod that tolerates all three.
+
+**They only repel.** A toleration does not attract -- it merely permits. So tainting the GPU
+nodes and adding a toleration to your GPU workload keeps other Pods away but does nothing to
+guarantee your workload lands there; it can still be scheduled on a general node where it will
+find no GPU. The complete pattern is always taint plus toleration (to keep others out) **and**
+label plus selector or affinity (to pull the right Pods in).
+
+**`NoExecute` is the special one.** Every other placement feature is evaluated once, at
+scheduling. `NoExecute` is evaluated continuously: taint a node with it and Pods that do not
+tolerate it are evicted now. That is what makes it the tool for draining and for reacting to node
+conditions, and the reason `tolerationSeconds` exists -- a grace window per Pod.
+
+**Kubernetes uses this on itself, and the timings explain real behaviour.** When a node stops
+heartbeating, the controller adds `node.kubernetes.io/unreachable:NoExecute`. Every Pod gets a
+default toleration for it with `tolerationSeconds: 300`, so Pods sit on the dead node for five
+minutes before being deleted and rescheduled. Shortening that toleration in the Pod spec is the
+supported way to recover faster, and it trades against flapping: a node that briefly loses its
+network would otherwise have all its Pods rescheduled for nothing.
+
+**Control plane nodes are tainted**, which is why a single-node cluster runs nothing until you
+either remove the taint or tolerate it -- the first puzzle anyone hits with kubeadm on one
+machine. And an empty-key toleration with `operator: Exists` tolerates everything, which is
+appropriate for a handful of cluster agents and for nothing else.

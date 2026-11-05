@@ -1,0 +1,70 @@
+---
+id: ingress
+title: "Ingress"
+type: concept
+domain: network
+hub: true
+summary: "HTTP routing by host and path, sharing one load balancer across many Services. A frozen API whose real behaviour lives in controller-specific annotations."
+level: core
+access: free
+monogram: ING
+exam: [ckad, cka]
+relations:
+  related: [ingress-controller, gateway-api]
+  alternative_to: [loadbalancer-service, gateway-api]
+connects:
+  - to: ingress-controller
+    text: "The object is inert on its own. A controller watches it and programs a real proxy, and which controller you run decides what the object means."
+  - to: gateway-api
+    text: "Gateway API is the replacement: the same job with a real schema, role separation and protocols beyond HTTP."
+  - to: service
+    text: "Rules point at Services, and most controllers then bypass the ClusterIP and send straight to the Pod endpoints."
+  - to: annotations
+    text: "Rewrites, timeouts, body size and auth are all annotations, which is why one manifest behaves differently on two controllers."
+lead: "What the API itself can express -- which is less than most people assume."
+parts:
+  - name: "Host and path rules"
+    kind: lanes
+    text: "Match a hostname and a path with Prefix or Exact, and send it to a Service and port. This is the whole routing model."
+  - name: "TLS"
+    kind: shell
+    text: "A list of hosts and the Secret holding their certificate. Termination happens at the controller, and cert-manager usually fills the Secret."
+  - name: "IngressClass"
+    kind: meta
+    text: "Which controller owns this object. Required once more than one controller runs, and the cause of an Ingress nothing ever picks up."
+  - name: "defaultBackend"
+    kind: gate
+    text: "Where unmatched requests go. Without it, the controller's own default 404 is what your users see."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An Ingress maps hostnames and paths to Services. One load balancer, one address, one certificate
+store, many applications behind it -- which is why it replaced a LoadBalancer Service per app
+almost everywhere HTTP is involved. The object itself does nothing: it is configuration for a
+controller that must be installed separately.
+
+**The API stopped evolving, and the ecosystem went around it.** Ingress describes host, path, TLS
+and a backend, and nothing else. Everything real -- a path rewrite, a redirect, a timeout, a
+request size limit, rate limiting, authentication, canary weights, gRPC, websockets -- arrives as
+annotations whose names and semantics belong to the controller. The consequence is concrete: an
+Ingress manifest is not portable, validation cannot catch a typo in an annotation key, and
+migrating from ingress-nginx to Traefik or an ALB controller means rewriting every one.
+
+**`pathType` is the part people get wrong.** `Prefix` matches path segments, so `/api` matches
+`/api/v1` but not `/apifoo`; `Exact` matches only the literal path; and
+`ImplementationSpecific` means whatever the controller wants, which is usually a regex and is why
+the same file behaves differently in two clusters. On ingress-nginx, regex captures combined with
+a rewrite annotation are the standard way to strip a prefix, and they are not part of the API at
+all.
+
+**Most controllers skip the Service.** Having resolved the rule to a Service, they read its
+EndpointSlices and load-balance to Pod IPs directly -- so the ClusterIP is not in the data path,
+kube-proxy is bypassed, and features like per-request balancing, retries and sticky sessions
+become possible. It also means `sessionAffinity` on the Service does nothing for ingress traffic.
+
+**New clusters should look at Gateway API first.** It is the successor, designed with the
+annotation problem in mind: typed route objects, protocol-specific listeners, cross-namespace
+delegation and a clean split between the person who owns the load balancer and the team that owns
+a route. Ingress is not going away -- too much exists -- but it is not where the work is
+happening.

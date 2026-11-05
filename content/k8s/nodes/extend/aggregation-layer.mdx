@@ -1,0 +1,51 @@
+---
+id: aggregation-layer
+title: "API aggregation"
+type: concept
+domain: extend
+summary: "A second API server owning a whole group path, proxied by the main one. How metrics.k8s.io works, and the right answer when objects must not live in etcd."
+level: advanced
+access: free
+monogram: AGG
+exam: [cka]
+relations:
+  related: [crd, metrics-server]
+  alternative_to: [crd]
+connects:
+  - to: crd
+    text: "A CRD stores objects in etcd and needs no server of your own; aggregation gives you full control of storage and behaviour, and a server to run."
+  - to: metrics-server
+    text: "The resource metrics API is the canonical example: current usage served from memory, which no etcd-backed CRD could do."
+  - to: apiserver
+    text: "An APIService registration makes the main API server proxy that group path, so clients see one API with one authentication model."
+reviewed: 2026-11-05
+---
+
+The aggregation layer lets you register an `APIService` claiming a group and version, pointing at
+a Service in the cluster. The main API server then proxies every request for that group to your
+server, after authenticating the caller -- so clients see one API, one endpoint, one
+authentication model, and `kubectl` works against your resources as if they were built in.
+
+**metrics-server is the example that explains why it exists.** `kubectl top` reads
+`metrics.k8s.io`, which is served from memory and recomputed every fifteen seconds. Storing that
+in etcd would be absurd: thousands of values, rewritten constantly, with no value in history.
+An aggregated API server can serve whatever it likes from wherever it likes, which is the one
+thing a CRD cannot do.
+
+**CRD versus aggregation is a short decision.** Use a CRD unless you need custom storage (objects
+that live in an external database, or are computed rather than stored), unusual semantics
+(long-running operations, streaming, non-standard subresources), or a volume of objects that
+would hurt etcd. That covers almost everything, which is why CRDs are the overwhelming majority
+of extensions and aggregation is rare.
+
+**The cost is that you are running an API server.** TLS with a certificate the main server
+trusts, delegated authentication and authorisation (your server must ask the main one whether the
+caller is allowed), OpenAPI publishing, versioning and conversion, high availability -- all of it
+yours. `apiserver-builder` and the sample-apiserver exist to help, and it is still substantially
+more work than a CRD.
+
+**Its failure mode affects more than itself.** An unavailable aggregated API makes discovery
+incomplete, and commands like `kubectl get all` or anything that enumerates resources can fail or
+hang -- which is why a broken metrics-server sometimes manifests as `kubectl` being slow for
+everything. `kubectl get apiservices` showing a `False` availability condition is the check, and
+it is worth knowing before an incident makes it look like the whole API is unwell.

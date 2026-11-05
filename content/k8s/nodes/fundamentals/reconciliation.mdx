@@ -1,0 +1,70 @@
+---
+id: reconciliation
+title: "The reconciliation loop"
+type: concept
+domain: fundamentals
+hub: true
+summary: "Nothing in Kubernetes executes your command. A controller watches for the gap between spec and status and keeps trying to close it, forever."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [object, controller-manager]
+connects:
+  - to: controller-manager
+    text: "The built-in controllers all run here, each one a loop over one kind of object. Deployment, Node, Job and the rest are the same pattern repeated."
+  - to: operator
+    text: "An operator is this loop applied to a resource you invented, which is why writing one is mostly deciding what its status means."
+  - to: apiserver
+    text: "Controllers learn about change through a watch on the API server, not by polling, and re-list periodically in case they missed an event."
+  - to: events
+    text: "An event is a controller saying out loud why it could not converge: the readable half of a loop that otherwise just retries."
+lead: "The loop every controller runs, from the built-in Deployment controller to the operator you write on Friday."
+parts:
+  - name: "Watch"
+    kind: orbit
+    text: "A long-lived connection to the API server that streams changes to the objects this controller cares about, with a periodic re-list to recover from a missed event."
+  - name: "Work queue"
+    kind: jobs
+    text: "Changes become keys in a queue, de-duplicated and rate-limited. Ten edits in a second collapse into one reconcile, which is why controllers survive a storm."
+  - name: "Reconcile"
+    kind: loop
+    text: "Read the object, look at the world, do whatever makes them agree. It must be idempotent: it will run again on the same object with nothing left to do."
+  - name: "Status update"
+    kind: panel
+    text: "Write back what is now true, including conditions and an observedGeneration, so the next pass can tell its own work from someone else's."
+  - name: "Backoff"
+    kind: trigger
+    text: "A failed reconcile is re-queued with exponential backoff instead of retried in a tight loop. This is why a broken object fails slowly, not loudly."
+layout: row
+reviewed: 2026-11-05
+---
+
+`kubectl apply` does not deploy anything. It writes an object and returns. Some controller,
+somewhere, later notices the write and starts trying to make reality match it -- and will keep
+trying, with backoff, until it succeeds or you change the spec. Understanding this is the
+difference between reading Kubernetes as a job scheduler and reading it as what it actually is:
+a database with a lot of robots watching it.
+
+**Level-triggered, not edge-triggered.** A controller does not process the event "replicas
+changed from 3 to 5". It wakes up and asks "the spec says 5, how many are there?", which is why
+a controller that was down for an hour does not need a backlog -- it reads the current state and
+converges. It is also why there is no such thing as a failed command to retry: there is only a
+spec that is not yet true.
+
+**Every reconcile must be idempotent**, because it runs far more often than the number of real
+changes: a re-list, a resync, another controller's status write, your own `kubectl label`. If a
+reconcile creates something without first checking whether it exists, you get duplicates on the
+second pass. This is the single most common bug in a first operator.
+
+**Conditions are the readable form of the loop's state.** `Available`, `Progressing`,
+`Ready` -- each with a status, a reason and a message. `observedGeneration` on status, compared
+against `metadata.generation`, tells you whether the controller has even looked at your latest
+edit yet; if they differ, the status you are reading answers an older question. When something
+is stuck, those two numbers and `kubectl describe` are the first place to look, before logs.
+
+The practical consequence is that there is no imperative path to fall back on. If a controller
+is not running -- the operator is not installed, the controller-manager is down, RBAC denies it
+the object -- then the object sits there, valid and accepted and completely inert, and nothing
+in the output of `kubectl apply` hints at it.

@@ -1,0 +1,48 @@
+---
+id: downward-api
+title: "Downward API"
+type: concept
+domain: config
+summary: "A Pod learning about itself: its name, namespace, node, labels, and its own resource limits, as environment variables or files."
+level: intermediate
+access: free
+monogram: DA
+exam: [ckad]
+relations:
+  related: [volume-projection]
+connects:
+  - to: volume-projection
+    text: "As a projected source, labels and annotations become files that are updated when they change -- which environment variables cannot do."
+  - to: requests-and-limits
+    text: "A container can read its own memory limit, which is how a runtime sizes its heap correctly instead of reading the node's total."
+  - to: tracing
+    text: "Pod name, node and namespace as environment variables are what let a process tag its own metrics and spans with where it is running."
+reviewed: 2026-11-05
+---
+
+The downward API exposes information about the Pod to the containers inside it. Through
+`fieldRef` you get `metadata.name`, `metadata.namespace`, `metadata.uid`, `spec.nodeName`,
+`status.podIP` and the service account name; through `resourceFieldRef` you get a container's own
+requests and limits; and through a projected volume you get labels and annotations as files.
+
+**The resource case is the one that prevents real bugs.** A JVM, a Go program or a Node process
+that sizes itself from the machine's visible CPU and memory reads the *node's* values, not the
+container's limits, because cgroup limits are not what `/proc/meminfo` reports. A JVM on a node
+with 64 GiB and a 512 MiB limit sets a heap it cannot have and is OOM-killed. Modern runtimes are
+cgroup-aware and mostly get this right, but passing the limit explicitly --
+`MEMORY_LIMIT` from `resourceFieldRef` on `limits.memory` -- is unambiguous and works everywhere.
+
+**Identity for telemetry is the other common use.** `POD_NAME`, `POD_NAMESPACE` and
+`NODE_NAME` as environment variables are what let an application label its metrics, tag its
+traces and write log lines that can be correlated with a Pod -- and they cost nothing. Nearly
+every production Deployment has these three.
+
+**Labels and annotations are only available as files, not as environment variables**, and the
+reason is exactly the update semantics: labels can change on a running Pod, environment variables
+cannot be updated, so exposing them that way would be a lie. As files in a projected volume they
+are kept current, which makes them usable for a sidecar that needs to react to a label change.
+
+**What it cannot give you** is anything about other objects: no Service addresses, no ConfigMap
+contents, nothing about the cluster. For those, the Pod has to query the API with its
+ServiceAccount token -- which is a different and much larger decision, since it means granting
+RBAC to a workload.

@@ -1,0 +1,64 @@
+---
+id: api-priority-fairness
+title: "API Priority & Fairness"
+type: concept
+domain: control-plane
+summary: "Bounded concurrency with fair queues in front of the API server, so one hot-looping controller cannot starve the kubelets out of the control plane."
+level: advanced
+access: free
+monogram: APF
+exam: [cka]
+relations:
+  related: [apiserver]
+connects:
+  - to: apiserver
+    text: "Requests are classified and queued before they are served, so overload degrades per-class instead of collapsing the whole API."
+  - to: operator
+    text: "A badly written operator that lists every Pod in a loop is the usual cause of the throttling someone else sees."
+  - to: troubleshooting
+    text: "A 429 with a retryAfterSeconds hint is APF speaking: the request was shed on purpose, not lost."
+lead: "Two objects decide what happens to a request before it is served."
+parts:
+  - name: "FlowSchema"
+    kind: lanes
+    text: "Matches a request by user, group, verb and resource, and assigns it to a priority level plus a flow key -- usually the username, so one client is one queue."
+  - name: "PriorityLevelConfiguration"
+    kind: bars
+    text: "How many concurrency shares that level gets, how many queues it has, and whether excess is queued or rejected outright."
+  - name: "Shuffle sharding"
+    kind: split
+    text: "Flows are hashed across queues so one abusive client collides with few others, instead of taking a whole level down with it."
+  - name: "Exempt level"
+    kind: gate
+    text: "System-critical traffic -- the kubelets, the leaders -- never queues. This is the piece that keeps a melting cluster recoverable."
+layout: row
+reviewed: 2026-11-05
+---
+
+Before APF, the API server had two numbers: maximum in-flight mutating requests and maximum
+in-flight read requests. Exceed either and requests were rejected indiscriminately -- so an
+operator listing every Pod every second could push the kubelets' heartbeats out of the server
+and take the cluster `NotReady`. The fix was not more capacity but fairness.
+
+**Every request is classified, then queued.** A FlowSchema matches on identity and resource and
+routes the request to a PriorityLevelConfiguration; within a level, requests are distributed
+across queues by a flow key so that one noisy client occupies one queue rather than all of them.
+Levels have concurrency shares, so `leader-election` and `system` traffic is protected from
+`global-default`, and the `exempt` level bypasses queuing entirely.
+
+**What you see when it engages is a 429** with `Retry-After`, and kubectl saying it is being
+throttled. That is the system working: the request was deliberately shed to protect something
+more important. The wrong reaction is to raise the limits; the right one is to find the client.
+The `apiserver_flowcontrol_*` metrics -- rejected requests and queue length by priority level
+and FlowSchema -- name it directly, and almost always it is one controller doing unbounded
+`list` calls where it should be using an informer's cache.
+
+**Tuning is rarely the answer, but it is available.** You can give a critical in-house controller
+its own FlowSchema and priority level so it is not competing in the default pool, or cap a
+known-abusive integration into a small level of its own. Both are better than the alternative
+people reach for first, which is adding API server replicas to absorb traffic that should not
+exist.
+
+For anyone writing controllers, the lesson is upstream of all of this: watch, do not poll; use a
+shared informer; set a resync period in minutes, not seconds; and page through large lists.
+APF is a seatbelt, not a licence.

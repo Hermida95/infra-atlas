@@ -1,0 +1,51 @@
+---
+id: persistent-volume
+title: "PersistentVolume"
+type: concept
+domain: storage
+summary: "A piece of real storage as a cluster-scoped object, with its own lifecycle. These days almost always created by a driver rather than by hand."
+level: intermediate
+access: free
+monogram: PV
+exam: [cka]
+relations:
+  related: [persistent-volume-claim, storage-class]
+connects:
+  - to: persistent-volume-claim
+    text: "A claim is a request and a volume is the supply. Binding is one-to-one and exclusive, and once bound neither can be reused elsewhere."
+  - to: storage-class
+    text: "A class is what creates these automatically, which is why writing one by hand is now only for pre-existing storage."
+  - to: reclaim-policy
+    text: "The policy on the volume decides whether the real disk is deleted or kept when the claim goes away."
+  - to: csi
+    text: "The volume's source names a CSI driver and a volume handle, which is the link between the Kubernetes object and the actual disk."
+reviewed: 2026-11-05
+---
+
+A PersistentVolume represents actual storage: an EBS volume, a Ceph RBD image, an NFS export, a
+directory on a particular node. It is cluster-scoped, has a capacity, a set of access modes, a
+reclaim policy, and a driver-specific source that identifies the real thing. It exists
+independently of any Pod.
+
+**You rarely create one now.** With a StorageClass and dynamic provisioning, a claim causes a
+volume to be created to fit it, which is the normal path. Writing a PV by hand remains the
+answer in two cases: adopting storage that already exists and must not be recreated (a restored
+snapshot, a legacy NFS share), and local volumes pinned to specific nodes.
+
+**Binding is exclusive and sticky.** One claim binds to one volume, and the pairing is recorded
+on both. A volume that was bound and is now `Released` -- because its claim was deleted but its
+reclaim policy was `Retain` -- will not be reused by a new claim even if it looks identical; the
+stale `claimRef` has to be cleared first. That is the explanation for a PVC sitting in
+`Pending` while an apparently suitable volume sits in `Released` next to it.
+
+**Access modes are a property of the storage, not a wish.** `ReadWriteOnce` means one node at a
+time, which is what every cloud block device offers, and it is the reason a Deployment with two
+replicas and one block-backed PVC cannot have both Pods on different nodes.
+`ReadWriteMany` needs a file protocol -- NFS, EFS, CephFS, Azure Files.
+`ReadWriteOncePod` is the newer, stricter one: exactly one Pod, which is what a single-writer
+database actually wants.
+
+**For local storage, `nodeAffinity` on the volume is what makes it work.** A local PV declares
+which node it lives on, and the scheduler will only place a Pod using it there. That is the
+supported replacement for `hostPath`: the same performance, with the scheduler aware of the
+constraint rather than discovering it as a failed mount.

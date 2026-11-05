@@ -1,0 +1,50 @@
+---
+id: server-side-apply
+title: "Server-side apply"
+type: concept
+domain: fundamentals
+summary: "Field-level ownership recorded on the object itself. It turns two tools fighting over one field from a silent last-write-wins into a reported conflict."
+level: intermediate
+access: free
+monogram: SSA
+exam: [cka]
+relations:
+  related: [object, kubectl]
+connects:
+  - to: apiserver
+    text: "The merge happens in the API server, which records in managedFields which manager owns which field, so ownership survives whoever runs the next apply."
+  - to: gitops
+    text: "A GitOps controller and an autoscaler can own different fields of the same Deployment, which is only safe because ownership is tracked per field."
+  - to: hpa
+    text: "An HPA writes spec.replicas. Applying a manifest that also sets replicas is the textbook conflict, and the fix is to stop declaring it."
+  - to: kustomize
+    text: "A patch and an apply are both writes from different managers, so the diff you see locally is not necessarily the diff the server will take."
+reviewed: 2026-11-05
+---
+
+Client-side apply computed the diff on your machine, using the
+`last-applied-configuration` annotation as its record of what you previously sent. That worked
+alone and badly in company: two tools applying overlapping manifests each believed the other's
+fields were removals, and whoever ran last won, silently.
+
+**Server-side apply moves the merge into the API server** and records the result in
+`metadata.managedFields`: for each field path, which manager set it. Applying with a field
+manager that does not own a field you are trying to change returns a `409 Conflict` listing
+exactly which fields and which manager -- so the collision becomes a message instead of a
+mystery. `--force-conflicts` takes ownership anyway, which is the right answer when you have
+decided your manifest is the source of truth.
+
+**The HPA case is the one everyone hits.** A Deployment manifest that sets `replicas: 3` and an
+HorizontalPodAutoscaler that scales to 7 are two managers writing one field. With client-side
+apply, every CI run quietly reset the count to 3 until the HPA scaled it back, producing a
+sawtooth nobody could explain. With server-side apply it is a conflict, and the actual fix is
+to remove `replicas` from the manifest entirely and let the autoscaler own it.
+
+**Lists need a merge key to be mergeable.** The schema marks `containers` as merged by `name`
+and `ports` by `containerPort`, so two managers can each own one entry. A list without a
+declared strategy is atomic -- one manager owns the whole thing -- which is why adding one
+tolerationfrom a second tool takes the whole list with it.
+
+For anything automated, `kubectl apply --server-side --field-manager=<name>` with a stable
+manager name is the right default: the ownership record then tells a human, six months later,
+which pipeline is responsible for the field they want to change.

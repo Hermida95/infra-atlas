@@ -1,0 +1,65 @@
+---
+id: node-affinity
+title: "Node affinity"
+type: concept
+domain: scheduling
+summary: "Node selection with operators and with soft preferences. The required form can make a Pod unschedulable; the preferred form can only make it badly placed."
+level: intermediate
+access: free
+monogram: NA
+exam: [ckad, cka]
+relations:
+  related: [node-selector, pod-affinity]
+connects:
+  - to: scheduler
+    text: "requiredDuringScheduling is evaluated in the filter phase and preferredDuringScheduling in the score phase, which is exactly the difference in their consequences."
+  - to: node-selector
+    text: "Anything a nodeSelector can say, affinity can say too, with In, NotIn, Exists and Gt added."
+  - to: topology-spread
+    text: "Affinity decides which nodes are acceptable; spread constraints decide how evenly to use them. They are usually both needed."
+  - to: karpenter
+    text: "A node provisioner reads these constraints to decide what kind of instance to launch, so affinity becomes a purchasing instruction."
+lead: "Two halves with different enforcement, and the difference is the whole feature."
+parts:
+  - name: "requiredDuringSchedulingIgnoredDuringExecution"
+    kind: gate
+    text: "A hard filter. Multiple nodeSelectorTerms are ORed, matchExpressions within one are ANDed. No match means Pending."
+  - name: "preferredDuringSchedulingIgnoredDuringExecution"
+    kind: bars
+    text: "A weighted score from 1 to 100. The Pod will be placed somewhere regardless -- just not where you hoped if nothing matches."
+  - name: "Operators"
+    kind: chips
+    text: "In, NotIn, Exists, DoesNotExist, Gt, Lt. NotIn and DoesNotExist are how anti-affinity against a node label is expressed."
+  - name: "IgnoredDuringExecution"
+    kind: ring
+    text: "Both names end this way for a reason: the rule is checked once, at scheduling. Relabel the node afterwards and the Pod stays put."
+layout: row
+reviewed: 2026-11-05
+---
+
+Node affinity is `nodeSelector` with a grammar. It lets you say "in zone a or zone b", "any
+instance type not in this list", "a node with a GPU count greater than 2", and -- crucially --
+"prefer this, but run anyway if you cannot".
+
+**Required versus preferred is the distinction to internalise**, because it decides your failure
+mode. A required rule is a filter: the scheduler discards every node that does not match, and if
+none are left the Pod waits as `Pending` indefinitely. A preferred rule is a score: the scheduler
+ranks nodes, adds the weight where the rule matches, and places the Pod on the best survivor --
+so an unsatisfiable preference is silent, and you discover it by noticing all your replicas are
+in one zone.
+
+**`IgnoredDuringExecution` is in both names and means what it says.** Affinity is evaluated when
+the Pod is scheduled and never again. Remove the label from the node and the Pod keeps running
+there happily. There has never been a `RequiredDuringExecution` variant, so if a Pod must leave a
+node when conditions change, the mechanism is a taint with `NoExecute`, not affinity.
+
+**The syntax has one real trap.** Under `required`, the list of `nodeSelectorTerms` is ORed while
+the `matchExpressions` inside one term are ANDed. So two terms means "either of these shapes" and
+two expressions in one term means "both of these labels" -- and writing the one you did not mean
+produces a rule that is either far too permissive or impossible to satisfy, with no error either
+way. `kubectl describe pod` on a Pending Pod is the only feedback.
+
+**With a node provisioner it becomes a buying decision.** Karpenter and the cluster autoscaler
+read a pending Pod's affinity to decide what to launch: a required `arch: arm64` means a Graviton
+instance appears, a required zone means it appears there. That makes affinity the interface
+between a workload's needs and your cloud bill, and a stray required constraint an expensive one.

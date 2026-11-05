@@ -1,0 +1,64 @@
+---
+id: role-and-clusterrole
+title: "Role & ClusterRole"
+type: concept
+domain: security
+summary: "A list of permissions with no subject attached. The scope difference is not about power but about which kinds of object the rules can name."
+level: core
+access: free
+monogram: RO
+exam: [cka, cks]
+relations:
+  related: [rbac, rolebinding]
+connects:
+  - to: rbac
+    text: "A role grants nothing on its own. It is a reusable list that a binding turns into access."
+  - to: rolebinding
+    text: "A RoleBinding can reference a ClusterRole, which grants those rules inside one namespace -- the main reusability idiom."
+  - to: crd
+    text: "Custom resources need explicit rules naming their apiGroup, which is why installing a CRD is followed by writing roles for it."
+lead: "What a rule is made of, and the field each one controls."
+parts:
+  - name: "apiGroups"
+    kind: modules
+    text: "The group the resource belongs to. The empty string is the core group, which is the mistake people make when writing their first role."
+  - name: "resources"
+    kind: sheet
+    text: "Plural, lower-case, as api-resources lists them. Subresources are paths: pods/exec, pods/log, deployments/scale."
+  - name: "verbs"
+    kind: chips
+    text: "get, list, watch, create, update, patch, delete, deletecollection, plus escalate, bind and impersonate."
+  - name: "resourceNames"
+    kind: meta
+    text: "Restricts a rule to named objects. It cannot restrict list or watch, which is the limitation that surprises people."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Role is a namespaced list of rules; a ClusterRole is the same list, cluster-scoped. Neither
+grants anything. The scope difference is about what the rules can address: cluster-scoped
+resources -- Nodes, PersistentVolumes, Namespaces, CustomResourceDefinitions, ClusterRoles
+themselves -- can only appear in a ClusterRole, because a namespaced Role has no way to refer to
+an object with no namespace.
+
+**The four built-in ClusterRoles are worth using rather than reinventing.**
+`view` is read-only excluding Secrets, `edit` is read-write on workloads but cannot change RBAC,
+`admin` adds RBAC within the namespace, and `cluster-admin` is everything everywhere. Bound with
+a *RoleBinding*, the first three give a team real autonomy inside its namespace with no
+cluster-wide reach -- which covers most of what people write custom roles for.
+
+**The empty `apiGroups` entry is the classic first mistake.** Pods, Services, ConfigMaps, Secrets
+and Nodes are in the core group, written as `""`. Deployments are in `apps`, Ingresses in
+`networking.k8s.io`, Roles in `rbac.authorization.k8s.io`. A rule listing
+`resources: ["deployments"]` under `apiGroups: [""]` is syntactically fine and matches nothing.
+`kubectl api-resources` prints the right group for everything the cluster serves.
+
+**Subresources are separate and often forgotten.** `pods` does not include `pods/log`,
+`pods/exec`, `pods/portforward` or `pods/status`. A debugging role needs `pods/log` explicitly,
+and *not* granting `pods/exec` is often the whole point -- a shell in a Pod is equivalent to
+whatever that Pod can reach, including its ServiceAccount token.
+
+**`resourceNames` is narrower than it looks.** It restricts rules for verbs that address one
+object (`get`, `update`, `patch`, `delete`) and has no effect on `list` or `watch`, which address a
+collection. So "may read only this ConfigMap" works for `get` and cannot prevent listing all of
+them. When that matters, the answer is a separate namespace, not a cleverer role.

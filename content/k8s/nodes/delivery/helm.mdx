@@ -1,0 +1,71 @@
+---
+id: helm
+title: "Helm"
+type: tool
+domain: delivery
+summary: "Templated manifests packaged as a versioned chart, with release state stored in the cluster. The de facto way third-party software is distributed."
+logo: helm
+level: core
+access: free
+exam: [ckad]
+relations:
+  related: [kustomize, gitops]
+  alternative_to: [kustomize]
+connects:
+  - to: kustomize
+    text: "The other approach patches plain YAML instead of templating strings, which is safer to read and much less expressive."
+  - to: gitops
+    text: "A GitOps controller usually renders the chart itself, so the cluster state comes from git rather than from someone's laptop."
+  - to: configmap
+    text: "Hashing rendered config into a Pod annotation is how a chart makes a config change trigger a rollout."
+  - to: crd
+    text: "Charts install CRDs in a special directory that Helm does not upgrade or delete, which is the sharpest edge in the tool."
+lead: "What a chart is made of, and where the state lives."
+parts:
+  - name: "templates"
+    kind: code
+    text: "Go templates producing Kubernetes YAML. Text templating over a structured format, which is both the power and the pain."
+  - name: "values.yaml"
+    kind: sheet
+    text: "The defaults, overridden per install. The chart's real API, and usually its only documentation."
+  - name: "Chart.yaml and dependencies"
+    kind: modules
+    text: "Name, version, appVersion and subcharts. Subchart values nest under the subchart's name, which is where overrides go wrong."
+  - name: "Release secret"
+    kind: shell
+    text: "Each revision stored as a Secret in the namespace, which is how rollback works and why a huge chart can exceed the size limit."
+  - name: "Hooks"
+    kind: trigger
+    text: "pre-install, pre-upgrade, post-upgrade jobs. The right place for a migration, and a common cause of a stuck upgrade."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Helm renders a directory of Go templates with a values file into Kubernetes manifests, applies
+them, and records the result as a release -- stored as a Secret in the namespace, one per
+revision. That record is what makes `helm rollback` and `helm history` possible, and it is also
+state in the cluster that can disagree with your repository.
+
+**It won distribution.** Practically every piece of third-party software for Kubernetes ships as a
+chart, so knowing how to read `values.yaml`, override it properly and inspect the result is a
+basic skill. `helm template` renders without installing and is what you should look at before
+applying anything; `helm diff` (a plugin) shows what an upgrade would change, which is the single
+most valuable addition to the tool.
+
+**Templating YAML as text is its fundamental weakness.** Indentation bugs, `nindent` mistakes and
+a value that was supposed to be a string becoming a number are all normal, and the error surfaces
+as invalid YAML or as a field silently in the wrong place. Charts that handle every possible
+option grow into templates nobody can read. This is the trade against Kustomize, which
+manipulates structured YAML and cannot produce syntactic nonsense -- at the cost of being far
+less expressive.
+
+**CRDs are the known sharp edge.** CRDs placed in a chart's `crds/` directory are installed on
+first install and then never upgraded or deleted by Helm. So a chart upgrade that ships a new CRD
+version does not apply it, and your new resources fail validation against the old schema. The
+workarounds are applying CRDs separately in your pipeline, or using a chart that puts them in
+templates and accepts the risk. Either way it has to be a conscious decision.
+
+**For your own applications, the question is whether you need templating at all.** One chart with
+values per environment is a real pattern; so is Kustomize overlays with no templating; so is
+rendering with Helm and committing the output for a GitOps controller to apply. The worst of the
+three is a chart so parameterised that reading it tells you nothing about what will be deployed.

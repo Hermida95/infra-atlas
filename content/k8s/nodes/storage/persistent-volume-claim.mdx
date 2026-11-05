@@ -1,0 +1,53 @@
+---
+id: persistent-volume-claim
+title: "PersistentVolumeClaim"
+type: concept
+domain: storage
+summary: "A Pod's request for storage: a size, an access mode and a class. It is the object that outlives the Pod, which makes it the one that holds your data."
+level: core
+access: free
+monogram: PVC
+exam: [ckad, cka]
+relations:
+  related: [persistent-volume, storage-class]
+connects:
+  - to: persistent-volume
+    text: "The claim is matched to a volume, or a volume is created for it. The binding is one-to-one and recorded on both objects."
+  - to: storage-class
+    text: "The class named here decides the driver, the parameters, the reclaim policy and whether binding waits for a Pod to be scheduled."
+  - to: statefulset
+    text: "volumeClaimTemplates creates one of these per Pod, and deliberately does not delete it when the Pod or the set goes away."
+  - to: finalizers
+    text: "A protection finalizer keeps the claim alive while a Pod still uses it, so deleting it does not pull a volume out from under a process."
+  - to: volume-expansion
+    text: "Growing storage is an edit to this object's requested size, and only works if the class allows it."
+reviewed: 2026-11-05
+---
+
+A PersistentVolumeClaim is what a workload actually writes: "I need 20Gi, ReadWriteOnce, from this
+StorageClass". The control plane either binds it to an existing PersistentVolume or asks the
+driver to create one. The Pod then references the claim, not the volume, which is the indirection
+that lets storage outlive Pods.
+
+**It is namespaced, and that is the tenancy boundary.** A Pod can only use a claim in its own
+namespace, so storage follows the same ownership as everything else, and a ResourceQuota can cap
+`requests.storage` per class to stop a team provisioning a terabyte by accident.
+
+**`volumeBindingMode` is the field that prevents the classic zone deadlock.** With
+`Immediate`, the volume is created as soon as the claim exists -- in some zone the provisioner
+picks -- and the Pod can then only be scheduled in that zone, which fails if there is no room
+there. With `WaitForFirstConsumer`, binding is deferred until a Pod using the claim is being
+scheduled, so the volume is created in the zone the scheduler chose. On any multi-zone cluster
+the second is what you want, and it is the default on most managed clusters now.
+
+**Deletion is deliberately awkward**, for good reasons. A claim in use carries the
+`kubernetes.io/pvc-protection` finalizer, so `kubectl delete pvc` hangs in `Terminating` until
+no Pod mounts it -- which is a feature, not a bug. And a StatefulSet's claims are not deleted
+when the StatefulSet is, so scaling from 5 to 3 leaves two claims (and two billed volumes)
+waiting for a scale-up. `persistentVolumeClaimRetentionPolicy` now lets you choose that
+behaviour explicitly, and setting it on purpose is better than inheriting it.
+
+**A Pending claim has three causes and `kubectl describe pvc` names which.** No StorageClass can
+satisfy it (wrong class name, or no default class in the cluster); the requested access mode is
+not available from the driver; or, with `WaitForFirstConsumer`, nothing is wrong at all and it is
+simply waiting for a Pod -- which is the one that looks like a failure and is not.
