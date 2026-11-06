@@ -8,27 +8,15 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { type GraphNode, MAP, type World } from "@/lib/graph";
+import { type GraphNode, linkDrawn, MAP, type MapView, type World } from "@/lib/graph";
 import type { Lit } from "@/lib/lit";
 import { hasMark } from "@/lib/logos";
 import { glowTexture, markCanvas } from "@/lib/textures";
 
-/**
- * What the hologram draws right now. `null` means the whole graph, which is what a world small
- * enough to read whole uses. An atlas narrows it: the overview is the major nodes and the links
- * between them, opening a node is that node and its neighbours, opening a case is its own set.
- * Nothing is removed from the graph -- this only decides what is on screen.
- */
-export type MapView = {
-  nodes: Set<string>;
-  /** Every link between the visible nodes, or only the ones the overview draws. */
-  links: "all" | "primary";
-};
-
 export type MapStore = {
   hover: GraphNode | null;
   selected: GraphNode | null;
-  /** What is drawn. See MapView; null draws everything. */
+  /** What is drawn (lib/graph.ts). Null draws everything. */
   view: MapView | null;
   /** How many links each node has that the current view is not drawing. */
   hidden: Map<string, number> | null;
@@ -133,13 +121,7 @@ function buildScene(world: World) {
   const byId = new Map(items.map((i) => [i.node.id, i]));
 
   const links = world.graph.links
-    .map((l) => ({
-      s: byId.get(l.source)!,
-      t: byId.get(l.target)!,
-      primary: l.primary !== false,
-      cur: [0, 0, 0],
-      tgt: [0, 0, 0],
-    }))
+    .map((l) => ({ s: byId.get(l.source)!, t: byId.get(l.target)!, link: l, cur: [0, 0, 0], tgt: [0, 0, 0] }))
     .filter((l) => l.s && l.t);
   const lPos = new Float32Array(links.length * 6);
   const lCol = new Float32Array(links.length * 6);
@@ -419,10 +401,7 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
       }
     }
     scene.links.forEach((l, i) => {
-      const visible =
-        drawn(l.s.node.id) &&
-        drawn(l.t.node.id) &&
-        (!onScreen || onScreen.links === "all" || l.primary);
+      const visible = linkDrawn(onScreen, l.link);
       if (!visible) {
         l.tgt = [0, 0, 0];
       } else if (show) {
@@ -431,7 +410,17 @@ function Hologram({ store, labels, onSelect, world = MAP }: Omit<Props, "paused"
         l.tgt = both ? [kk, 0.77 * kk, 0.42 * kk] : [0.5 * kk, 0.89 * kk, kk];
       } else {
         const on = focus && (l.s.node === focus || l.t.node === focus);
-        const kk = focus ? (on ? 1.2 : 0.08) : 0.42;
+        /*
+         * Inside a node's own map, everything still drawn is one of its neighbours, so a link
+         * that does not touch the focus is the neighbours relating to each other -- which is
+         * most of what the little map is for. It stays clearly secondary to the node's own
+         * spokes, but it is readable rather than hidden.
+         *
+         * On a map drawn whole, the same links are the entire rest of the graph, and dimming
+         * them to almost nothing is what creates the focus in the first place.
+         */
+        const context = onScreen?.kind === "focus" ? 0.34 : 0.08;
+        const kk = focus ? (on ? 1.2 : context) : 0.42;
         l.tgt = [0.5 * kk, 0.89 * kk, kk];
       }
       const appear = v.reduce ? 1 : Math.max(0, Math.min(1, (ease - Math.max(l.s.delay, l.t.delay)) / 0.4));

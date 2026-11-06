@@ -152,6 +152,34 @@ export function buildWorld(graph: Graph): World {
   };
 }
 
+/**
+ * What the hologram has on screen, and why. `null` is the whole graph, which is what a world
+ * small enough to read whole uses. `kind` is not decoration: it decides how the links between
+ * the visible nodes are drawn, because a node's own map wants to show how its neighbours relate
+ * to each other, while the overview wants the shape of the world and nothing else.
+ */
+export type MapView = {
+  kind: "overview" | "focus" | "case";
+  nodes: Set<string>;
+  /** Every link between the visible nodes, or only the ones the overview draws. */
+  links: "all" | "primary";
+};
+
+/** Whether a view draws this link: both ends on screen, and primary if that is all it wants. */
+export function linkDrawn(view: MapView | null, link: Link): boolean {
+  if (!view) return true;
+  return (
+    view.nodes.has(link.source) &&
+    view.nodes.has(link.target) &&
+    (view.links === "all" || link.primary !== false)
+  );
+}
+
+/** The links a view actually draws. */
+export function drawnLinks(world: World, view: MapView | null): Link[] {
+  return view ? world.graph.links.filter((l) => linkDrawn(view, l)) : world.graph.links;
+}
+
 /** The sentence that explains an edge, or null for a plain `related` line. */
 export function edgeTextBetween(world: World, a: string, b: string): string | null {
   return world.edgeText.get(edgeKey(a, b)) ?? null;

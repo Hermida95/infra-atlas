@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { categories, examLabel, inScope } from "@/lib/atlas";
-import { MAP } from "@/lib/graph";
+import { drawnLinks, MAP, type MapView } from "@/lib/graph";
 import { ATLASES } from "@/lib/worlds";
 
 /*
@@ -139,6 +139,39 @@ describe.each(ATLASES.map((atlas) => [atlas.id, atlas] as const))("%s", (_id, at
         majors.has(node.id) || [...(neighbours.get(node.id) ?? [])].some((id) => majors.has(id));
       expect(reached, `${node.id} is more than one click from the overview`).toBe(true);
     }
+  });
+
+  it("draws a node's neighbours and the links among them, not just its own spokes", () => {
+    // The map of one node is not a star: how its neighbours relate to each other is half of
+    // what it has to say, so those links belong in it too.
+    const busiest = [...atlas.world.neighbours.entries()].sort(
+      (a, b) => b[1].size - a[1].size,
+    )[0][0];
+    const near = atlas.world.neighbours.get(busiest)!;
+    const view: MapView = { kind: "focus", nodes: new Set([busiest, ...near]), links: "all" };
+
+    const drawn = drawnLinks(atlas.world, view);
+    const spokes = drawn.filter((l) => l.source === busiest || l.target === busiest);
+    const between = drawn.filter((l) => l.source !== busiest && l.target !== busiest);
+
+    expect(spokes.length).toBe(near.size);
+    expect(between.length, `${busiest}'s neighbours never touch each other`).toBeGreaterThan(0);
+    // Every link drawn joins two nodes that are on screen, so nothing dangles into the dark.
+    for (const link of drawn) {
+      expect(view.nodes.has(link.source) && view.nodes.has(link.target)).toBe(true);
+    }
+  });
+
+  it("draws only the primary links in the overview, and all of them when asked", () => {
+    const overview: MapView = { kind: "overview", nodes: atlas.world.majors, links: "primary" };
+    const everything: MapView = { kind: "overview", nodes: atlas.world.majors, links: "all" };
+
+    const few = drawnLinks(atlas.world, overview);
+    const more = drawnLinks(atlas.world, everything);
+
+    expect(few.every((l) => l.primary !== false)).toBe(true);
+    expect(few.length).toBeLessThanOrEqual(more.length);
+    expect(drawnLinks(atlas.world, null).length).toBe(atlas.world.graph.links.length);
   });
 
   it("puts every node in an area the structure browser shows", () => {

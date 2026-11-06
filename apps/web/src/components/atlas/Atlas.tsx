@@ -10,10 +10,18 @@ import {
   examLabel,
   inScope,
 } from "@/lib/atlas";
-import { type Case, type CaseOption, edgeTextBetween, type GraphNode } from "@/lib/graph";
+import {
+  type Case,
+  type CaseOption,
+  drawnLinks,
+  edgeTextBetween,
+  type GraphNode,
+  linkDrawn,
+  type MapView,
+} from "@/lib/graph";
 import { caseLit, optionLit } from "@/lib/lit";
 import { doorway } from "@/lib/worlds";
-import type { MapStore, MapView } from "../brain/BrainScene";
+import type { MapStore } from "../brain/BrainScene";
 import { Mark } from "../brain/Mark";
 import { Header } from "../Header";
 import { inline } from "../Prose";
@@ -117,12 +125,14 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
    */
   const view = useMemo<MapView | null>(() => {
     if (showAll || !world.tiered) return null;
-    if (study) return { nodes: new Set((option ?? study).nodes), links: "all" };
+    if (study) return { kind: "case", nodes: new Set((option ?? study).nodes), links: "all" };
     if (selected) {
       const near = world.neighbours.get(selected.id) ?? new Set<string>();
-      return { nodes: new Set([selected.id, ...near]), links: "all" };
+      // Its neighbours come with it, and so do the links among them: how they relate to each
+      // other is half of what this node's own map has to say.
+      return { kind: "focus", nodes: new Set([selected.id, ...near]), links: "all" };
     }
-    return { nodes: world.majors, links: "primary" };
+    return { kind: "overview", nodes: world.majors, links: "primary" };
   }, [showAll, world, study, option, selected]);
 
   // Per visible node, how many of its links this view is not drawing. The map shows it next to
@@ -132,11 +142,7 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
     const counts = new Map<string, number>();
     for (const id of view.nodes) counts.set(id, 0);
     for (const link of world.graph.links) {
-      const shown =
-        view.nodes.has(link.source) &&
-        view.nodes.has(link.target) &&
-        (view.links === "all" || link.primary !== false);
-      if (shown) continue;
+      if (linkDrawn(view, link)) continue;
       for (const end of [link.source, link.target]) {
         if (counts.has(end)) counts.set(end, counts.get(end)! + 1);
       }
@@ -168,6 +174,7 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
     () => world.graph.nodes.filter((n) => inScope(n, filter)).length,
     [filter, world],
   );
+  const shownLinks = useMemo(() => drawnLinks(world, view).length, [world, view]);
   const back = `Back to ${atlas.copy.short}`;
   const deeper = selected ? doorway(atlas.id, selected.id) : null;
 
@@ -300,7 +307,8 @@ export default function Atlas({ atlas }: { atlas: AtlasWorld }) {
       <div className="hud" aria-hidden="true">
         {atlas.copy.nouns} <b>{view ? `${view.nodes.size} of ${visible}` : visible}</b>
         <br />
-        Links <b>{world.graph.links.length}</b>
+        Links{" "}
+        <b>{view ? `${shownLinks} of ${world.graph.links.length}` : world.graph.links.length}</b>
         {view && !study && !selected && (
           <>
             <br />
