@@ -1,0 +1,51 @@
+---
+id: image-signing
+title: "Image signing & provenance"
+type: concept
+domain: security
+summary: "Proving an image came from your pipeline and not from somewhere else. Verification has to happen at admission or on the node, or the signature changes nothing."
+level: advanced
+access: free
+monogram: SIG
+exam: [cks]
+relations:
+  related: [image-scanning, policy-engine]
+connects:
+  - to: policy-engine
+    text: "Kyverno or Gatekeeper verifying the signature at admission is what turns a signed image into a rule the cluster enforces."
+  - to: image-management
+    text: "A signature covers a digest, so deploying by tag makes verification meaningless -- the tag can move to an unsigned image."
+  - to: admission
+    text: "Verification belongs in the admission chain, since that is the only point where an unsigned image can still be refused."
+  - to: gitops
+    text: "The same signing applies to manifests and charts, so what runs can be traced to a commit as well as to a build."
+reviewed: 2026-11-05
+---
+
+Signing an image produces a cryptographic statement that a specific digest was built and approved
+by a specific identity. Sigstore and its `cosign` tool made this practical: keyless signing uses
+an OIDC identity (a GitHub Actions workflow, say) to obtain a short-lived certificate, signs the
+digest, and records the signature in a public transparency log -- so there is no long-lived
+signing key to protect.
+
+**A signature that nobody verifies is decoration.** The whole value is in the enforcement point:
+an admission policy that rejects any Pod whose image is not signed by the expected identity.
+Kyverno's `verifyImages` rule and Gatekeeper with the `cosign` provider both do this, and both
+also *mutate* the image reference to its digest, which closes the gap where a verified tag could
+later point elsewhere. Without that, you have a supply chain claim and a cluster that ignores it.
+
+**Which is why digests matter so much here.** A signature is over a digest. A Pod spec saying
+`app:1.4.2` resolves to whatever that tag points at *when the kubelet pulls it* -- potentially
+after verification happened, on a different node, to a different image. Deploying by digest, or
+having the admission controller rewrite to a digest, is what makes the chain unbroken.
+
+**Provenance and SBOMs are the next layer and attach the same way.** A SLSA provenance attestation
+says which source commit, which builder and which parameters produced the digest; an SBOM lists
+what is inside it. Both are stored alongside the image in the registry as attestations, both are
+signed, and both can be required at admission -- "this image must have provenance from our
+builder, and its SBOM must contain no package with a critical CVE" is expressible today.
+
+**The realistic adoption path** is: sign in CI (one step, keyless), require signatures in staging
+with a policy in audit mode, verify the identity rather than merely the presence of a signature,
+then enforce in production per namespace. The step people skip is checking the *identity* -- a
+policy that accepts any valid signature accepts an attacker's signature too.

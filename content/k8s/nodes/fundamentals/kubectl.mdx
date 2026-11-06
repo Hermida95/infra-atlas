@@ -1,0 +1,69 @@
+---
+id: kubectl
+title: "kubectl"
+type: tool
+domain: fundamentals
+summary: "An HTTP client for the API with opinions. Most of what looks like Kubernetes behaviour in a tutorial is actually kubectl behaviour, and the difference matters in CI."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [object, kubeconfig]
+connects:
+  - to: kubeconfig
+    text: "Which cluster, which user and which namespace a command goes to is read from the kubeconfig, never from the command itself."
+  - to: server-side-apply
+    text: "`kubectl apply --server-side` moves the merge from your laptop to the API server, which is what makes two writers an explicit conflict."
+  - to: rbac
+    text: "`kubectl auth can-i` asks the API server to evaluate RBAC for you, which is the fastest way to tell a permission problem from a bug."
+  - to: ephemeral-containers
+    text: "`kubectl debug` attaches a container with a shell to a running Pod, so a distroless image is still debuggable."
+lead: "The subcommands worth knowing cold, because they answer different questions."
+parts:
+  - name: "get -o yaml"
+    kind: sheet
+    text: "The object as the API has it, spec and status together. The ground truth when a tool and reality disagree."
+  - name: "describe"
+    kind: panel
+    text: "The object plus the events that mention it, in one view. Almost always the right first command when something is stuck."
+  - name: "apply"
+    kind: trigger
+    text: "Declarative create-or-update with a three-way merge. `--server-side` and `--dry-run=server` are the two flags that change what it means."
+  - name: "logs and exec"
+    kind: code
+    text: "`logs -f --previous` reads the dead container of a CrashLoopBackOff, which is where the actual error is. `exec -it` is the shell."
+  - name: "explain"
+    kind: modules
+    text: "The schema of any field, straight from the server, including CRDs. Faster and more accurate than searching the docs."
+layout: stack
+reviewed: 2026-11-05
+---
+
+kubectl is a client. Every command is one or more HTTP requests against the API server, and
+`kubectl --v=8 get pods` prints them. Knowing this changes how you debug: a command that fails
+is either a request that was rejected (RBAC, admission, validation) or a response you are
+misreading, and the two look nothing alike once you can see the wire.
+
+**Some behaviour is the client's, not the cluster's.** `kubectl apply` used to compute its diff
+locally from the `last-applied-configuration` annotation -- so whether a removed field was
+actually deleted depended on which tool wrote it last. `kubectl run` has changed meaning
+repeatedly across versions. `kubectl rollout restart` is not an API verb; it patches an
+annotation into the Pod template so the Deployment sees a change. None of this is wrong, but
+none of it is portable to a controller or a CI script, which should talk to the API or use
+server-side apply.
+
+**The four commands that solve most problems** are `describe`, `logs --previous`, `get -o yaml`
+and `get events --sort-by=.lastTimestamp`. In that order: describe tells you what the control
+plane thinks, logs tell you what the process thinks, the raw object settles disagreements, and
+the event stream shows what happened before the current state. A Pod stuck in `Pending` is
+answered entirely by the first; a `CrashLoopBackOff` entirely by the second.
+
+**Two flags worth a habit.** `--dry-run=server -o yaml` sends the object through validation,
+defaulting, admission and mutating webhooks without persisting it, so you see what would
+actually be stored -- including what a policy engine or a sidecar injector will do to it.
+And `-o jsonpath` or `-o go-template` turns any query into a scriptable one line, which is how
+you avoid parsing human output in a pipeline.
+
+The one command to be careful with is `kubectl edit`. It works, and it leaves a cluster whose
+state no longer matches git. For anything you intend to keep, edit the file.

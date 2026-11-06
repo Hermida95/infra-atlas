@@ -1,0 +1,76 @@
+# Areas of the Kubernetes atlas. Same shape as ../domains.yaml, but this map is not a journey
+# either: it is a cluster read from the object outwards. `fundamentals` sits near the centre
+# because every other area is reached through the API; the control plane and the node sit to the
+# left, on the side that makes the objects real; the resources a workload consumes -- network,
+# storage, configuration -- sit to the right; security and observability wrap the whole thing;
+# and extension, delivery and day two sit outside it, where the cluster meets the people.
+- id: fundamentals
+  name: "Objects & the API"
+  order: 0
+  position: [-0.14, 0.02, 0.0]
+  hue: 216
+- id: control-plane
+  name: "Control plane"
+  order: 1
+  position: [-0.76, 0.44, -0.26]
+  hue: 230
+- id: node
+  name: "The node"
+  order: 2
+  position: [-0.74, -0.46, 0.3]
+  hue: 202
+- id: workloads
+  name: "Workloads"
+  order: 3
+  position: [0.2, -0.12, 0.3]
+  hue: 186
+- id: scheduling
+  name: "Scheduling"
+  order: 4
+  position: [-0.3, -0.6, -0.24]
+  hue: 266
+- id: network
+  name: "Networking"
+  order: 5
+  position: [0.62, 0.1, -0.18]
+  hue: 174
+- id: storage
+  name: "Storage"
+  order: 6
+  position: [0.56, -0.56, 0.26]
+  hue: 158
+- id: config
+  name: "Configuration"
+  order: 7
+  position: [0.0, 0.4, 0.34]
+  hue: 242
+- id: security
+  name: "Security"
+  order: 8
+  position: [-0.34, 0.66, 0.26]
+  hue: 284
+- id: scaling
+  name: "Scaling"
+  order: 9
+  position: [0.3, -0.64, -0.3]
+  hue: 146
+- id: observability
+  name: "Observability"
+  order: 10
+  position: [0.44, 0.58, -0.3]
+  hue: 136
+- id: extend
+  name: "Extending the API"
+  order: 11
+  position: [1.0, 0.44, 0.2]
+  hue: 254
+- id: delivery
+  name: "Delivery"
+  order: 12
+  position: [1.04, -0.22, -0.34]
+  hue: 222
+- id: day2
+  name: "Day two"
+  order: 13
+  position: [1.06, 0.06, 0.3]
+  hue: 194

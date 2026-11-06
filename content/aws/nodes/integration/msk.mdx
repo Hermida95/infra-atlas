@@ -1,0 +1,40 @@
+---
+id: msk
+title: "MSK"
+type: service
+domain: integration
+summary: "Managed Apache Kafka, with a serverless option. The answer when Kafka itself, and the ecosystem around it, is the requirement."
+monogram: MSK
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [kinesis-data-streams]
+connects:
+  - to: kinesis-data-streams
+    text: "Kinesis is cheaper and simpler; MSK is what you pick when Connect, Streams or an existing Kafka estate is non-negotiable."
+reviewed: 2026-11-05
+---
+
+MSK is managed Apache Kafka: AWS runs the brokers and, in current versions, the coordination
+layer, handling patching, broker replacement and multi-AZ placement. The API is Kafka, so
+existing producers, consumers, Kafka Connect connectors and Kafka Streams applications work
+unchanged.
+
+That compatibility is the entire reason to choose it over Kinesis. An organization with Kafka
+expertise, existing Connect pipelines, Schema Registry, Streams applications or a hybrid
+deployment that must mirror between data centres and AWS gets to keep all of it. Kafka also
+offers things Kinesis does not: log compaction, consumer groups with their own rebalancing
+semantics, and arbitrary retention and partition counts.
+
+**MSK Serverless** removes capacity planning -- no brokers to size, automatic partition scaling,
+pay per hour and per GB -- at a higher unit cost, which suits variable or unpredictable
+workloads. Provisioned clusters are cheaper at steady high volume and give control over broker
+type, storage and tiered storage for long retention.
+
+The honest comparison with Kinesis Data Streams: Kinesis is simpler, cheaper for most volumes,
+has no brokers at all and integrates natively with Lambda, Firehose and the rest of AWS. MSK is
+more work and more capable, and is the right answer when Kafka itself is the requirement. For a
+greenfield AWS workload with no Kafka history, Kinesis is usually the better default, and exams
+tend to phrase the MSK case explicitly as "the team already uses Kafka" or "must use the Kafka
+API".

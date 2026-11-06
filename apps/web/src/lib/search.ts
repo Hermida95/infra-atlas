@@ -1,4 +1,4 @@
-import { domainById, graph, type GraphNode } from "@/lib/graph";
+import { type GraphNode, MAP, type World } from "@/lib/graph";
 
 export type Hit = { node: GraphNode; score: number };
 
@@ -24,7 +24,7 @@ function subsequence(q: string, s: string): boolean {
 }
 
 /** How well one query token matches a node. 0 means no match. */
-function tokenScore(token: string, node: GraphNode): number {
+function tokenScore(token: string, node: GraphNode, domain: string): number {
   const title = norm(node.title);
   const words = title.split(/[^a-z0-9]+/).filter(Boolean);
   if (title === token || norm(node.id) === token) return 100;
@@ -33,7 +33,7 @@ function tokenScore(token: string, node: GraphNode): number {
   if (title.includes(token)) return 60;
   if (token.length >= 2 && initials(node.title).startsWith(token)) return 55;
   if (node.parts.some((p) => norm(p.name).includes(token))) return 35;
-  if (norm(domainById.get(node.domain)?.name ?? "").includes(token)) return 30;
+  if (norm(domain).includes(token)) return 30;
   if (norm(node.summary).includes(token)) return 20;
   if (token.length >= 3 && subsequence(token, title)) return 10;
   return 0;
@@ -42,9 +42,15 @@ function tokenScore(token: string, node: GraphNode): number {
 /**
  * Ranked concept search for the command palette. Every word of the query has to match
  * something (title, initials, part names, domain or summary); titles weigh the most.
- * An empty query suggests the hub technologies.
+ * An empty query suggests the hub technologies. `world` is the graph being searched: the
+ * journey map by default, the AWS atlas on /aws.
  */
-export function search(query: string, nodes: GraphNode[] = graph.nodes, limit = 8): Hit[] {
+export function search(
+  query: string,
+  nodes: GraphNode[] = MAP.graph.nodes,
+  limit = 8,
+  world: World = MAP,
+): Hit[] {
   const tokens = norm(query).split(/\s+/).filter(Boolean);
   if (!tokens.length) {
     return nodes.filter((n) => n.hub).slice(0, limit).map((node) => ({ node, score: 0 }));
@@ -52,8 +58,9 @@ export function search(query: string, nodes: GraphNode[] = graph.nodes, limit = 
   const hits: Hit[] = [];
   for (const node of nodes) {
     let score = 0;
+    const domain = world.domainById.get(node.domain)?.name ?? "";
     for (const t of tokens) {
-      const s = tokenScore(t, node);
+      const s = tokenScore(t, node, domain);
       if (!s) {
         score = 0;
         break;

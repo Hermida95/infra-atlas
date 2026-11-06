@@ -1,0 +1,38 @@
+---
+id: macie
+title: "Macie"
+type: service
+domain: security
+summary: "Discovers personal and sensitive data sitting in S3 buckets, and reports which of them are public, unencrypted or shared."
+monogram: MA
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: s3
+    text: "It is S3-specific, which is also where the forgotten copy of the customer export usually is."
+  - to: security-hub
+    text: "Findings aggregate with the rest, so a sensitive-data finding is triaged like any other."
+reviewed: 2026-11-05
+---
+
+Macie answers a question nobody can answer by hand: **what sensitive data is sitting in our S3
+buckets?** It uses managed identifiers for the obvious categories -- credit card numbers,
+national identifiers, passport and driving licence numbers, AWS keys, private keys, health and
+financial data -- and supports custom identifiers as regular expressions with keyword proximity
+for whatever is specific to your business.
+
+It has two modes, and the free one is the one people forget. **Bucket inventory and posture** is
+continuous and covers every bucket in the account: which are public, which are unencrypted,
+which are shared with other accounts, which are missing Block Public Access. That alone is worth
+enabling. **Sensitive data discovery jobs** then sample or fully scan objects, and those are
+charged per gigabyte, which is why the sensible pattern is to scope jobs by bucket, prefix or
+tag rather than pointing it at a petabyte lake.
+
+Findings go to Security Hub and EventBridge, so "a bucket that now contains personal data became
+publicly readable" can be an automated response rather than a quarterly review.
+
+Where it shows up in exam scenarios: GDPR or HIPAA scope discovery, a data classification
+requirement before a migration, and the specific shape of "we think there may be customer data
+in a bucket nobody owns". It is **S3-only** -- for databases and other stores the answer is a
+different tool -- and that limitation is also where the forgotten CSV export usually is.

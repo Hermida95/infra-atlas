@@ -1,0 +1,73 @@
+---
+id: coredns
+title: "CoreDNS"
+type: service
+domain: network
+summary: "Cluster DNS, as a Deployment inside the cluster. Every service call starts here, which makes its resolution behaviour a latency and reliability concern."
+level: core
+access: free
+monogram: DNS
+exam: [ckad, cka]
+relations:
+  related: [service, namespace]
+connects:
+  - to: service
+    text: "It answers svc.namespace.svc.cluster.local with the Service's ClusterIP, which is the discovery half of every in-cluster call."
+  - to: headless-service
+    text: "For a headless Service it returns one record per ready Pod instead of a virtual IP, which is what makes per-Pod addressing work."
+  - to: pod
+    text: "Each Pod's resolv.conf points at the kube-dns Service and carries a search list, and that search list is where the surprising latency comes from."
+  - to: network-policy
+    text: "A default-deny policy that forgets to allow DNS egress breaks every name lookup in the namespace, which looks like a total outage."
+lead: "The pieces that decide how a name is resolved, and where the cost is."
+parts:
+  - name: "The kube-dns Service"
+    kind: ring
+    text: "A ClusterIP that every Pod's resolv.conf points at, served by two or three CoreDNS replicas as an ordinary Deployment."
+  - name: "ndots and the search list"
+    kind: lanes
+    text: "ndots 5 by default, so a name with fewer dots is tried against every search domain first -- several failed lookups before the right one."
+  - name: "The kubernetes plugin"
+    kind: plugin
+    text: "Watches Services and EndpointSlices and answers from memory. Cluster records never hit an upstream resolver."
+  - name: "Forward and cache"
+    kind: cylinder
+    text: "Everything else goes upstream, with a short TTL cache. This is where an external name lookup problem actually lives."
+  - name: "NodeLocal DNSCache"
+    kind: node
+    text: "An optional per-node cache that removes one network hop and most of the load, and is the standard fix at scale."
+layout: stack
+reviewed: 2026-11-05
+---
+
+CoreDNS runs as a small Deployment in `kube-system`, fronted by a ClusterIP that every Pod's
+`/etc/resolv.conf` points at. It answers cluster names from its own watch of Services and
+EndpointSlices, and forwards everything else to the node's upstream resolvers. It is the first
+thing in the path of every service-to-service call, which gives it an outsized influence on
+tail latency.
+
+**The `ndots: 5` behaviour is the classic performance trap.** A Pod's resolv.conf has a search
+list -- `<namespace>.svc.cluster.local`, `svc.cluster.local`, `cluster.local`, plus the node's
+domains -- and `ndots: 5` means any name with fewer than five dots is tried with each suffix
+appended *before* being tried as written. So resolving `api.example.com` performs four or five
+failed lookups first, on every call, from every Pod. The fixes: a trailing dot
+(`api.example.com.`) to make it fully qualified, a `dnsConfig` with a lower `ndots` on the Pod,
+or NodeLocal DNSCache so the failures are answered locally.
+
+**Its failure is total and looks like something else.** When DNS is slow or unavailable, every
+application reports connection errors to every dependency, and nobody's dashboard says "DNS".
+The usual causes are too few replicas for the request rate, CPU throttling on the CoreDNS Pods
+(a CPU limit on an infrastructure component that handles thousands of queries a second is a bad
+idea), and a default-deny NetworkPolicy that forgot to allow UDP 53 egress to kube-system --
+which produces an entire namespace that cannot resolve anything, immediately after a security
+change.
+
+**At scale, run NodeLocal DNSCache.** A DaemonSet caching on each node answers most queries
+without leaving the host, absorbs the search-list churn, and converts the UDP conntrack pressure
+that causes intermittent five-second timeouts into local hits. It is one of the highest-value
+additions to a busy cluster.
+
+**Two Pod-level fields are worth knowing.** `dnsPolicy: ClusterFirst` is the default;
+`None` with an explicit `dnsConfig` is how you take full control for a workload with unusual
+needs, and `hostNetwork` Pods need `dnsPolicy: ClusterFirstWithHostNet` or they will not use
+cluster DNS at all.

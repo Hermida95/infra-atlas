@@ -1,0 +1,52 @@
+---
+id: kustomize
+title: "Kustomize"
+type: tool
+domain: delivery
+summary: "Patch plain YAML instead of templating strings. Built into kubectl, cannot produce invalid YAML, and deliberately less expressive than templating."
+level: core
+access: free
+monogram: KZ
+exam: [ckad]
+relations:
+  related: [helm, gitops]
+  alternative_to: [helm]
+connects:
+  - to: helm
+    text: "Templating is more expressive and can generate anything; patching is safer to read and always produces structurally valid YAML."
+  - to: gitops
+    text: "Both Argo CD and Flux render kustomizations natively, so an overlay per environment is the common GitOps layout."
+  - to: immutable-config
+    text: "Name-suffixed generated ConfigMaps mean every change is a new object, which triggers a rollout and makes immutability free."
+reviewed: 2026-11-05
+---
+
+Kustomize takes valid Kubernetes YAML and applies structured transformations to it: patches,
+name prefixes, common labels, image tag replacements, generated ConfigMaps and Secrets. There are
+no variables and no template language. It is built into `kubectl` (`kubectl apply -k`), though
+the standalone binary is usually newer.
+
+**The base-and-overlay layout is the whole idea.** A `base/` directory holds the manifests as
+they would be in a plain cluster; `overlays/staging/` and `overlays/production/` each reference
+the base and patch what differs -- replica counts, resource requests, an ingress hostname, an
+extra environment variable. The base stays readable as actual Kubernetes YAML, which means you
+can `kubectl apply` it directly, and nothing in it is a placeholder.
+
+**Its safety property is real.** Because it manipulates parsed YAML rather than text, it cannot
+produce the indentation disasters templating produces, and a patch that targets a field which does
+not exist fails loudly instead of being silently dropped. `kubectl kustomize overlays/production`
+prints exactly what will be applied.
+
+**Its limitation is equally real.** There are no conditionals and no loops, so "include this
+Deployment only when a flag is set" has no clean expression -- the honest answers are a separate
+overlay or a component. Values cannot be passed in from the command line in the way Helm's
+`--set` allows, which is deliberate: the configuration is in files, in git, not in someone's shell
+history. For distributing software to strangers who need a hundred options, Helm is the better
+tool; for deploying your own applications to three environments you control, Kustomize is usually
+the calmer one.
+
+**The ConfigMap generator is the feature worth adopting immediately.**
+`configMapGenerator` creates a ConfigMap with a hash of its content appended to the name, and
+rewrites every reference to it. So changing a config value changes the object name, which changes
+the Pod template, which triggers a rolling update -- the problem Helm solves with a checksum
+annotation, solved here by construction, with the old versions left in place for rollback.

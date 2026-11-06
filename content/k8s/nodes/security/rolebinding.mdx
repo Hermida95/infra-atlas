@@ -1,0 +1,49 @@
+---
+id: rolebinding
+title: "RoleBinding & ClusterRoleBinding"
+type: concept
+domain: security
+summary: "The object that actually grants access. Which kind you use, not which role you reference, is what decides the scope."
+level: core
+access: free
+monogram: BND
+exam: [cka, cks]
+relations:
+  related: [rbac, role-and-clusterrole]
+connects:
+  - to: rbac
+    text: "Nothing in RBAC grants until a binding exists, and effective access is the union of every binding naming the subject."
+  - to: service-account
+    text: "The subject is usually a ServiceAccount, named as kind ServiceAccount with its namespace -- not as a username."
+  - to: authentication
+    text: "A human subject is a username or group string that authentication produced, which is why group bindings to an OIDC claim are the normal pattern."
+reviewed: 2026-11-05
+---
+
+A binding joins subjects to a role. A RoleBinding lives in a namespace and grants within it; a
+ClusterRoleBinding is cluster-scoped and grants everywhere. The crucial detail is that **the
+binding's kind decides the scope, not the role's**: a RoleBinding referencing a ClusterRole grants
+those permissions only inside the binding's namespace.
+
+**That combination is the main tool for multi-tenancy.** Define the permission set once as a
+ClusterRole -- or use the built-in `edit` -- and create a RoleBinding per team namespace. No
+duplicated rules, no cluster-wide grant, and adding a namespace is one small object.
+
+**Subjects come in three kinds and the syntax differs.** A `ServiceAccount` subject needs
+`name` and `namespace`. A `User` or `Group` subject is a bare string, matched against whatever
+authentication returned -- so `kind: User, name: alice@example.com` only works if your OIDC
+provider puts exactly that in the username claim. Binding to a group is almost always the right
+choice for humans: membership is then managed in the identity provider, and nobody has to edit
+RBAC when someone joins or leaves.
+
+**Bindings are nearly immutable in one respect:** `roleRef` cannot be changed after creation. To
+point a binding at a different role you delete and recreate it, which is a brief window with no
+access -- worth knowing before doing it to something in the critical path.
+
+**ClusterRoleBindings are the audit target.** `kubectl get clusterrolebindings -o wide` lists
+every cluster-wide grant with its subjects, and the ones to question are any binding of
+`cluster-admin` to a ServiceAccount, anything granting to the group
+`system:authenticated` or `system:unauthenticated`, and bindings to a ServiceAccount in a
+namespace where many people can create Pods -- because creating a Pod with that ServiceAccount
+inherits the grant. That last path is how a seemingly modest namespace permission becomes cluster
+admin.

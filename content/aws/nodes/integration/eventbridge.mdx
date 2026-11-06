@@ -1,0 +1,72 @@
+---
+id: eventbridge
+title: "EventBridge"
+type: service
+domain: integration
+summary: "An event bus that routes by the content of the event, with schemas, archives and replay, plus the scheduler that replaced cron."
+monogram: EV
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [sqs, cloudtrail]
+  alternative_to: [sns]
+connects:
+  - to: lambda
+    text: "A rule matches a pattern and invokes a target. Nothing polls, and the producer never knows who is listening."
+  - to: step-functions
+    text: "The pair for choreography: events arrive on the bus, and a workflow runs the multi-step part."
+  - to: sns
+    text: "SNS is fan-out to subscribers you register; EventBridge is routing on content, with replay and a schema registry."
+lead: "A bus, rules that match on the content of an event, and targets. The decoupling is total: a producer has no idea who is listening."
+parts:
+  - name: "Event buses"
+    kind: bus
+    text: "The default bus for AWS service events, custom buses for your own, and partner buses for SaaS sources. A bus is a namespace and a policy boundary."
+  - name: "Rules and patterns"
+    kind: lanes
+    text: "A JSON pattern matched against the event: source, detail-type, and anything inside detail, with prefix, numeric, exists and anything-but matching."
+  - name: "Targets"
+    kind: satellites
+    text: "Up to five per rule: Lambda, Step Functions, SQS, SNS, ECS tasks, API destinations, another bus. With input transformers to reshape the event."
+  - name: "Archive and replay"
+    kind: loop
+    text: "Keep matching events for a retention period and replay them later -- into a new consumer, or to reprocess after a bug."
+  - name: "Scheduler"
+    kind: trigger
+    text: "One-off or recurring schedules at scale, with time zones and flexible windows. What replaced cron on a server, and CloudWatch Events rules."
+layout: stack
+reviewed: 2026-11-05
+---
+
+EventBridge is the serverless event bus. Producers put events on it; **rules** match on the
+event's content and send it to targets. Neither side knows about the other, which is the
+property that makes event-driven architectures loosely coupled in practice rather than just on a
+diagram.
+
+The **default bus** already receives events from most AWS services, which is more useful than it
+sounds: an EC2 instance state change, an ECS task stopping, a CodePipeline stage failing, a
+Health event, a GuardDuty finding, an S3 object created, or **any CloudTrail API call** can
+trigger something without polling. That last one is the general-purpose hook -- "when anyone
+calls `DeleteBucket`, notify" is a rule, not a service.
+
+**Event patterns** match structurally, not with a query language: fields you name must match,
+fields you omit are ignored. Beyond equality there is prefix matching, numeric comparison,
+`exists`, `anything-but` and IP matching. Patterns are the routing logic, and keeping them in
+the rule rather than in a function is the difference between a bus and a dispatcher you wrote.
+
+Three features that solve real problems. **Archive and replay**: keep matching events and replay
+them later -- into a consumer you just wrote, or over a window where a bug dropped them.
+**Schema registry** with code bindings, so consumers are typed against the event shape rather
+than against a dictionary. **API destinations**, which let a rule call an external HTTPS API
+with managed authentication, retries and rate limiting -- the integration you would otherwise
+write a Lambda for.
+
+**EventBridge Scheduler** deserves separate mention: millions of one-off or recurring schedules
+with time-zone support, flexible time windows and a target of almost anything. It replaced both
+cron on a server and the older CloudWatch Events scheduled rules, and "run this at 09:00 in the
+customer's local time" is a configuration rather than a design.
+
+**Pipes** is the fourth piece: a point-to-point connection from a source (SQS, DynamoDB Streams,
+Kinesis, MSK) through optional filtering and enrichment to a target, which removes the glue
+Lambda that existed only to forward.

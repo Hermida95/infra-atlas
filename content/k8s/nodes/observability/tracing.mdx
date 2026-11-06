@@ -1,0 +1,52 @@
+---
+id: tracing
+title: "Tracing"
+type: concept
+domain: observability
+summary: "One request followed across services, as a tree of spans. It is the only tool that answers which hop was slow, and it needs context propagation to work at all."
+logo: opentelemetry
+level: intermediate
+access: free
+monogram: TR
+exam: [ckad]
+relations:
+  related: [metrics, logs]
+connects:
+  - to: service-mesh
+    text: "A mesh can generate spans per hop with no code change, but it cannot see inside a process -- so it gives you topology, not causes."
+  - to: downward-api
+    text: "Pod, node and namespace as environment variables are what let a span say where it ran."
+  - to: logs
+    text: "A trace id in every log line is what connects a slow span to the lines that explain it, and it is the cheapest correlation there is."
+reviewed: 2026-11-05
+---
+
+A trace is one request's path through a system: a tree of spans, each with a start, a duration,
+attributes, and a parent. In a cluster where a single page view touches six services, it is the
+only thing that answers "which of them was slow", and the only thing that shows that the answer
+was "the fourth one called the third one eleven times".
+
+**Context propagation is the whole requirement, and it is where adoption fails.** Every service
+must read the incoming `traceparent` header and pass it on. One service in the middle that does
+not forward it breaks the trace into two unrelated fragments, and the gap is invisible from either
+end. This is why tracing is an all-or-nothing adoption per request path, and why the first
+investment is a shared middleware or library rather than a backend.
+
+**OpenTelemetry is the answer to the instrumentation question.** One vendor-neutral SDK per
+language, auto-instrumentation for the common frameworks and HTTP clients, and the OTel Collector
+as a DaemonSet or Deployment that receives, batches, samples and exports to whatever backend --
+Jaeger, Tempo, a managed APM. Having the Collector in the middle is what makes the backend choice
+reversible.
+
+**Sampling is a decision you cannot avoid.** Tracing every request is expensive in network and
+storage; head sampling (decide at the start, keep 1%) is cheap and systematically throws away the
+interesting requests, because errors and slow requests are rare. Tail sampling in the Collector
+-- buffer the spans, then keep the trace if it contains an error or exceeded a latency threshold
+-- is what makes traces useful in production, and it is the setting worth the configuration
+effort.
+
+**What a mesh gives you and what it does not.** Sidecar proxies produce a span per network hop
+with no application change, which maps the topology and shows per-hop latency. They cannot see a
+slow database query, a lock, or a loop inside a handler -- the places the time actually goes. The
+practical combination is mesh spans for the edges and application instrumentation for the
+inside, joined by the same trace id, with that id also in every log line.

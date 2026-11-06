@@ -1,0 +1,43 @@
+---
+id: annotations
+title: "Annotations"
+type: concept
+domain: fundamentals
+summary: "Unindexed metadata nothing selects on. In practice it is the extension point every controller uses before the feature has a proper API field."
+level: core
+access: free
+monogram: AN
+exam: [ckad]
+relations:
+  related: [labels, object]
+connects:
+  - to: ingress-controller
+    text: "Most controller-specific behaviour -- rewrites, timeouts, body size, auth -- arrives as an annotation, which is exactly what Gateway API set out to replace."
+  - to: gateway-api
+    text: "Gateway API exists because annotations made Ingress non-portable: the same manifest means different things on two controllers."
+  - to: gitops
+    text: "Tools record their own bookkeeping here, which is why a manifest in git and the object in the cluster are never byte-identical."
+reviewed: 2026-11-05
+---
+
+An annotation is a key-value pair in metadata that nothing indexes and nothing selects on. The
+values can be large and arbitrary -- JSON, a certificate, a whole config file -- and the API
+server treats them as opaque. Which makes them the universal escape hatch of the ecosystem.
+
+**Their real job is extension.** When a controller needs an input Kubernetes has no field for,
+it reads an annotation: `nginx.ingress.kubernetes.io/proxy-body-size`,
+`service.beta.kubernetes.io/aws-load-balancer-type`,
+`cert-manager.io/cluster-issuer`. This works, and it is also the reason an Ingress manifest is
+not portable between two clusters running different controllers -- the YAML validates either
+way and silently does something else. Gateway API is the direct answer to that problem.
+
+**Kubernetes itself uses them to record history.** `kubectl.kubernetes.io/last-applied-configuration`
+is how client-side apply computed a three-way diff before server-side apply existed, and the
+reason `kubectl apply` could delete a field you removed from your file while `kubectl edit`
+could not. `deployment.kubernetes.io/revision` is what `kubectl rollout history` reads.
+`kubectl.kubernetes.io/restartedAt` is the trick `kubectl rollout restart` uses: it changes
+nothing meaningful in the Pod template, which is exactly enough to make the Deployment roll.
+
+**The practical rule:** if something will ever select on it, it is a label; otherwise it is an
+annotation. And treat a controller-specific annotation as what it is -- a dependency on that
+controller's version, undocumented in your manifest, and worth a comment next to it.

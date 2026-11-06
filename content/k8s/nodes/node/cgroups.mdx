@@ -1,0 +1,67 @@
+---
+id: cgroups
+title: "cgroups"
+type: concept
+domain: node
+summary: "The kernel feature that makes requests and limits real. A memory limit is an OOM kill by the kernel; a CPU limit is throttling, which is a very different kind of pain."
+logo: linux
+level: intermediate
+access: free
+exam: [cka]
+relations:
+  related: [requests-and-limits, qos-classes]
+connects:
+  - to: requests-and-limits
+    text: "A CPU request becomes cpu.weight and a CPU limit becomes a quota per period. A memory limit becomes memory.max, enforced by the kernel OOM killer."
+  - to: qos-classes
+    text: "The QoS class decides which cgroup tree a Pod lands in, which decides who the kernel kills first under node memory pressure."
+  - to: eviction
+    text: "Eviction is the kubelet acting before the kernel does, because a kernel OOM kill is abrupt and gives the Pod no chance to be rescheduled gracefully."
+  - to: metrics
+    text: "Container CPU and memory figures are read straight out of these files, so every dashboard number is a cgroup counter."
+lead: "The controllers a container actually lives inside, and what each one does when you cross it."
+parts:
+  - name: "cpu.weight"
+    kind: bars
+    text: "From the CPU request. It only matters when the CPU is contended: it decides the share of time, not a cap."
+  - name: "cpu.max"
+    kind: gate
+    text: "From the CPU limit: a quota per 100ms period. Exceeding it does not kill anything, it stops the process until the next period -- which is throttling."
+  - name: "memory.max"
+    kind: shell
+    text: "From the memory limit, and a hard wall. An allocation past it fails or the kernel OOM-kills the biggest offender inside the cgroup."
+  - name: "pids.max"
+    kind: chips
+    text: "A cap on processes, which is what contains a fork bomb from taking the node with it."
+  - name: "io.max"
+    kind: cylinder
+    text: "Block I/O throttling. Not expressible in Pod spec, which is why a noisy-neighbour disk problem is harder to fix than a CPU one."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Control groups are the kernel mechanism that accounts for and limits what a set of processes may
+use. Kubernetes `resources` are not enforced by Kubernetes at all: the runtime writes the
+corresponding cgroup files when it creates the container, and the kernel does the rest. Everything
+confusing about limits becomes clear once you know which file each one lands in.
+
+**CPU and memory behave nothing alike, and this is the single most useful thing to internalise.**
+A memory limit is a wall: cross it and the kernel kills the process inside the cgroup, and the
+container's last state reads `OOMKilled` with exit code 137. A CPU limit is a quota per period:
+cross it and your threads are simply not scheduled until the period rolls over. Nothing dies,
+nothing logs an error, and latency goes through the roof in a pattern that looks like a network
+problem. `container_cpu_cfs_throttled_seconds_total` is the metric that tells them apart, and
+a Pod with a modest CPU limit and a thread pool sized from `nproc` is the usual cause.
+
+**The hierarchy is why QoS matters.** The kubelet builds a cgroup tree --
+`kubepods` with `burstable` and `besteffort` beneath it -- and places each Pod by its QoS class.
+Guaranteed Pods sit at the top level with their own reservation. Under node memory pressure the
+kernel's OOM killer is biased by `oom_score_adj`, which the kubelet sets from the QoS class, so
+BestEffort dies first and Guaranteed last. Nothing about that ordering is configurable per Pod:
+it is a consequence of whether requests equal limits.
+
+**cgroup v2 is now the default and it is better here.** `memory.max` plus `memory.high` allows
+throttling before killing, PSI pressure metrics make "this node is struggling" measurable rather
+than inferred, and the unified hierarchy removes the controller-per-mount mess of v1. The one
+thing it demands is consistency: the kubelet, the runtime and the node must agree on the systemd
+cgroup driver, or Pods fail with errors that point nowhere near the real cause.

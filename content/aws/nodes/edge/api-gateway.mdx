@@ -1,0 +1,69 @@
+---
+id: api-gateway
+title: "API Gateway"
+type: service
+domain: edge
+summary: "A managed front door for an API: authorisation, throttling, request validation, transformation and caching before anything reaches your code."
+logo: aws:apigateway
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [appsync, alb]
+  alternative_to: [alb]
+connects:
+  - to: lambda
+    text: "The pair behind most serverless APIs. API Gateway handles the HTTP; the function handles only the logic."
+  - to: cognito
+    text: "A Cognito or Lambda authoriser rejects unauthenticated requests at the edge of the API, not in the handler."
+  - to: step-functions
+    text: "Direct integrations mean an endpoint can start a workflow, write to DynamoDB or publish to SQS with no function at all."
+lead: "Two products with one name. Picking the wrong one is the most expensive decision here."
+parts:
+  - name: "HTTP API"
+    kind: lanes
+    text: "Newer, around 70% cheaper, lower latency. JWT authorizers, CORS, and direct integrations. Lacks caching, usage plans and request validation."
+  - name: "REST API"
+    kind: gate
+    text: "The full product: request and response transformation, caching, usage plans and API keys, WAF, private endpoints, canary deployments."
+  - name: "Authorizers"
+    kind: shell
+    text: "IAM, a Cognito user pool, or a Lambda authorizer. Rejection happens before any of your code runs."
+  - name: "Integrations"
+    kind: bus
+    text: "Lambda, HTTP, a VPC link to an NLB or ALB, or AWS services directly -- a request can write to DynamoDB with no function at all."
+  - name: "Stages and throttling"
+    kind: bars
+    text: "Deployments to named stages with variables, per-stage throttling, usage plans per client, and canary releases by percentage."
+layout: stack
+reviewed: 2026-11-05
+---
+
+API Gateway is a managed front door: it terminates TLS, authorises, throttles, validates,
+transforms and routes, so none of that lives in your code. It also has two distinct products and
+one WebSocket one, and the first decision is which.
+
+**HTTP API** is the newer one: roughly 70% cheaper, lower latency, and enough for most
+serverless APIs -- JWT authorizers, CORS, Lambda and HTTP integrations, private integrations
+through a VPC link. **REST API** is the original and keeps the features HTTP API does not have:
+**response caching**, **usage plans and API keys** for per-customer quotas, request and response
+**transformation** with mapping templates, **request validation** against a schema, **WAF**
+integration, **private** endpoints reachable only through a VPC endpoint, and **canary
+deployments**. The honest rule: start with HTTP API, and move to REST when you need something on
+that list.
+
+**Authorizers** are where the security boundary belongs. A **Cognito** authorizer validates the
+user pool's JWT; a **Lambda authorizer** runs your own logic and returns an IAM policy, with
+caching so it does not run on every request; **IAM** auth signs requests with SigV4, which is
+right for service-to-service. In all three cases an unauthorised request is rejected at the
+gateway and never reaches the function -- which is both a security property and a cost one.
+
+**Direct service integrations** remove functions that exist only to forward. A REST API can
+`PutItem` into DynamoDB, publish to SNS, send to SQS or start a Step Functions execution with no
+Lambda in the path: less latency, less cost, nothing to patch.
+
+The limits to design around: a hard **29-second integration timeout** (so a long job must be
+asynchronous -- accept, enqueue, return a job id), 10 MB payloads, and per-account throttling
+defaults of 10,000 requests per second with a 5,000 burst. Endpoint types matter too: *regional*
+is the default, *edge-optimised* routes through CloudFront, and *private* is reachable only from
+inside a VPC through an interface endpoint.

@@ -1,0 +1,54 @@
+---
+id: events
+title: "Events"
+type: concept
+domain: observability
+summary: "Controllers saying out loud why they could not do something. The most useful diagnostic in Kubernetes, and it is garbage-collected within the hour."
+level: core
+access: free
+monogram: EV
+exam: [ckad, cka]
+relations:
+  related: [reconciliation, audit-log]
+connects:
+  - to: reconciliation
+    text: "An event is the readable half of a control loop: a controller that cannot converge records why, then retries."
+  - to: audit-log
+    text: "Events are controller commentary and expire; the audit log is the API server's permanent record of who did what."
+  - to: etcd
+    text: "They are stored like any other object, which is why a cluster generating events in a loop puts real pressure on the control plane."
+  - to: troubleshooting
+    text: "describe is mostly an event viewer, and events are usually where the actual reason is written."
+reviewed: 2026-11-05
+---
+
+An Event is an object a controller or the kubelet creates to explain something about another
+object: a Pod was scheduled, an image could not be pulled, a volume failed to mount, a quota was
+exceeded, a probe failed. They are the narrative layer over the reconciliation loops, and they
+answer "why is nothing happening" more often than logs do.
+
+**`kubectl describe` is primarily an event viewer**, and that is why it is the first command for a
+stuck object. The three or four lines at the bottom usually contain the whole diagnosis: a
+scheduling failure with a count per reason, a `FailedMount` naming the volume, a
+`FailedCreate` from a ReplicaSet hitting a quota, an `Unhealthy` from a probe with the HTTP status
+it got.
+
+**They expire, and that is the thing to know before an incident.** The default retention is one
+hour. An event that explained a 3am failure is gone by the morning, so a cluster without event
+collection loses its own explanation of what happened. Shipping events to a log system --
+`kubectl get events --watch` into a collector, or the event exporters that do it properly -- is a
+small change with a large payoff on the next postmortem.
+
+**They are also deduplicated and rate-limited**, which is why a Pod that failed to pull an image
+forty times shows one event with `count: 40` and a last-seen timestamp. That count is useful
+signal: a high count on a `FailedScheduling` means nothing has changed for a while, and a count of
+1 on something that just happened is a fresh problem.
+
+**Sort them.** The default output ordering is not chronological, which has wasted a great deal of
+people's time: `kubectl get events --sort-by=.lastTimestamp` and, for a cluster-wide view during
+an incident, `kubectl get events -A --sort-by=.lastTimestamp | tail -40`. Filtering with
+`--field-selector type=Warning` narrows it to things that are actually wrong.
+
+**At scale they are a load source.** Every event is an object written to etcd, so a controller
+stuck in a failing loop can generate thousands and contribute real API server and etcd pressure.
+A spike in event volume is a symptom worth alerting on in its own right.

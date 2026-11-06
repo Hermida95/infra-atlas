@@ -1,0 +1,52 @@
+---
+id: configmap
+title: "ConfigMap"
+type: concept
+domain: config
+summary: "Non-secret configuration as an API object, mounted as files or injected as environment variables. The choice between those two decides whether a change needs a restart."
+level: core
+access: free
+monogram: CM
+exam: [ckad, cka]
+relations:
+  related: [secret, volume-projection]
+connects:
+  - to: volume-projection
+    text: "Mounted as a volume the contents are kept in sync when the object changes; as environment variables they are frozen at container start."
+  - to: deployment
+    text: "A Deployment does not restart when a ConfigMap changes, so a rollout has to be triggered deliberately -- usually by hashing the config into an annotation."
+  - to: secret
+    text: "Same shape, different intent. A ConfigMap is not encrypted, is readable by anyone with get on the namespace, and should hold nothing sensitive."
+  - to: immutable-config
+    text: "Marking it immutable removes the kubelet's watch on it, which measurably reduces API load in clusters with thousands of Pods."
+reviewed: 2026-11-05
+---
+
+A ConfigMap is a map of keys to strings, stored in the API, and consumed by Pods in one of three
+ways: individual environment variables, all keys as environment variables with `envFrom`, or a
+volume where each key becomes a file. It is for configuration that is not sensitive -- feature
+flags, hostnames, log levels, an nginx.conf.
+
+**Files update, environment variables do not.** This is the single most consequential fact about
+them. A ConfigMap mounted as a volume is refreshed by the kubelet when the object changes,
+within a minute or so, by swapping a symlink -- so an application that re-reads its config file
+picks up the change with no restart. The same ConfigMap consumed as environment variables is
+read once, at container creation, and nothing will ever update it: the Pod must be replaced. A
+team that changes a value and sees no effect is almost always in the second case.
+
+**Even with a volume, most applications do not re-read.** So the practical pattern is to make
+config changes trigger a rollout deliberately: hash the ConfigMap's content into an annotation on
+the Pod template, so a change to the data changes the template, which changes the
+`pod-template-hash`, which causes a rolling update. Helm does this with
+`checksum/config`; Kustomize does it by generating name-suffixed ConfigMaps, which gives the same
+effect plus a trail of old versions you can roll back to.
+
+**`subPath` breaks the update**, which is worth repeating because it is the common way to mount a
+single file into a directory that has other things in it. The file is copied once and never
+refreshed. If live reload matters, mount the whole volume somewhere and symlink, or use a
+projected volume.
+
+**Three limits to know.** A ConfigMap is capped at about 1 MiB because it lives in etcd, so it is
+not a place for large files or datasets. A Pod referencing a ConfigMap that does not exist stays
+in `ContainerCreating` indefinitely rather than failing fast. And anyone with `get` on ConfigMaps
+in the namespace can read all of it -- which is why "not sensitive" has to be taken literally.

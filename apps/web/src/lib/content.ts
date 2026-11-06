@@ -1,15 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Atlas } from "@/lib/atlas";
 import type { Evidence, GraphNode } from "@/lib/graph";
 
 // Concept bodies live in the MDX files next to their frontmatter. They are read at build time
 // (pages are prerendered), so the client bundle never ships the content folder.
 const REPO = path.join(process.cwd(), "..", "..");
 const CONTENT = path.join(REPO, "content", "nodes");
+// An atlas keeps its tree under content/<world id>, which is also its route: content/aws, content/k8s.
+const atlasRoot = (atlas: Atlas) => path.join(REPO, "content", atlas.id, "nodes");
 
 /** The MDX body below the frontmatter, split into paragraphs. */
-export function conceptBody(node: GraphNode): string[] {
-  const file = path.join(CONTENT, node.domain, `${node.id}.mdx`);
+export function conceptBody(node: GraphNode, root: string = CONTENT): string[] {
+  const file = path.join(root, node.domain, `${node.id}.mdx`);
   if (!fs.existsSync(file)) return [];
   const raw = fs.readFileSync(file, "utf8");
   const body = raw.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
@@ -31,6 +34,11 @@ export function evidenceSnippet(evidence: Evidence): string {
   return lines.map((l) => l.slice(indent)).join("\n").trimEnd();
 }
 
+/** The same, for a node of an atlas, whose content tree is content/<world id>. */
+export const atlasBody = (atlas: Atlas, node: GraphNode) => conceptBody(node, atlasRoot(atlas));
+
 export const REPO_URL = "https://github.com/Hermida95/infra-atlas";
 export const sourceUrl = (node: GraphNode) => `${REPO_URL}/blob/main/content/nodes/${node.domain}/${node.id}.mdx`;
+export const atlasSourceUrl = (atlas: Atlas, node: GraphNode) =>
+  `${REPO_URL}/blob/main/content/${atlas.id}/nodes/${node.domain}/${node.id}.mdx`;
 export const evidenceUrl = (e: Evidence) => `${REPO_URL}/blob/main/${e.path}#L${e.lines[0]}-L${e.lines[1]}`;

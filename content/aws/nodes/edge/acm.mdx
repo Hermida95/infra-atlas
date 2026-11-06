@@ -1,0 +1,41 @@
+---
+id: acm
+title: "Certificate Manager"
+type: service
+domain: edge
+summary: "Free public TLS certificates that renew themselves, plus a private CA when you need one. Regional, except that CloudFront reads only us-east-1."
+monogram: CM
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: route53
+    text: "DNS validation puts one CNAME in the zone and the certificate renews for ever without anyone being paged."
+  - to: alb
+    text: "An ALB, NLB, API Gateway or CloudFront references the certificate; the private key never leaves AWS."
+reviewed: 2026-11-05
+---
+
+ACM issues and renews public TLS certificates for free, and the private key never leaves AWS --
+you cannot export it, which is the point and also the limitation.
+
+**Validation** is either DNS or email, and DNS is the one to use: a CNAME in the zone, and
+renewal is then automatic and silent for as long as that record exists. With Route 53 the
+console writes the record for you. Email validation needs a human every time and is how
+certificates expire.
+
+Two constraints to carry into any design. Certificates are **regional**, and they are attached
+to regional services -- an ALB in eu-west-1 needs a certificate in eu-west-1. The exception that
+catches everyone: **CloudFront reads certificates only from us-east-1**, because its control
+plane lives there. A multi-region deployment therefore needs the same domain's certificate
+issued separately in each region plus one in us-east-1 for the distribution. And ACM public
+certificates **cannot be exported**, so anything that needs the key on a server you control --
+an EC2 instance terminating TLS itself, an on-premises appliance -- cannot use one.
+
+**ACM Private CA** is the other half of the service: your own certificate authority for internal
+names, mutual TLS between services, device identities and IoT. It is charged per CA per month
+plus per certificate, and unlike public ACM the certificates can be exported.
+
+The detail worth knowing for an incident: renewal is automatic only while the validation record
+is still in place and the certificate is still **in use** by a supported service. An unused
+certificate stops renewing, and so does one whose DNS record someone cleaned up.

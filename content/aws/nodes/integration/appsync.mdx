@@ -1,0 +1,43 @@
+---
+id: appsync
+title: "AppSync"
+type: service
+domain: integration
+summary: "Managed GraphQL with subscriptions over WebSockets, resolving straight into DynamoDB, Aurora, Lambda or an HTTP source."
+monogram: AP
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [api-gateway]
+connects:
+  - to: cognito
+    text: "Authorisation per type and per field, from a Cognito group or an OIDC claim, rather than in each resolver."
+  - to: dynamodb
+    text: "A resolver can read and write a table with no function in between, which is most of its appeal."
+reviewed: 2026-11-05
+---
+
+AppSync is managed GraphQL. You supply a schema, and **resolvers** map each field to a data
+source -- a DynamoDB table, an Aurora cluster through the Data API, a Lambda function, an
+OpenSearch domain, an HTTP endpoint, or an EventBridge bus.
+
+The appeal over REST is in the client: one request returns exactly the fields the screen needs,
+across several data sources, instead of three round trips and over-fetching. For a mobile
+application on a poor connection that is a real difference.
+
+The feature with no simple REST equivalent is **subscriptions**: a client subscribes to a field
+and AppSync pushes updates over a managed WebSocket when a mutation touches it. Real-time
+dashboards, chat and collaborative editing come almost free, with no connection state to manage.
+
+**Authorisation** is per type and per field, and can combine API keys, IAM, Cognito user pools,
+OIDC and Lambda authorizers in one API -- so a public query and an admin mutation live in the
+same schema with different rules, enforced before any resolver runs.
+
+**Direct resolvers** are where it saves the most: a resolver can read and write DynamoDB with no
+Lambda at all, which removes both the cost and the cold start. JavaScript resolvers have largely
+replaced the old VTL mapping templates, which were the main reason people disliked it.
+
+Against API Gateway: API Gateway is protocol-agnostic, has usage plans and caching, and fits
+service-to-service and public REST APIs. AppSync fits client-facing applications with varied
+data needs and real-time requirements. A system can reasonably have both.

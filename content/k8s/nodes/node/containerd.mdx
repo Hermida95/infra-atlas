@@ -1,0 +1,50 @@
+---
+id: containerd
+title: "containerd"
+type: tool
+domain: node
+summary: "The runtime most clusters actually run. It manages images, snapshots and container lifecycle, and shells out to runc for the kernel work."
+logo: containerd
+level: intermediate
+access: free
+exam: [cka]
+relations:
+  related: [cri]
+connects:
+  - to: cri
+    text: "Its CRI plugin is what the kubelet connects to, so containerd is one implementation of a contract rather than a Kubernetes component."
+  - to: image-management
+    text: "Layers live in its content store and snapshotter, and its own garbage collector is what reclaims disk when images are unused."
+  - to: image-signing
+    text: "Verification policies and registry mirrors are configured here, on the node, which is why an unsigned image can be refused before the kubelet ever sees it."
+reviewed: 2026-11-05
+---
+
+containerd is a daemon that does the unglamorous half of containers: pull and store images,
+unpack layers into snapshots, create and supervise containers, stream their logs, and report
+their state. The kernel work -- namespaces, cgroups, capabilities, seccomp -- it delegates to an
+OCI runtime, normally `runc`, one short-lived process per container launch.
+
+**Its structure explains a few node behaviours.** Images are stored content-addressed in a
+*content store* and unpacked by a *snapshotter* (overlayfs by default), so pulling a second
+image that shares layers is nearly free, and `du` on `/var/lib/containerd` is not a per-image
+number. Each container gets a `containerd-shim` process that outlives containerd itself, which
+is why you can restart or upgrade containerd without killing running containers -- a property
+the dockershim era did not have.
+
+**Configuration lives in `/etc/containerd/config.toml`**, and three parts of it come up
+repeatedly in real clusters. The cgroup driver must match the kubelet's (`SystemdCgroup = true`
+on any systemd host) or Pods fail in ways that look like memory accounting bugs. Registry mirrors
+and credentials are set here, which is how a cluster pulls through a pull-through cache instead
+of hitting Docker Hub's rate limit from fifty nodes. And the sandbox image is pinned here, which
+is the one image that cannot be pulled from a registry that needs the cluster to be working.
+
+**`nerdctl` and `crictl` are the two CLIs.** `crictl` speaks CRI and shows you what the kubelet
+sees -- the right tool when debugging a Pod. `nerdctl` speaks containerd natively with a
+Docker-compatible interface, so it can build and run things the kubelet knows nothing about;
+useful on a node, misleading if you forget that containers you start that way are invisible to
+Kubernetes.
+
+The alternative, CRI-O, is the same contract with a narrower scope -- it exists only to serve
+Kubernetes and ships nothing for building images. Red Hat's platforms default to it; almost
+everything else defaults to containerd. Workloads cannot tell the difference.

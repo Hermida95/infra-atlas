@@ -1,0 +1,69 @@
+---
+id: storage-class
+title: "StorageClass"
+type: concept
+domain: storage
+summary: "A named storage offering: which driver, which parameters, which reclaim policy. It is where the decisions that are expensive to change later actually live."
+level: intermediate
+access: free
+monogram: SC
+exam: [cka]
+relations:
+  related: [persistent-volume-claim, dynamic-provisioning]
+connects:
+  - to: dynamic-provisioning
+    text: "A class is what makes provisioning automatic: a claim naming it causes the driver to create a volume to fit."
+  - to: csi
+    text: "The provisioner field names a CSI driver, and the parameters are passed straight to it -- disk type, IOPS, encryption, filesystem."
+  - to: reclaim-policy
+    text: "The class sets the policy that volumes inherit, which decides whether the real disk is deleted with the claim."
+  - to: volume-expansion
+    text: "allowVolumeExpansion is per class, so whether storage can grow in place was decided when the class was written."
+lead: "The fields that matter, each one a decision you do not want to discover later."
+parts:
+  - name: "provisioner"
+    kind: plugin
+    text: "The CSI driver that will create volumes. Immutable, like the whole class -- a different driver means a different class."
+  - name: "parameters"
+    kind: meta
+    text: "Driver-specific: gp3 or io2, IOPS, throughput, filesystem type, encryption key. The performance and cost of every volume in the class."
+  - name: "reclaimPolicy"
+    kind: trigger
+    text: "Delete by default, which removes the real disk with the claim. Retain for anything whose loss would be an incident."
+  - name: "volumeBindingMode"
+    kind: zones
+    text: "WaitForFirstConsumer defers creation until a Pod is scheduled, so the volume lands in the right zone. Immediate is the zone-deadlock default."
+  - name: "allowVolumeExpansion"
+    kind: bars
+    text: "Whether a claim can be grown later. Off by default on hand-written classes, and painful to retrofit."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A StorageClass is the catalogue entry a claim picks from. It names a provisioner and carries the
+parameters that provisioner needs, plus the three policy decisions that will apply to every
+volume created through it: reclaim behaviour, binding mode, and whether expansion is allowed.
+
+**A class is immutable after creation.** You cannot change its parameters -- you create another
+class and migrate workloads to it, which for existing data means a snapshot and restore or a
+copy. This is why the defaults you ship matter: `gp2` instead of `gp3` on AWS is a permanent
+performance and cost difference for every volume anyone creates until someone notices.
+
+**The default class is a cluster-wide decision with real consequences.** A claim with no
+`storageClassName` gets whatever is annotated as default, and if there is none it stays
+`Pending` with no obvious explanation. Having exactly one default, and having it be a sensible
+general-purpose SSD with `WaitForFirstConsumer` and expansion enabled, removes a whole class of
+support question. Two defaults is a configuration error that produces nondeterministic
+behaviour.
+
+**`reclaimPolicy: Delete` is the right default and the wrong one for databases.** With Delete,
+deleting a namespace deletes the claims, which deletes the volumes, which deletes the data -- in
+one command, with no confirmation. A separate `Retain` class used deliberately by stateful
+workloads is cheap insurance, and it leaves the volumes behind as `Released` objects you have to
+tidy up, which is the intended trade.
+
+**Several classes is normal and worth doing.** A fast expensive class for databases, a general
+one for everything else, a `ReadWriteMany` file class for the workloads that genuinely need
+shared access, and a `Retain` variant for anything whose data must survive a mistake. Naming them
+for what they are rather than for the disk type (`db-retain`, not `io2`) makes the manifests
+self-documenting.

@@ -1,0 +1,70 @@
+---
+id: admission
+title: "Admission control"
+type: concept
+domain: control-plane
+hub: true
+summary: "The last stage before a write is stored, and the only place to change or refuse an object regardless of who sent it. Also the easiest way to break a cluster."
+level: intermediate
+access: free
+monogram: ADM
+exam: [cka, cks]
+relations:
+  related: [apiserver]
+connects:
+  - to: apiserver
+    text: "Admission runs inside the request chain, after authorisation and before storage, so nothing reaches etcd without passing it."
+  - to: admission-webhook
+    text: "A webhook is admission delegated to an HTTPS service of your own, which is how a policy engine or a sidecar injector plugs in."
+  - to: pod-security-admission
+    text: "The built-in Pod Security plugin enforces the three standard levels from a namespace label, with no webhook to run."
+  - to: validating-admission-policy
+    text: "CEL expressions evaluated in-process, so simple rules no longer need a deployment with its own availability problem."
+  - to: policy-engine
+    text: "Kyverno and Gatekeeper are webhooks: they receive the object, and their answer decides whether it exists."
+lead: "Four kinds of admission, in the order the API server runs them."
+parts:
+  - name: "Built-in mutating plugins"
+    kind: split
+    text: "Compiled in: ServiceAccount token projection, default StorageClass, LimitRange defaults. Enabled with a flag, not an object."
+  - name: "Mutating webhooks"
+    kind: plugin
+    text: "Your HTTPS services, called in order, each able to return a patch. Sidecar injection and policy mutation live here."
+  - name: "Validating policies"
+    kind: meta
+    text: "ValidatingAdmissionPolicy: CEL evaluated by the API server itself. No network call, so no availability risk."
+  - name: "Validating webhooks"
+    kind: bell
+    text: "Called in parallel, any one can reject. The last word on whether the object is accepted."
+layout: row
+reviewed: 2026-11-05
+---
+
+Admission control is the hook that makes Kubernetes governable. Authentication says who you are
+and RBAC says what you may touch, but neither can say "no Pod may run as root" or "every
+workload must declare an owner" -- those are statements about object content, and content is
+what admission sees. It is also the only place that can modify an object on the way in, which is
+how sidecars get injected and defaults get filled.
+
+**Mutating runs before validating**, which is the only ordering you have to remember: a mutating
+webhook that adds a sidecar runs first, so the validating policy that checks every container's
+security context sees the sidecar too. Mutating webhooks are called in sequence (each sees the
+previous one's patch), validating ones in parallel (any rejection is final).
+
+**A webhook is a dependency of every write.** This is where clusters get bricked.
+`failurePolicy: Fail` on a webhook whose service is unavailable rejects every matching request
+-- and if the match rule is broad enough to include the webhook's own Deployment or the
+kube-system namespace, there is no way to fix it from inside the cluster. The protections are
+mechanical and non-negotiable: scope `rules` as narrowly as the policy allows, exclude
+kube-system with a `namespaceSelector`, keep `timeoutSeconds` low, run the webhook with more
+than one replica, and think hard before choosing `Fail` over `Ignore`.
+
+**Prefer in-process policy where it fits.** ValidatingAdmissionPolicy evaluates CEL expressions
+inside the API server, so a rule like "every Pod must set resource limits" has no service, no
+certificate rotation and no availability story at all. The remaining reasons to run a webhook
+are mutation, cross-object lookups and anything needing real logic -- which is still plenty, but
+a lot less than it used to be.
+
+`kubectl apply --dry-run=server` is the tool that makes all of this visible: it runs the full
+chain without persisting, so you see the mutated object a policy engine will actually store, and
+the rejection message before it lands in a pipeline.

@@ -1,0 +1,69 @@
+---
+id: statefulset
+title: "StatefulSet"
+type: concept
+domain: workloads
+summary: "Stable names, stable storage and ordered operations. It gives each Pod an identity that survives rescheduling, which is the only thing clustered software needs."
+level: intermediate
+access: free
+monogram: STS
+exam: [ckad, cka]
+relations:
+  related: [deployment, headless-service]
+  alternative_to: [deployment]
+connects:
+  - to: headless-service
+    text: "Each Pod gets a DNS name of pod-0.svc.namespace, which requires a headless Service and is how cluster members find each other."
+  - to: persistent-volume-claim
+    text: "volumeClaimTemplates creates one PVC per Pod, kept across restarts and rescheduling, and deliberately not deleted with the Pod."
+  - to: pdb
+    text: "Ordered updates plus a budget is what stops a rolling restart from taking a quorum below its minimum."
+  - to: operator
+    text: "A database needs more than ordering -- backup, failover, promotion -- which is where an operator replaces hand-written StatefulSet logic."
+lead: "What a StatefulSet adds to a Deployment. All four exist to give one Pod a durable identity."
+parts:
+  - name: "Ordinal names"
+    kind: meta
+    text: "web-0, web-1, web-2 instead of a random suffix. The name is stable across restart and reschedule, so it can be used as a cluster member id."
+  - name: "Per-Pod storage"
+    kind: cylinder
+    text: "volumeClaimTemplates gives each ordinal its own PVC, reattached to the new Pod when it moves. Deleting the StatefulSet leaves them behind on purpose."
+  - name: "Stable DNS"
+    kind: ring
+    text: "A headless Service publishes one A record per Pod, which is what lets members address each other individually rather than through a load balancer."
+  - name: "Ordered operations"
+    kind: lanes
+    text: "Created and updated 0, 1, 2 and terminated in reverse, each waiting for the previous to be Ready. Parallel podManagementPolicy opts out."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A StatefulSet runs Pods with identity. Each one gets a predictable name, its own persistent
+volume that follows it, a DNS record of its own, and a guaranteed order for creation, update and
+deletion. Those are precisely the requirements of software that forms a cluster -- Kafka,
+Cassandra, etcd, Elasticsearch, PostgreSQL with replication -- where "replica 2" is a specific
+member with specific data and not an interchangeable copy.
+
+**Storage is the part with the sharpest edges.** `volumeClaimTemplates` creates one PVC per Pod,
+named after it, and reattaches it when the Pod is rescheduled. Those PVCs are *not* deleted when
+the StatefulSet is deleted, which is a deliberate safety choice and a recurring surprise:
+deleting and recreating a StatefulSet reuses the old data, and scaling down from 5 to 3 leaves
+two PVCs behind, still billed, waiting for a scale-up. `persistentVolumeClaimRetentionPolicy`
+now lets you choose, and it is worth setting explicitly rather than discovering the default.
+
+**Zone pinning follows from storage.** A PVC bound to a block volume in one availability zone can
+only be mounted in that zone, so `web-1` is pinned there for life. `WaitForFirstConsumer` on the
+StorageClass makes the volume follow the scheduler's choice rather than the other way round,
+which is the difference between a StatefulSet that spreads across zones and one that cannot
+schedule after a zone fails.
+
+**Ordering is a double-edged default.** It makes bootstrapping a quorum possible and makes
+rolling updates safe, with `partition` in the update strategy allowing a genuine canary -- update
+only ordinals above N, verify, then lower the partition. It also means one Pod that will not
+become Ready blocks the entire rollout, indefinitely, with no progress deadline to rescue you.
+`podManagementPolicy: Parallel` removes the ordering for startup and scaling, not for updates.
+
+**A StatefulSet is not a database operator.** It gives you identity and storage; it knows nothing
+about electing a leader, taking a backup, promoting a replica or running a restore. For anything
+you would be paged about, an operator (CloudNativePG, the Strimzi Kafka operator) or a managed
+service outside the cluster is the serious answer.

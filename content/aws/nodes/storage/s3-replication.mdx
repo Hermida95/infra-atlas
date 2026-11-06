@@ -1,0 +1,46 @@
+---
+id: s3-replication
+title: "S3 replication"
+type: service
+domain: storage
+summary: "Copies new objects to another bucket, region or account, with optional Replication Time Control for a fifteen-minute objective."
+monogram: S3
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [s3, aws-backup]
+connects:
+  - to: backup-restore
+    text: "Cross-region replication is how an S3 RPO is met, and the reason an S3 restore is rarely the slow part of a DR plan."
+  - to: multi-region
+    text: "Two-way replication keeps both regions writable, at the price of having to settle conflicts yourself."
+reviewed: 2026-11-05
+---
+
+Replication copies objects from one bucket to another, automatically, after they are written.
+Cross-Region Replication (CRR) is the one that appears in disaster-recovery and latency
+questions; Same-Region Replication (SRR) is for log aggregation, compliance copies in another
+account, and moving between storage classes or ownership.
+
+It needs **versioning on both buckets** and an IAM role S3 assumes to do the copy. By default it
+replicates only objects written **after** the rule is created -- existing objects need **Batch
+Replication** to backfill, which is the step people forget. Delete markers can be replicated or
+not, and deliberately not replicating them is a reasonable protection against an accidental mass
+delete propagating.
+
+**Replication Time Control (RTC)** is the part that turns it into an RPO. Without it,
+replication is best-effort and usually seconds but with no promise. With it, 99.99% of objects
+replicate within 15 minutes, there is an SLA, and you get CloudWatch metrics for pending bytes
+and latency so you can alarm when it falls behind. If a requirement states a replication
+objective in minutes, RTC is the answer.
+
+Two other uses worth knowing. Replicating to a bucket in a **different account** gives you a
+copy an attacker who compromises the source account cannot delete -- combine with Object Lock
+for a real ransomware answer. And **two-way replication** keeps both regions writable for an
+active/active design, at the cost of having to settle conflicts yourself, because S3 is
+last-writer-wins and does not merge.
+
+Encryption travels with it: replicating KMS-encrypted objects needs the key in the destination
+region and the role granted use of both keys. That is the most common reason a replication rule
+silently fails.

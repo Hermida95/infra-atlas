@@ -1,0 +1,63 @@
+---
+id: fsx
+title: "FSx"
+type: comparison
+domain: storage
+summary: "Managed Windows File Server for SMB, NetApp ONTAP for enterprise features, OpenZFS for low latency, and Lustre for HPC against S3."
+monogram: FSX
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [efs]
+  alternative_to: [efs]
+connects:
+  - to: directory-service
+    text: "FSx for Windows joins an Active Directory domain, so the directory is a prerequisite, not an extra."
+  - to: s3
+    text: "FSx for Lustre links to a bucket and presents it as a POSIX file system at hundreds of gigabytes per second."
+lead: "Four filesystems under one name. The protocol in the question picks the one."
+parts:
+  - name: "FSx for Windows File Server"
+    kind: sheet
+    text: "Native SMB, Active Directory joined, Windows ACLs, DFS namespaces and shadow copies. For Windows applications that expect a drive letter."
+  - name: "FSx for NetApp ONTAP"
+    kind: modules
+    text: "NFS, SMB and iSCSI at once, with snapshots, cloning, dedup, compression and SnapMirror. For teams who already run ONTAP."
+  - name: "FSx for OpenZFS"
+    kind: cylinder
+    text: "NFS with sub-millisecond latency, snapshots and instant clones. A fast Linux filesystem without the ONTAP licensing."
+  - name: "FSx for Lustre"
+    kind: bus
+    text: "Hundreds of GB/s for HPC and ML training, linked to an S3 bucket so the lake is presented as a POSIX filesystem."
+  - name: "Multi-AZ"
+    kind: zones
+    text: "Windows and ONTAP offer a standby in a second zone with automatic failover; OpenZFS and Lustre are single-zone."
+layout: stack
+reviewed: 2026-11-05
+---
+
+FSx is four separate filesystems sold under one brand, and the only question that picks between
+them is what protocol or feature the application requires.
+
+**FSx for Windows File Server** is a real Windows file server: SMB, Active Directory
+authentication, Windows ACLs, DFS namespaces, volume shadow copies, and a Multi-AZ option with
+automatic failover. If a requirement mentions SMB, Windows, AD or shadow copies, this is the
+answer, and EFS is not -- EFS is NFS, and Windows does not support it. It must join a directory,
+so AWS Managed Microsoft AD or a trust to your own is a prerequisite rather than an extra.
+
+**FSx for NetApp ONTAP** speaks NFS, SMB and iSCSI simultaneously and brings the whole ONTAP
+feature set: snapshots, FlexClone, deduplication, compression, automatic tiering to capacity
+storage, and SnapMirror replication from an on-premises ONTAP array. It is the migration answer
+for a shop already running NetApp, and the one to pick when the same data must be reachable from
+both Linux and Windows.
+
+**FSx for OpenZFS** is NFS with very low latency, snapshots and instant clones, for Linux
+workloads that want speed and ZFS semantics without ONTAP's complexity or price.
+
+**FSx for Lustre** is the HPC and machine-learning option: hundreds of gigabytes per second and
+millions of IOPS. Its distinguishing feature is the **S3 link** -- associate a bucket and the
+objects appear as files, loaded lazily on first read, with results written back. That is how a
+training job or a genomics pipeline gets POSIX performance over a data lake without copying it
+first. Scratch deployments have no replication and are meant to be thrown away; persistent ones
+replicate within a zone.

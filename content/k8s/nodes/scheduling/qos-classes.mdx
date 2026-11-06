@@ -1,0 +1,61 @@
+---
+id: qos-classes
+title: "QoS classes"
+type: concept
+domain: scheduling
+summary: "Guaranteed, Burstable or BestEffort, derived from your requests and limits rather than declared. The class decides who the node kills first."
+level: intermediate
+access: free
+monogram: QOS
+exam: [ckad, cka]
+relations:
+  related: [requests-and-limits, eviction]
+connects:
+  - to: requests-and-limits
+    text: "You never set the class: requests equal to limits on every container gives Guaranteed, no resources at all gives BestEffort, anything else is Burstable."
+  - to: eviction
+    text: "Under node pressure the kubelet evicts BestEffort first, then Burstable Pods over their requests, and Guaranteed last."
+  - to: cgroups
+    text: "The class puts the Pod in a different branch of the cgroup tree and sets its OOM score, so the kernel's choice follows Kubernetes' intent."
+lead: "Three classes, and the rule that assigns each one."
+parts:
+  - name: "Guaranteed"
+    kind: core
+    text: "Every container has requests equal to limits, for both CPU and memory. Evicted last, and eligible for exclusive CPUs with the static CPU manager policy."
+  - name: "Burstable"
+    kind: bars
+    text: "At least one request set, but not matching its limit. The normal case, and the one where usage above request is what puts you at risk."
+  - name: "BestEffort"
+    kind: split
+    text: "No requests or limits anywhere in the Pod. Schedules anywhere, uses whatever is spare, and is killed first."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Pod's QoS class is computed, not chosen. Set requests equal to limits on every container and
+every resource and you get `Guaranteed`. Set nothing at all and you get `BestEffort`. Anything in
+between is `Burstable`. `kubectl get pod -o jsonpath='{.status.qosClass}'` tells you what you
+actually ended up with, which is occasionally not what you intended -- one container in a Pod
+with a mismatched limit demotes the whole Pod to Burstable.
+
+**The class is the eviction order.** When a node runs short of memory, the kubelet kills
+BestEffort Pods first, then Burstable Pods that are using more than they requested (most over
+request first), and only touches Guaranteed Pods when there is nothing else left. It also sets
+each container's `oom_score_adj` accordingly, so if the kernel's OOM killer fires before the
+kubelet gets there, it makes the same choice.
+
+**Guaranteed buys more than survival on some clusters.** With the kubelet's static CPU manager
+policy enabled, a Guaranteed Pod requesting whole cores gets exclusive pinned CPUs with no
+sharing and no cross-core migration -- which matters for latency-sensitive and NUMA-sensitive
+workloads and is the only way to get it. Likewise the memory manager and topology manager only
+align resources for Guaranteed Pods.
+
+**The practical policy most teams land on:** Guaranteed for anything serving user traffic or
+holding state, Burstable for workloads with genuinely spiky but bounded CPU, BestEffort only for
+work you are happy to lose -- a nightly report, a speculative build. And a LimitRange in every
+namespace so a Pod that forgot to say anything does not quietly become the most fragile thing in
+the cluster.
+
+The one thing the class does *not* affect is scheduling. A BestEffort Pod is not scheduled last
+or on worse nodes; it is scheduled anywhere, because it reserved nothing. Its disadvantage is
+entirely in what happens after the node gets busy.

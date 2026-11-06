@@ -1,0 +1,45 @@
+---
+id: cost-explorer
+title: "Cost Explorer"
+type: service
+domain: account
+summary: "Where the bill is sliced by service, account, tag and usage type, forecast forward, and where a spike gets a name."
+monogram: CE
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: budgets
+    text: "Cost Explorer explains the past; Budgets act on the future. They read the same data."
+  - to: tagging
+    text: "Untagged resources appear as one undifferentiated lump, so a tagging policy is a cost tool before it is a tidiness one."
+  - to: nat-gateway
+    text: "Half of all surprise bills are here: NAT Gateway data processing, cross-zone traffic and idle Elastic IPs."
+reviewed: 2026-11-05
+---
+
+Cost Explorer is where the bill is broken down and where a spike gets a name. It slices by
+service, account, region, instance type, usage type, purchase option and **tag**, over daily or
+monthly granularity, with hourly and resource-level data available if you turn it on.
+
+The practical loop: notice the number, group by service to find which one, group by usage type
+to find what inside it, group by account and tag to find whose. Most surprises resolve in three
+clicks and are one of a short list -- NAT Gateway data processing, cross-AZ transfer, idle load
+balancers and Elastic IPs, orphaned EBS volumes and snapshots, CloudWatch Logs ingestion from
+debug logging left on, or an S3 lifecycle rule nobody ever wrote.
+
+Beyond the breakdown it does three useful things. **Forecasting** projects the month and the
+quarter from current usage, which is what a budget threshold should be set against.
+**Rightsizing recommendations** flag over-provisioned instances from real utilisation. **Savings
+Plans recommendations** compute the commitment that matches your actual baseline, which is a
+better basis than a guess.
+
+The dependency to remember is **cost allocation tags**: they must be activated in the management
+account, and they only populate from that point onward. Untagged resources appear as one
+undifferentiated lump, which is why a tagging policy -- enforced with a Config rule and
+remediation -- is a cost tool before it is a tidiness one.
+
+Where it sits among the others: **Cost Explorer** explains the past and projects forward,
+**Budgets** acts on thresholds, **Cost and Usage Report** is the raw line-item export for
+anything more precise, **Compute Optimizer** recommends sizes, and **Trusted Advisor** sweeps
+for the obvious waste.

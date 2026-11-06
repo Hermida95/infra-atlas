@@ -1,0 +1,54 @@
+---
+id: cluster-autoscaler
+title: "Cluster Autoscaler"
+type: tool
+domain: scaling
+summary: "Adds nodes when Pods are Pending and removes them when they are underused. It works through node groups, which is both its simplicity and its limit."
+level: intermediate
+access: free
+monogram: CA
+exam: [cka]
+relations:
+  related: [karpenter, hpa]
+  alternative_to: [karpenter]
+connects:
+  - to: karpenter
+    text: "Karpenter removes the node group: it picks an instance type per pending Pod instead of scaling a pre-defined pool."
+  - to: scheduler
+    text: "It simulates scheduling to decide whether a new node of a group's shape would let the pending Pod fit."
+  - to: pdb
+    text: "Removing a node means evicting its Pods through the eviction API, so a tight budget is a common reason scale-down stops."
+  - to: pod-priority
+    text: "Low-priority placeholder Pods are the standard way to keep warm capacity, since they are preempted the instant real work arrives."
+reviewed: 2026-11-05
+---
+
+The Cluster Autoscaler watches for Pods that cannot be scheduled and, for each configured node
+group, simulates whether adding a node of that group's shape would let them fit. If so, it
+increases the group's size. Separately, it looks for nodes whose Pods could all run elsewhere and
+removes them.
+
+**It is driven entirely by `Pending` Pods, not by utilisation.** A cluster at 95% CPU with
+everything scheduled will not grow; a cluster at 10% with one unschedulable Pod will. That makes
+it predictable, and it means the quality of your resource requests determines the quality of
+your autoscaling -- Pods that request far more than they use produce nodes that are mostly
+empty.
+
+**Node groups are the constraint.** Each group is a fixed instance shape, and the autoscaler can
+only add more of it. So covering a mixed workload means several groups -- small, large, GPU,
+ARM, spot -- each with its own labels and taints, and each one more thing to maintain. The
+`--expander` setting decides which group to grow when more than one would work;
+`least-waste` is usually the right choice.
+
+**Scale-down is where it disappoints people.** A node is only removed if it has been underused
+for ten minutes, every Pod on it can be moved, and nothing on it blocks eviction. The usual
+blockers are: a Pod with no controller (a bare Pod), a Pod using local storage, a restrictive
+PodDisruptionBudget, and a kube-system Pod with no budget. The annotation
+`cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` pins a node open, sometimes applied by
+a chart nobody read. `kubectl -n kube-system logs <ca-pod>` names the Pod that is blocking,
+which is the only efficient way to debug it.
+
+**It is slow in the way clouds are slow.** From Pending to Ready is an instance launch, a kubelet
+registration and image pulls -- two to five minutes. For traffic that arrives faster than that,
+the answer is over-provisioning with low-priority placeholder Pods so capacity is already there,
+not a faster autoscaler.

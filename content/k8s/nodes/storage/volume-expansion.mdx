@@ -1,0 +1,50 @@
+---
+id: volume-expansion
+title: "Volume expansion"
+type: concept
+domain: storage
+summary: "Growing a volume in place by editing the claim. Only forward, only if the class allows it, and the filesystem resize may need the Pod to restart."
+level: intermediate
+access: free
+monogram: VE
+exam: [cka]
+relations:
+  related: [persistent-volume-claim, storage-class]
+connects:
+  - to: storage-class
+    text: "allowVolumeExpansion must be true on the class, and it cannot be added to volumes already created from a class that lacked it."
+  - to: persistent-volume-claim
+    text: "The operation is an edit to the claim's requested size. Shrinking is rejected outright."
+  - to: csi
+    text: "The external-resizer grows the disk and the node plugin grows the filesystem, which is why some drivers need the Pod restarted."
+reviewed: 2026-11-05
+---
+
+To grow a volume you edit `spec.resources.requests.storage` on the PersistentVolumeClaim to a
+larger value. The external-resizer sidecar calls the driver to expand the disk, and then the
+filesystem on it has to be grown as well -- which is the step with the operational caveat.
+
+**Three preconditions, each a hard stop.** The StorageClass must have
+`allowVolumeExpansion: true`, and this is checked against the class as it exists now; volumes
+created when it was absent are not covered, so retrofitting means creating a new class and
+migrating. The driver must support expansion -- most cloud block drivers do, some on-premise
+ones do not. And the new size must be larger: shrinking is not supported by any driver and the
+API rejects it, so a typo that lowers the number is at least safe.
+
+**Online versus offline resize is the detail to check before a maintenance window.** Many modern
+drivers can grow the filesystem while the Pod is running, in which case the operation is
+invisible. Others need the volume unmounted, so the claim sits with
+`FileSystemResizePending` until the Pod is deleted and recreated -- and the disk is already
+bigger and already billed at the new size while that is true.
+`kubectl describe pvc` shows the condition and makes it obvious which case you are in.
+
+**For a StatefulSet it is one claim at a time.** `volumeClaimTemplates` are immutable, so you
+cannot change the declared size on the set -- you edit each existing PVC individually, and then
+(for the templates to match for future replicas) recreate the StatefulSet with
+`--cascade=orphan` so its Pods survive. That procedure is fiddly enough to be worth writing down
+before you need it at 3am with a full disk.
+
+**The real lesson is to make expansion possible rather than to plan sizes perfectly.** A default
+class with expansion enabled, an alert at 80% of volume capacity
+(`kubelet_volume_stats_available_bytes` over `..._capacity_bytes`), and a known procedure turns a
+full disk from an outage into a routine edit.

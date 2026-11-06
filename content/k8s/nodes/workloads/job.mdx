@@ -1,0 +1,65 @@
+---
+id: job
+title: "Job"
+type: concept
+domain: workloads
+summary: "Run Pods until a number of them succeed, then stop. Retries, parallelism and cleanup are all in the spec, and each has a default that eventually surprises someone."
+level: core
+access: free
+monogram: JOB
+exam: [ckad, cka]
+relations:
+  related: [cronjob, pod-lifecycle]
+connects:
+  - to: cronjob
+    text: "A CronJob is a Job factory on a schedule, so every question about retries and parallelism is really a question about the Job it creates."
+  - to: sidecar-containers
+    text: "A classic sidecar never exits, so the Pod never completes and the Job hangs. A native sidecar is terminated once the main container is done."
+  - to: pod-priority
+    text: "Batch work is the usual candidate for a low priority class, so it is the first thing preempted when something interactive needs room."
+  - to: keda
+    text: "Queue-driven batch work scales better as jobs created from queue depth than as a fixed parallelism."
+lead: "The four fields that decide what a Job actually does, and the default that bites."
+parts:
+  - name: "completions"
+    kind: jobs
+    text: "How many successful Pods make the Job done. Unset means one. With an index, each completion gets JOB_COMPLETION_INDEX for sharding work."
+  - name: "parallelism"
+    kind: lanes
+    text: "How many Pods run at once. Independent of completions, so 100 completions at parallelism 5 is a worker pool."
+  - name: "backoffLimit"
+    kind: loop
+    text: "Retries before the Job is marked Failed. Six by default, with exponential backoff, which is why a broken Job takes several minutes to give up."
+  - name: "ttlSecondsAfterFinished"
+    kind: trigger
+    text: "Delete the Job and its Pods this long after finishing. Unset means they stay forever, which is how clusters accumulate thousands of objects."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Job creates Pods and tracks how many have succeeded. When `completions` Pods have exited 0, the
+Job is complete and stops creating more. That is the whole contract, and it makes Jobs the right
+object for migrations, imports, batch processing and anything else with an end -- as opposed to a
+Deployment, which will restart your migration forever.
+
+**`restartPolicy` must be `OnFailure` or `Never`**, and the choice decides where the evidence
+lives. With `OnFailure`, the kubelet restarts the container in the same Pod, so you get one Pod
+with a restart count and `--previous` logs. With `Never`, a failure creates a new Pod, so you get
+a trail of failed Pods you can inspect individually -- usually what you want for a batch job,
+because the failed attempt is still there to read.
+
+**`backoffLimit` and its backoff are the reason a broken Job is slow to fail.** Six retries with
+exponential backoff from ten seconds means several minutes before the Job reports `Failed`, which
+in a pipeline waiting on it looks like a hang. For a migration gating a deploy, a lower limit and
+an `activeDeadlineSeconds` are what turn a hang into a clear failure.
+
+**Indexed completion mode is the underused feature.** With
+`completionMode: Indexed`, each Pod gets a distinct `JOB_COMPLETION_INDEX`, so a Job can shard a
+dataset across N Pods with no coordination and no queue -- the simplest parallel batch primitive
+Kubernetes has. Combined with `parallelism` it gives you a worker pool with a known total.
+
+**Cleanup is opt-in and that is the most common operational complaint.** Without
+`ttlSecondsAfterFinished`, every Job and every Pod it created stays in the API forever. A CronJob
+running every five minutes leaves thousands of objects behind, which inflates etcd, slows down
+`kubectl get pods`, and eventually shows up as control plane latency. Setting a TTL of an hour or
+a day, plus `successfulJobsHistoryLimit` on the CronJob, is the fix nobody regrets.

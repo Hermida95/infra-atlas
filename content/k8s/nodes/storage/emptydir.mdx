@@ -1,0 +1,51 @@
+---
+id: emptydir
+title: "emptyDir"
+type: concept
+domain: storage
+summary: "Scratch space that lives and dies with the Pod. It is the right tool for a cache or a shared directory and the wrong one for anything you would miss."
+level: core
+access: free
+monogram: ED
+exam: [ckad, cka]
+relations:
+  related: [volume]
+connects:
+  - to: volume
+    text: "The simplest volume source: a directory created on the node when the Pod starts and removed when it ends."
+  - to: init-containers
+    text: "The standard handover: an init container writes a fetched file or a rendered config here and the app container reads it."
+  - to: eviction
+    text: "It consumes the node's ephemeral storage, so an unbounded one causes disk pressure and the eviction of Pods that did nothing wrong."
+  - to: requests-and-limits
+    text: "With medium Memory it is a tmpfs charged against the Pod's memory limit, so a large file there is an OOM kill rather than a full disk."
+reviewed: 2026-11-05
+---
+
+`emptyDir` creates a directory on the node when the Pod is scheduled and deletes it when the Pod
+is removed. It survives container restarts within the Pod, which makes it meaningfully different
+from writing into the container filesystem, and it is shared by every container in the Pod that
+mounts it.
+
+**Its three good uses** are a cache or temporary workspace that can be rebuilt, a handover
+directory between an init container and the app, and a writable path for an application that
+insists on one while the root filesystem is read-only -- which is the pattern that lets you set
+`readOnlyRootFilesystem: true` without rewriting the application.
+
+**It is not storage, and the failure is silent until it is not.** Nothing warns you that the data
+is ephemeral. A Pod running for three months accumulates state in an
+`emptyDir`, and the first node upgrade reveals that it was never persistent. If the data matters
+past the Pod's life, it needs a PersistentVolumeClaim.
+
+**Size limits are the operational point.** By default an `emptyDir` can grow until the node's
+disk is full, at which point the kubelet reports `DiskPressure` and starts evicting Pods --
+including innocent ones on the same node. `sizeLimit` makes the kubelet evict the offending Pod
+instead, which is a much better failure. The matching discipline is declaring
+`ephemeral-storage` in requests and limits, so the scheduler accounts for it rather than
+discovering it.
+
+**`medium: Memory` changes the trade-off completely.** The directory becomes a tmpfs: fast, never
+touching disk, and counted against the Pod's memory limit. That makes it the right place for
+secrets you do not want written to node storage, and a trap for a workload that writes a
+multi-gigabyte temporary file and is OOM-killed for it with no mention of the file anywhere in
+the error.

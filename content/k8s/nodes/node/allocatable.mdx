@@ -1,0 +1,50 @@
+---
+id: allocatable
+title: "Allocatable & reservations"
+type: concept
+domain: node
+summary: "A node does not offer all its CPU and memory to Pods. What is left after system and kube reservations and the eviction threshold is what the scheduler can spend."
+level: intermediate
+access: free
+monogram: AL
+exam: [cka]
+relations:
+  related: [node-conditions, requests-and-limits]
+connects:
+  - to: scheduler
+    text: "The scheduler fits Pods into allocatable, not capacity, so a node with 8 GiB of RAM has noticeably less than 8 GiB to give away."
+  - to: eviction
+    text: "The eviction threshold is carved out of allocatable up front, which is how the kubelet keeps room to act before the kernel does."
+  - to: requests-and-limits
+    text: "Honest requests only work if the node's own overhead is reserved first, or the sum of requests can exceed what the machine can really run."
+reviewed: 2026-11-05
+---
+
+`kubectl describe node` prints `Capacity` and `Allocatable`, and the gap between them is where a
+surprising amount of cluster capacity goes. Capacity is what the machine has. Allocatable is
+capacity minus `--kube-reserved` (for the kubelet and the container runtime), minus
+`--system-reserved` (for the OS, sshd, the log agent), minus the hard eviction threshold. Only
+allocatable is available to Pods.
+
+**The numbers are not small.** On a managed cluster the reservation scales with instance size,
+and on small nodes it is brutal -- a 2 vCPU, 4 GiB node can offer well under 3 GiB to Pods, so
+two 1 GiB Pods plus a DaemonSet or two is already most of it. This is the main argument for
+fewer, larger nodes: the fixed overhead per node is paid once per node, as are the DaemonSets,
+the kube-proxy, the CNI agent and the log shipper.
+
+**Not reserving is worse than reserving too much.** With no reservation, the scheduler happily
+allocates every last byte to Pods, and then the kubelet and containerd are competing with
+workloads for memory. The failure mode is a node that goes `NotReady` under load -- the kubelet
+cannot get CPU to heartbeat -- which looks like a network problem and is really a budgeting one.
+Enforcing the reservation with `--enforce-node-allocatable` puts the system daemons in their own
+cgroup so they actually get what was set aside.
+
+**Two further deductions catch people out.** Pod overhead from a `RuntimeClass` (meaningful for
+Kata or gVisor, where each Pod carries a VM) is charged against allocatable in addition to the
+containers' own requests. And a `hugepages` or GPU resource is its own dimension that does not
+substitute for memory.
+
+The practical check on any cluster is the ratio of total requests to total allocatable, per
+node. Under about 60% on average means money is being burned; over about 85% means a single node
+failure has nowhere to put its Pods, and the cluster autoscaler will be the only thing standing
+between you and a wave of `Pending`.

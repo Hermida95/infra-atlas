@@ -1,0 +1,80 @@
+---
+id: lambda
+title: "Lambda"
+type: service
+domain: compute
+hub: true
+summary: "Run a function on an event, pay per millisecond of the memory you asked for, and never see a server or a scaling policy."
+logo: aws:lambda
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [fargate, step-functions, app-runner]
+  alternative_to: [fargate, ecs]
+connects:
+  - to: api-gateway
+    text: "Synchronous and user-facing: the API handles the protocol, the function handles the logic."
+  - to: sqs
+    text: "Polled and resilient: the queue absorbs the spike and holds the message until a successful run, with a dead-letter queue for the rest."
+  - to: rds-proxy
+    text: "The connection problem: a thousand concurrent functions mean a thousand database connections unless the proxy pools them."
+  - to: eventbridge
+    text: "Event-driven glue: a rule matches, the function runs, and nothing polls anything."
+  - to: iam-role
+    text: "The execution role is the whole security boundary of a function, so it is the first thing to scope down."
+lead: "Lambda removes the server and adds a set of limits. Knowing the limits is what separates a design that works from one that nearly does."
+parts:
+  - name: "Handler and runtime"
+    kind: code
+    text: "Your function in a managed runtime or a container image, up to 10 GB of memory and 15 minutes per invocation."
+  - name: "Event source"
+    kind: trigger
+    text: "API Gateway, S3, SQS, DynamoDB Streams, EventBridge, an ALB. The source decides whether it is synchronous, asynchronous or polled."
+  - name: "Execution role"
+    kind: shell
+    text: "The function's identity. Everything it is allowed to touch is in this one role."
+  - name: "Concurrency"
+    kind: jobs
+    text: "One invocation per instance of the function. Reserved concurrency caps it, provisioned concurrency keeps instances warm."
+  - name: "Networking"
+    kind: bus
+    text: "No VPC by default. Attach it to subnets and it reaches private resources through an ENI, and loses the public internet without NAT."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Lambda runs a function in response to an event and charges per millisecond of the memory you
+asked for. There is no server, no scaling policy and no idle cost -- and in exchange there is a
+set of limits that shape the design.
+
+**The limits, in order of how often they matter.** Fifteen minutes per invocation, which is why
+long jobs belong on Fargate or Batch with a queue in front. Ten gigabytes of memory, and **CPU
+scales with memory** -- so a CPU-bound function at 128 MB is slow because it has a fraction of a
+core, and raising memory often *reduces* cost by finishing sooner. Six megabytes of synchronous
+payload, 256 KB asynchronous. 512 MB of `/tmp` by default, up to 10 GB, with **EFS** as the
+answer for anything shared or larger. And **concurrency**, which is per account per region and
+is a quota to raise before a launch, not during one.
+
+**How it is invoked** changes the retry behaviour, and this is the part that loses data when it
+is not understood. **Synchronous** (API Gateway, ALB, direct invoke): the caller gets the error
+and owns the retry. **Asynchronous** (S3, SNS, EventBridge): Lambda retries twice and then
+discards the event unless a **dead-letter queue** or an on-failure destination is configured.
+**Poll-based** (SQS, Kinesis, DynamoDB Streams): an event source mapping polls and retries the
+batch, and for streams a failing batch blocks the shard until it succeeds or is bisected away.
+
+**Cold starts** are the initialisation of a new execution environment: runtime, dependencies and
+your init code. They matter for user-facing latency and not at all for asynchronous work. The
+levers are a smaller deployment package, lighter dependency loading, Graviton, **SnapStart** for
+Java, and **provisioned concurrency** when the latency has to be deterministic -- which costs
+while idle and is therefore a deliberate choice.
+
+**Networking** is the other design decision. By default a function has no VPC, which means full
+internet access and no route to private resources. Attach it to subnets and it reaches your
+database through an ENI -- and loses the public internet unless there is a NAT Gateway or the
+relevant VPC endpoints. The ENI is now created at function creation rather than per cold start,
+so the old VPC cold-start penalty is gone.
+
+**The execution role** is the function's entire security boundary, so it is the first thing to
+scope down, and **Powertools for AWS Lambda** is worth adopting early for structured logging,
+tracing, idempotency and parameter caching.

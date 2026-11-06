@@ -1,0 +1,69 @@
+---
+id: hpa
+title: "HorizontalPodAutoscaler"
+type: concept
+domain: scaling
+summary: "More replicas when a metric rises. CPU utilisation is measured against the request, so a wrong request makes the autoscaler target the wrong number."
+level: core
+access: free
+monogram: HPA
+exam: [ckad, cka]
+relations:
+  related: [metrics-server, vpa]
+connects:
+  - to: metrics-server
+    text: "CPU and memory come from metrics-server through the resource metrics API. Without it the HPA reports unknown and does nothing."
+  - to: requests-and-limits
+    text: "Utilisation is a percentage of the request, not of the node, so halving a request doubles the reported utilisation."
+  - to: server-side-apply
+    text: "It writes spec.replicas, so a manifest that also declares replicas is two managers fighting over one field."
+  - to: cluster-autoscaler
+    text: "Scaling Pods only helps if there is somewhere to put them, which is why pod and node autoscaling are deployed together."
+  - to: keda
+    text: "For queue depth, events per second or anything outside the cluster, KEDA generates the HPA rather than replacing it."
+lead: "The parts of the loop, and the one most people never touch until it misbehaves."
+parts:
+  - name: "Metric source"
+    kind: bars
+    text: "Resource (CPU, memory), Pods, Object, or External. Resource is a percentage of request; the others are raw values you set a target for."
+  - name: "Target"
+    kind: gate
+    text: "averageUtilisation or averageValue. The controller computes desired replicas as current times the ratio of actual to target."
+  - name: "Behaviour"
+    kind: lanes
+    text: "scaleUp and scaleDown policies with stabilisation windows. The default 300s down-stabilisation is what stops flapping."
+  - name: "Status conditions"
+    kind: panel
+    text: "AbleToScale, ScalingActive, ScalingLimited. Where the reason for doing nothing is actually written."
+layout: stack
+reviewed: 2026-11-05
+---
+
+The HorizontalPodAutoscaler reads a metric, compares it with a target, and writes a new replica
+count. The arithmetic is simple: desired replicas equals current replicas times (current metric
+divided by target metric), rounded up, clamped to min and max. Everything surprising about it
+comes from where the metric comes from.
+
+**CPU utilisation is relative to the request, and this is the detail that matters most.** A target
+of 70% means 70% of what the Pod *requested*, not of the node and not of the limit. So a Pod
+requesting 100m and using 200m reports 200% utilisation and triggers aggressive scale-up, while
+the same Pod requesting 2 cores reports 10% and never scales at all. Requests that do not
+reflect reality make the HPA behave randomly, which is why fixing requests comes before tuning
+autoscaling.
+
+**`behavior` is the fix for flapping and for slow reaction.** The defaults are deliberately
+cautious on the way down -- a five-minute stabilisation window, so a drop in load does not
+immediately remove Pods that will be needed again -- and permissive on the way up. A workload
+with a slow start benefits from a scale-up stabilisation window and a percentage policy; a
+workload that must absorb a spike wants no up-stabilisation and a large step. Both are
+expressible, and neither is the default.
+
+**Two or more metrics are evaluated independently and the largest wins**, which is usually what
+you want (scale on whichever pressure is real) and occasionally a trap: a memory metric that
+only ever rises -- a cache, a JVM heap -- will pin the replica count at the maximum, because
+memory usage does not fall when load does. Memory is a poor HPA signal for most applications.
+
+**When it does nothing, the reason is in the conditions.** `kubectl describe hpa` shows
+`ScalingActive: False` with `FailedGetResourceMetric` when metrics-server is missing or the Pods
+have no requests, and `ScalingLimited: True` when it is already at `maxReplicas`. Those two lines
+answer almost every "why is my HPA not working" question.

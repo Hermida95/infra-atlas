@@ -1,0 +1,68 @@
+---
+id: region
+title: "Region"
+type: service
+domain: foundation
+hub: true
+summary: "A named geographic area with its own isolated data centres, its own prices and its own set of services."
+monogram: RGN
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [outposts, service-quotas]
+connects:
+  - to: az
+    text: "A region is a set of Availability Zones. Picking the region picks how many you have to play with: most have three, a few have six."
+  - to: edge-location
+    text: "Hundreds of edge locations sit outside the regions and in front of them, terminating user connections far closer than any region can."
+  - to: local-zone
+    text: "A Local Zone is a piece of a region parked in a city, for the users a region is still too far from."
+  - to: multi-region
+    text: "Two regions is the next design, not the next setting: data replication and a way to decide which one is live."
+lead: "A region is the first decision of every design, and three things decide it: where the users are, where the data is allowed to live, and what the region costs."
+parts:
+  - name: "Availability Zones"
+    kind: zones
+    text: "Three or more isolated groups of data centres, kilometres apart, on separate power and network. Spanning two of them is what 'highly available' means on AWS."
+  - name: "Regional services"
+    kind: services
+    text: "S3, DynamoDB, SQS and most managed services are regional: they already span the zones for you, and you never see the machines."
+  - name: "Zonal services"
+    kind: disc
+    text: "EC2 instances, EBS volumes and subnets live in one zone. These are the ones you have to place by hand, and replicate yourself."
+  - name: "Global services"
+    kind: ring
+    text: "IAM, Route 53, CloudFront, Organizations and WAF for CloudFront have no region. Their console always talks to us-east-1."
+  - name: "The region boundary"
+    kind: shell
+    text: "Nothing leaves a region unless you move it: no replication, no failover and no backup copy happens by accident."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A region is a named geographic area -- `eu-west-1`, `us-east-1` -- containing three or more
+Availability Zones. It is the first decision in any design, and it is made on four grounds.
+
+**Where the users are**, because distance is round trips and no amount of compute fixes the
+speed of light. **Where the data is allowed to be**, which for personal data in Europe or health
+data under national rules is a hard constraint rather than a preference. **What is available**,
+because not every service launches in every region and some never arrive. And **price**, which
+differs materially: the same instance can cost 20-40% more in some regions than in `us-east-1`.
+
+The distinction that organises everything else is **scope**. Some services are **global** --
+IAM, Route 53, CloudFront, WAF for CloudFront, Organizations -- and their console always talks
+to `us-east-1`, which is why a certificate for CloudFront must be issued there. Most services
+are **regional**: S3, DynamoDB, SQS, Lambda already span the zones and you never see the
+machines. A few are **zonal**: EC2 instances, EBS volumes and subnets live in one zone, and
+these are the ones you have to place and replicate yourself.
+
+**Nothing crosses a region boundary by accident.** No replication, no failover, no backup copy
+happens unless you configure it -- and that is a safety property as much as a limitation. It is
+also why a multi-region design is a separate project rather than a setting, and why quotas,
+AMIs, KMS keys, certificates and secrets all have to be created again on the other side.
+
+Two region-specific details worth carrying. `us-east-1` hosts several global control planes, so
+it is both the cheapest region and the one whose incidents have the widest reach. And some
+regions are **opt-in** and disabled by default, which is a useful thing to leave that way and to
+enforce with an SCP on `aws:RequestedRegion`.

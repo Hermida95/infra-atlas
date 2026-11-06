@@ -1,0 +1,46 @@
+---
+id: dms
+title: "Database Migration Service"
+type: service
+domain: migrate
+summary: "Keeps a source database replicating into AWS while it is still serving, so the cutover is minutes rather than a weekend."
+monogram: DMS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [seven-rs, documentdb]
+connects:
+  - to: sct
+    text: "DMS moves the data; the Schema Conversion Tool is what handles the schema when the engine changes."
+  - to: rds
+    text: "Homogeneous migrations land on RDS or Aurora with no conversion at all, and that is the easy case."
+  - to: s3
+    text: "S3 is a valid target too, which is how a relational source becomes files in a lake."
+reviewed: 2026-11-05
+---
+
+Database Migration Service keeps a source database replicating into a target while the source is
+still serving, so the cutover is a short window rather than a weekend outage.
+
+A task has three modes and most real migrations use the third: **full load** copies the existing
+data; **CDC** (change data capture) streams ongoing changes by reading the source's transaction
+log; **full load plus CDC** does both, so the target catches up and then stays in step until you
+switch over.
+
+**Homogeneous** migrations -- PostgreSQL to RDS PostgreSQL, SQL Server to RDS SQL Server -- need
+no conversion and are the easy case. **Heterogeneous** ones -- Oracle to Aurora PostgreSQL, SQL
+Server to MySQL -- need the **Schema Conversion Tool** first for the schema, views, stored
+procedures and triggers, with a report of what it cannot convert. DMS then moves the data; it
+does not convert code.
+
+Targets are broader than people expect: RDS and Aurora, of course, but also **S3** (which is how
+a relational source becomes files in a lake), Redshift, DynamoDB, Kinesis, OpenSearch,
+DocumentDB and Neptune. The S3 target is the quiet workhorse of analytics pipelines.
+
+Things that bite. **Large objects** (LOBs) are handled specially and slowly -- limited LOB mode
+is fast and truncates beyond a size, full LOB mode is correct and slow. Tables **without a
+primary key** cannot be replicated by CDC in most engines. **Validation** is a separate task
+setting and should always be on, because "the data arrived" and "the data is correct" are
+different claims. And **DMS Serverless** removes the replication-instance sizing question, which
+was the other common source of a stalled migration.

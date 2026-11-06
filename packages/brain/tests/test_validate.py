@@ -1,5 +1,10 @@
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
 
 from brain.loader import find_repo_root
 from brain.validate import validate_content
@@ -139,3 +144,243 @@ def test_real_content_has_no_errors() -> None:
 
     assert report.errors == []
     assert len(report.nodes) > 0
+
+
+def _case(**overrides: Any) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "id": "pick-one",
+        "title": "Pick one",
+        "scenario": "Something has to be chosen.",
+        "nodes": ["docker"],
+        "options": [
+            {"id": "a", "name": "A", "verdict": "best", "nodes": ["docker"], "why": "It is."},
+            {"id": "b", "name": "B", "verdict": "works", "nodes": ["docker"], "why": "Also."},
+        ],
+    }
+    data.update(overrides)
+    return data
+
+
+@pytest.fixture
+def write_world(content_dir: Path) -> Callable[..., Path]:
+    def _write(exams: list[dict[str, Any]] | None = None, **overrides: Any) -> Path:
+        data: dict[str, Any] = {"id": "k8s", "name": "Inside Kubernetes", "exams": exams or []}
+        data.update(overrides)
+        path = content_dir / "world.yaml"
+        path.write_text(yaml.safe_dump(data, sort_keys=False))
+        return path
+
+    return _write
+
+
+@pytest.fixture
+def write_cases(content_dir: Path) -> Callable[..., Path]:
+    def _write(cases: list[dict[str, Any]]) -> Path:
+        path = content_dir / "cases.yaml"
+        path.write_text(yaml.safe_dump(cases, sort_keys=False))
+        return path
+
+    return _write
+
+
+def test_connects_to_an_unknown_node_is_an_error(content_dir: Path, write_node) -> None:
+    write_node("docker", connects=[{"to": "ghost", "text": "Nothing there."}])
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "connects[0]: unknown node 'ghost'" in report.errors[0].message
+
+
+def test_a_node_cannot_explain_the_same_edge_twice(content_dir: Path, write_node) -> None:
+    write_node(
+        "docker",
+        connects=[{"to": "image", "text": "One."}, {"to": "image", "text": "Two."}],
+    )
+    write_node("image")
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "connects: 'image' is explained twice" in report.errors[0].message
+
+
+def test_a_case_must_commit_to_exactly_one_best_option(
+    content_dir: Path, write_node, write_cases
+) -> None:
+    write_node("docker")
+    options = [
+        {"id": "a", "name": "A", "verdict": "works", "nodes": ["docker"], "why": "Maybe."},
+        {"id": "b", "name": "B", "verdict": "works", "nodes": ["docker"], "why": "Maybe."},
+    ]
+    write_cases([_case(options=options)])
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "exactly one option must be 'best', found 0" in report.errors[0].message
+
+
+def test_a_case_needs_a_real_choice(content_dir: Path, write_node, write_cases) -> None:
+    write_node("docker")
+    only = [{"id": "a", "name": "A", "verdict": "best", "nodes": ["docker"], "why": "It is."}]
+    write_cases([_case(options=only)])
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "needs at least two options" in report.errors[0].message
+
+
+def test_an_avoid_option_has_to_say_what_goes_wrong(
+    content_dir: Path, write_node, write_cases
+) -> None:
+    write_node("docker")
+    options = [
+        {"id": "a", "name": "A", "verdict": "best", "nodes": ["docker"], "why": "It is."},
+        {"id": "b", "name": "B", "verdict": "avoid", "nodes": ["docker"], "why": "It is not."},
+    ]
+    write_cases([_case(options=options)])
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "an 'avoid' option must say what goes wrong" in report.errors[0].message
+
+
+def test_a_case_cannot_name_a_node_that_does_not_exist(
+    content_dir: Path, write_node, write_cases
+) -> None:
+    write_node("docker")
+    write_cases([_case(nodes=["docker", "ghost"])])
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "unknown node 'ghost'" in report.errors[0].message
+
+
+def test_a_valid_case_is_loaded(content_dir: Path, write_node, write_cases) -> None:
+    write_node("docker")
+    write_cases([_case()])
+
+    report = validate_content(content_dir)
+
+    assert report.ok
+    assert [c.id for c in report.cases] == ["pick-one"]
+
+
+def test_an_option_cannot_light_a_service_the_case_does_not_name(
+    content_dir: Path, write_node, write_cases
+) -> None:
+    """Picking an option narrows what is lit, so it can never add to it."""
+    write_node("docker")
+    write_node("image")
+    options = [
+        {"id": "a", "name": "A", "verdict": "best", "nodes": ["docker"], "why": "It is."},
+        {"id": "b", "name": "B", "verdict": "works", "nodes": ["image"], "why": "Also."},
+    ]
+    write_cases([_case(nodes=["docker"], options=options)])
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "'image' is not in the case's own nodes" in report.errors[0].message
+
+
+def test_a_lead_without_parts_is_an_error(content_dir: Path, write_node) -> None:
+    """`lead` introduces the teardown, so it means nothing when there is nothing to take apart."""
+    write_node("docker", lead="Here is what it is made of.")
+
+    report = validate_content(content_dir)
+
+    assert not report.ok
+    assert "lead" in report.errors[0].message
+
+
+# A world's certification vocabulary. `exam` used to be Literal["saa", "sap"] in the shared
+# schema, which meant AWS vocabulary in a model every world has to use. Each world now declares
+# its own in world.yaml, and these are the checks that make that declaration mean something.
+
+
+def test_a_node_can_only_use_an_exam_its_world_declares(
+    content_dir: Path, write_node, write_world
+) -> None:
+    write_world([{"id": "ckad", "label": "CKAD"}, {"id": "cka", "label": "CKA"}])
+    write_node("pod", exam=["ckad", "saa"])
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert not report.ok
+    assert messages(report) == ["exam: 'saa' is not declared by this world (cka, ckad)"]
+
+
+def test_a_world_that_declares_no_exam_accepts_no_exam_tag(content_dir: Path, write_node) -> None:
+    """The journey map has no world.yaml and is studied for nothing, so a tag there is a typo."""
+    write_node("docker", exam=["saa"])
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert not report.ok
+    assert messages(report) == ["exam: 'saa' is not declared by this world (none)"]
+
+
+def test_an_exam_its_world_declares_is_accepted(content_dir: Path, write_node, write_world) -> None:
+    write_world([{"id": "ckad", "label": "CKAD", "name": "Application Developer"}])
+    write_node("pod", exam=["ckad"])
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert report.ok, messages(report)
+    assert report.world is not None
+    assert [e.id for e in report.world.exams] == ["ckad"]
+
+
+def test_a_case_can_only_use_an_exam_its_world_declares(
+    content_dir: Path, write_node, write_world, write_cases
+) -> None:
+    write_world([{"id": "cka", "label": "CKA"}])
+    write_node("docker", exam=["cka"])
+    write_cases([_case(exam=["cka", "sap"])])
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert not report.ok
+    assert messages(report) == ["case 'pick-one': exam 'sap' is not declared by this world (cka)"]
+
+
+def test_a_declared_exam_nothing_is_tagged_with_warns(
+    content_dir: Path, write_node, write_world
+) -> None:
+    """It would render a filter chip that empties the map."""
+    write_world([{"id": "ckad", "label": "CKAD"}, {"id": "cks", "label": "CKS"}])
+    write_node("pod", exam=["ckad"])
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert report.ok, messages(report)
+    assert [issue.message for issue in report.warnings] == [
+        "exam 'cks' is not used by any node or case"
+    ]
+
+
+def test_a_world_cannot_declare_the_same_exam_twice(
+    content_dir: Path, write_node, write_world
+) -> None:
+    write_world([{"id": "cka", "label": "CKA"}, {"id": "cka", "label": "CKA again"}])
+    write_node("pod", exam=["cka"])
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert not report.ok
+    assert messages(report) == ["duplicate exam id 'cka'"]
+
+
+def test_a_world_manifest_has_to_be_a_mapping(content_dir: Path, write_node) -> None:
+    write_node("docker")
+    (content_dir / "world.yaml").write_text("- id: k8s\n")
+
+    report = validate_content(content_dir, today=TODAY)
+
+    assert not report.ok
+    assert "must be a YAML mapping describing the world" in messages(report)[0]

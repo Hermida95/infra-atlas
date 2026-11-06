@@ -1,0 +1,53 @@
+---
+id: cri
+title: "Container Runtime Interface"
+type: concept
+domain: node
+summary: "The gRPC contract between the kubelet and whatever runs containers. It is the reason removing Docker support changed nothing for workloads."
+level: intermediate
+access: free
+monogram: CRI
+exam: [cka]
+relations:
+  related: [kubelet, containerd]
+  alternative_to: [containerd]
+connects:
+  - to: containerd
+    text: "The usual implementation. The kubelet asks for a sandbox and containers; containerd calls runc, which asks the kernel for namespaces and cgroups."
+  - to: cgroups
+    text: "Requests and limits become cgroup values at this layer: the runtime writes them when it creates the container."
+  - to: image-management
+    text: "Image pulls, the content store and garbage collection are the runtime's, not the kubelet's, which is why disk pressure is a node-level concern."
+  - to: security-context
+    text: "A Pod's user, capabilities and seccomp profile arrive here as an OCI runtime spec and are applied by runc."
+reviewed: 2026-11-05
+---
+
+CRI is a gRPC API with two services: `RuntimeService` for sandboxes and containers, and
+`ImageService` for pulls. The kubelet is the client; containerd or CRI-O is the server, usually
+over a Unix socket. Below that, the runtime calls an OCI runtime -- `runc` normally -- which
+makes the actual clone, unshare and cgroup syscalls.
+
+**This layering is why "Kubernetes removes Docker" was a non-event for applications.** Docker
+was never the thing Kubernetes talked to in spirit; it was reached through a shim called
+dockershim, which the project maintained reluctantly and removed in 1.24. Images did not change
+-- they are OCI images whoever built them, so a `docker build` artefact runs identically under
+containerd. What did break was anything on the node assuming a Docker daemon: a CI Pod mounting
+`/var/run/docker.sock` to build images, a log shipper reading Docker's JSON log format, or
+`docker ps` in a runbook, which becomes `crictl ps`.
+
+**The sandbox is the piece worth understanding.** CRI creates a *pod sandbox* first -- on Linux,
+a pause container that holds the network and IPC namespaces -- and then creates containers that
+join it. That is the mechanical reason containers in a Pod share an IP and can reach each other
+on localhost, and the reason a Pod's network is set up once, by the CNI plugin, against the
+sandbox rather than per container.
+
+**Alternative runtimes slot in at the same seam.** gVisor and Kata Containers are OCI runtimes
+that give each Pod a user-space kernel or a lightweight VM, selected per Pod through a
+`RuntimeClass` rather than by reconfiguring the node. That is the standard answer for running
+genuinely untrusted code, because a namespace is not a security boundary against a kernel
+exploit and a VM is.
+
+For debugging on a node where the API server cannot help, `crictl` is the tool: `crictl pods`,
+`crictl ps -a`, `crictl logs`, `crictl inspect`. It talks CRI directly, so it shows what the
+kubelet sees rather than what the cluster believes.

@@ -9,9 +9,13 @@ install: ## Install Python and Node dependencies
 	uv sync --all-packages
 	$(PNPM) install
 
-content: ## Validate /content and generate the graph the web app renders
+content: ## Validate the three worlds and generate the graphs the web app renders
 	uv run brain validate
 	uv run brain graph
+	uv run brain validate --content content/aws
+	uv run brain graph --content content/aws --out apps/web/src/data/aws.json
+	uv run brain validate --content content/k8s
+	uv run brain graph --content content/k8s --out apps/web/src/data/k8s.json
 
 embed: content ## Build the semantic search index (downloads the embedding model once)
 	uv run brain embed

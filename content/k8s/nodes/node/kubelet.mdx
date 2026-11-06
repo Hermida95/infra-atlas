@@ -1,0 +1,78 @@
+---
+id: kubelet
+title: "kubelet"
+type: service
+domain: node
+hub: true
+summary: "The agent on every node. It watches the API for Pods assigned to it and is the only thing that actually starts a container, which makes it the last link in every chain."
+logo: kubernetes
+level: core
+access: free
+exam: [cka, cks]
+relations:
+  related: [cri, node-conditions]
+connects:
+  - to: cri
+    text: "The kubelet never talks to Docker or containerd directly: it speaks CRI over a socket, which is what made the runtime replaceable."
+  - to: apiserver
+    text: "It watches for Pods bound to its node and reports their status back. No other component tells it what to run."
+  - to: probes
+    text: "Liveness, readiness and startup probes are executed by the kubelet on the node, not by the control plane, so they keep working when the API is down."
+  - to: eviction
+    text: "When the node runs out of memory or disk the kubelet, not the scheduler, decides which Pods to kill and in what order."
+  - to: volume
+    text: "Mounting a volume into a Pod is the kubelet's job, which is why a stuck mount shows up as a Pod stuck in ContainerCreating."
+  - to: static-pods
+    text: "A manifest in a directory on disk is run with no API server involved, which is how the control plane itself is bootstrapped."
+lead: "What the kubelet owns on its node, and what it refuses to do."
+parts:
+  - name: "Pod sync loop"
+    kind: loop
+    text: "For each Pod assigned to this node: pull images, create the sandbox, start init containers in order, then the rest. Re-runs on every change and periodically."
+  - name: "CRI client"
+    kind: plugin
+    text: "gRPC to containerd or CRI-O over a Unix socket. Image pulls and container lifecycle both go through it."
+  - name: "Volume manager"
+    kind: cylinder
+    text: "Waits for attach, then mounts into the Pod's directories. A CSI driver's problem becomes a ContainerCreating here."
+  - name: "Probes and status"
+    kind: bell
+    text: "Runs the three probe types, computes Pod conditions, and PATCHes status back to the API every few seconds."
+  - name: "Eviction manager"
+    kind: trigger
+    text: "Watches memory, disk and inodes against thresholds and evicts Pods by QoS class to protect the node."
+  - name: "cAdvisor"
+    kind: bars
+    text: "Container resource usage, served on the kubelet's own endpoint. The source metrics-server and therefore the HPA read."
+layout: cluster
+reviewed: 2026-11-05
+---
+
+The kubelet is the only component that can start a container, and it takes instructions from
+exactly one place: the API server's list of Pods whose `spec.nodeName` is this node. It does not
+take orders from the scheduler, the controller-manager or kubectl -- all of those write objects,
+and the kubelet reads them. That is why a Pod can be `Running` according to its Deployment and
+nowhere to be found on the node: the kubelet is the thing that closes the gap, and if it is
+unhealthy, nothing does.
+
+**It is responsible for the node, not for the cluster.** It reports node conditions and
+capacity, enforces its own eviction thresholds, runs probes locally, and restarts containers
+according to `restartPolicy` -- all without asking anyone. This local autonomy is why running
+Pods survive a control plane outage: the kubelet already knows what should be running and keeps
+it running, re-pulling images and restarting crashed containers on its own.
+
+**Most "the Pod will not start" problems live here**, and each has a distinct phase.
+`ImagePullBackOff` is the CRI failing to pull -- wrong name, missing imagePullSecret, rate
+limit. `ContainerCreating` that never ends is usually a volume: a CSI attach that never
+completed, a missing Secret or ConfigMap referenced by a projected volume.
+`CrashLoopBackOff` means the container started and exited, so the problem is the application and
+`kubectl logs --previous` has it. `Running` but not `Ready` is a readiness probe.
+`kubectl describe pod` plus the kubelet's own journal on that node distinguishes all four in
+under a minute.
+
+**Its own security surface is significant.** The kubelet API on port 10250 can list Pods and
+exec into them; left unauthenticated, it is a complete bypass of the API server's RBAC. The
+hardening is fixed: `--anonymous-auth=false`, webhook authorisation so the API server decides,
+the read-only port disabled, and the NodeRestriction admission plugin on so a compromised
+kubelet cannot edit other nodes or other nodes' Pods. On managed clusters this is done for you;
+on anything self-built it is the first thing to check.

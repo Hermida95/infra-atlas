@@ -1,0 +1,44 @@
+---
+id: privatelink
+title: "PrivateLink"
+type: service
+domain: network
+summary: "Exposes one service, not a network, to another VPC or account. No routes, no peering, and overlapping CIDRs stop mattering."
+monogram: PR
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [vpc-endpoint, transit-gateway]
+connects:
+  - to: nlb
+    text: "A provider puts a Network Load Balancer behind an endpoint service; consumers get an ENI that points at it."
+  - to: vpc-peering
+    text: "The alternative when you only need one service: peering joins two networks, PrivateLink joins a consumer to a service."
+reviewed: 2026-11-05
+---
+
+PrivateLink exposes a **service**, not a network. That is the whole idea, and it is what makes
+it different from peering and from a Transit Gateway, both of which join routing domains
+together.
+
+The provider puts a **Network Load Balancer** in front of whatever they are offering and creates
+an **endpoint service** from it. A consumer creates an interface endpoint in their own VPC and
+gets an ENI with a private address. Traffic flows one way -- consumer to provider -- over the
+AWS backbone. Nothing is routed: the two VPCs have no route to each other, no knowledge of each
+other's addresses, and **overlapping CIDRs stop being a problem entirely**. That last point is
+the usual reason it wins. After an acquisition, two VPCs that both use 10.0.0.0/16 cannot be
+peered without renumbering one of them; PrivateLink does not care.
+
+Access is controlled by the provider through an allow-list of principals, and new requests can
+require manual acceptance. Each consumer's endpoint gets its own DNS name, and the provider can
+publish a private hosted zone so consumers use a friendly name instead.
+
+Where it shows up: every AWS interface endpoint is PrivateLink underneath; SaaS vendors offer it
+so customers never traverse the internet; and inside a large organization it is how a platform
+team exposes one shared service -- an authentication API, an internal registry -- to a hundred
+accounts without joining a hundred networks.
+
+The trade-off against a Transit Gateway is scope. PrivateLink is one service, one direction, TCP
+only, and needs an NLB. A Transit Gateway is full routing in both directions for everything. If
+the requirement names a single service, PrivateLink is the smaller and safer answer.

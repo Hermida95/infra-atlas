@@ -1,0 +1,71 @@
+---
+id: auto-scaling
+title: "EC2 Auto Scaling"
+type: service
+domain: compute
+summary: "Keeps a group at a size, spreads it across zones, replaces unhealthy members, and scales on a target metric, a schedule or a forecast."
+monogram: EC2
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [ec2, spot, warm-standby]
+connects:
+  - to: cloudwatch-alarms
+    text: "Target tracking is an alarm on a metric such as average CPU or requests per target, and the group does the arithmetic."
+  - to: alb
+    text: "The group registers instances in the target group and drains them on the way out, using the load balancer's health checks."
+  - to: az
+    text: "Capacity is balanced across the zones in the group, which is what makes a zone failure a scaling event."
+lead: "A group is a contract about capacity, not a script that adds servers. Everything else follows from that."
+parts:
+  - name: "Launch template"
+    kind: sheet
+    text: "AMI, instance type, security groups, IAM profile, user data. Versioned, so a change is a new version and a rolling replacement."
+  - name: "Min, max and desired"
+    kind: bars
+    text: "Desired is what it keeps running; min and max are the floor and ceiling a policy may move it between. Min 2 across two zones is the baseline."
+  - name: "Health checks"
+    kind: bell
+    text: "EC2 status by default; add ELB checks so a process that is up but not serving gets replaced. The grace period must cover a real boot."
+  - name: "Scaling policies"
+    kind: loop
+    text: "Target tracking (hold a metric at a number), step scaling, scheduled, and predictive for known daily shapes."
+  - name: "Lifecycle hooks"
+    kind: gate
+    text: "Pause on launch or terminate to warm a cache, register somewhere, or drain cleanly. Without them, scale-in kills connections mid-request."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An Auto Scaling group turns individual instances into capacity. It keeps a desired count
+running, spreads it across the zones you list, replaces anything that fails a health check, and
+moves the count up and down. The moment a design has a group in it, instances stop being things
+you log into and start being things that are replaced -- which is also why the AMI and the user
+data matter more than they did.
+
+**Target tracking** is the policy to reach for first: name a metric and a target -- average CPU
+at 50%, or `ALBRequestCountPerTarget` at 1000 -- and the group does the arithmetic, creating the
+alarms itself. Request count per target is usually the better signal, because CPU is a symptom
+and arrives late. **Step scaling** is for when you want explicit bands. **Scheduled** is for a
+shape you already know, like a working day. **Predictive** reads fourteen days of history and
+provisions ahead of a daily pattern, which is the answer when scale-up is slower than the ramp.
+
+Health checks are where most real incidents hide. The default only checks that EC2 says the
+instance is running, so an application that has crashed inside a healthy instance stays in
+service forever. Turn on **ELB health checks** so the group replaces anything the load balancer
+will not send traffic to, and set the **grace period** longer than a real boot or the group
+kills instances while they are still starting -- a loop that looks like a scaling storm.
+
+Two things that make the difference between a group that works and one that drops requests.
+**Connection draining** (deregistration delay on the target group) lets in-flight requests
+finish before an instance goes away. And **lifecycle hooks** pause an instance in `Pending:Wait`
+or `Terminating:Wait` so something can run -- warm a cache, pull secrets, upload logs -- before
+it serves or disappears.
+
+For cost, a **mixed instances policy** puts on-demand and Spot in one group with a list of
+acceptable types and a floor of on-demand capacity you are not willing to lose. Combined with
+**capacity rebalancing**, which replaces a Spot instance when AWS signals it is at risk rather
+than waiting for the two-minute notice, that is most of the saving with little of the pain. And
+**warm pools** keep pre-initialised instances stopped and ready, for applications whose boot is
+measured in minutes.

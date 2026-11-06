@@ -1,0 +1,68 @@
+---
+id: namespace
+title: "Namespace"
+type: concept
+domain: fundamentals
+summary: "A name scope with a DNS name, a quota boundary and an RBAC boundary attached. It is not a security boundary, and the gap between those two claims causes real incidents."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka, cks]
+relations:
+  related: [object, resource-quota]
+connects:
+  - to: rbac
+    text: "A Role and RoleBinding only reach objects in one namespace, so the namespace is the unit teams are actually granted."
+  - to: resource-quota
+    text: "A quota is per namespace, which makes the namespace the only place to cap what a team can consume."
+  - to: network-policy
+    text: "Pods in different namespaces can talk by default. A namespace only isolates traffic once a NetworkPolicy says so."
+  - to: coredns
+    text: "A Service is reachable as <name>.<namespace>.svc.cluster.local, so the namespace is part of every in-cluster DNS name."
+  - to: pod-security-admission
+    text: "The Pod Security level is a label on the namespace, which makes the namespace the unit of enforcement for what a Pod may ask for."
+lead: "Four separate things arrive bundled in one object, and only three of them are boundaries."
+parts:
+  - name: "Name scope"
+    kind: shell
+    text: "A Deployment called `api` can exist once per namespace. This is the only guarantee a namespace makes unconditionally."
+  - name: "DNS segment"
+    kind: ring
+    text: "`svc.<namespace>.svc.cluster.local`. Cross-namespace calls work and need the full name; same-namespace calls can use the short one."
+  - name: "RBAC scope"
+    kind: gate
+    text: "A Role and RoleBinding apply inside it. Granting a team a namespace is how multi-tenancy is usually expressed."
+  - name: "Quota and limits"
+    kind: bars
+    text: "ResourceQuota and LimitRange attach here, so CPU, memory, storage and object counts are capped per namespace or not at all."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A namespace is a name scope. Everything else people believe about it -- that it isolates, that
+it contains, that it protects -- is true only because something else was also configured, and
+assuming otherwise is how a staging workload ends up reading production traffic.
+
+**What it does on its own:** names are unique within it, DNS names include it, RBAC rules bind
+to it, and ResourceQuota and LimitRange live in it. That is a genuinely useful bundle, and it is
+why the namespace, not the cluster, is the normal unit to hand to a team.
+
+**What it does not do:** it does not stop traffic. All Pods in a cluster can reach all other
+Pods across namespaces unless a NetworkPolicy says otherwise -- and most clusters have none.
+It does not stop a Pod from mounting a hostPath, from running as root, or from reading a node's
+credentials, unless Pod Security Admission or a policy engine is enforcing a level. And it does
+nothing at all for cluster-scoped objects: a ClusterRole, a PersistentVolume, a CRD and a Node
+are shared by everyone, whatever namespace they were applied from.
+
+**The tenancy question that follows** is therefore not "namespace or cluster" but "what does
+this tenant have to be prevented from doing". A namespace plus quota plus a default-deny
+NetworkPolicy plus a restricted Pod Security level plus no CRD or ClusterRole access is a
+reasonable soft boundary for teams inside one company. It is not a boundary for untrusted code,
+because the kernel is shared and so is the control plane; that needs separate clusters or a
+sandboxed runtime.
+
+Two operational details worth knowing. A namespace stuck in `Terminating` is almost always an
+object with a finalizer nobody will clear, often a custom resource whose operator has been
+uninstalled. And `kubectl delete namespace` is the fastest destructive command in Kubernetes:
+it removes everything inside, including PersistentVolumeClaims and therefore, depending on the
+reclaim policy, the data.

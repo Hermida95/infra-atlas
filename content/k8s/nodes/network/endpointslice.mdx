@@ -1,0 +1,67 @@
+---
+id: endpointslice
+title: "EndpointSlice"
+type: concept
+domain: network
+summary: "The actual list of addresses behind a Service, sharded into chunks. It is what every proxy and mesh programs from, and the first object to check when traffic goes nowhere."
+level: intermediate
+access: free
+monogram: ES
+exam: [cka]
+relations:
+  related: [service, kube-proxy]
+connects:
+  - to: service
+    text: "The Service holds the selector; the EndpointSlice controller resolves it into ready Pod addresses and ports."
+  - to: kube-proxy
+    text: "Every node watches these objects and programs its own forwarding rules from them, which is why propagation takes a moment."
+  - to: probes
+    text: "A Pod failing its readiness probe is moved to notReady here, which is how it stops receiving traffic without being restarted."
+  - to: graceful-shutdown
+    text: "A terminating Pod is marked rather than removed instantly, so proxies that honour it can drain connections properly."
+lead: "What one slice carries, and why the shape changed from the old Endpoints object."
+parts:
+  - name: "endpoints"
+    kind: services
+    text: "Up to 100 addresses by default, each with conditions: ready, serving and terminating. More than that and another slice is created."
+  - name: "conditions"
+    kind: bell
+    text: "ready is the one kube-proxy uses. serving and terminating together let a proxy keep sending to a Pod that is draining."
+  - name: "topology"
+    kind: zones
+    text: "The node and zone of each endpoint, which is what makes topology-aware routing and same-zone preference possible."
+  - name: "ports"
+    kind: lanes
+    text: "The resolved target ports, so a named port in the Service has already become a number by the time a proxy reads it."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An EndpointSlice is the resolved answer to a Service's selector: a list of Pod addresses, their
+ports, their readiness, and the node and zone each one is on. A controller in the
+controller-manager maintains them, and every kube-proxy and every mesh sidecar in the cluster
+watches them to program its own forwarding.
+
+**It replaced the Endpoints object for a scaling reason.** The old design put every address for a
+Service into one object, so a Service with 5,000 Pods had one very large object, and a single Pod
+becoming ready rewrote all of it -- and that rewrite was then sent to every node watching. Slices
+cap at 100 endpoints each, so one Pod change rewrites one small object. On big clusters this was
+the difference between a control plane that worked and one that spent its life distributing
+endpoint updates.
+
+**It is the right place to look when traffic is wrong.** `kubectl get endpointslices -l
+kubernetes.io/service-name=<svc>` answers the question "does this Service know about any Pods",
+which separates an application problem from a wiring problem instantly. Empty means the selector,
+the labels or readiness; populated but with the wrong port means `targetPort`; populated and
+correct means the problem is further along -- kube-proxy, policy, or the application itself.
+
+**The three conditions encode a subtlety that matters during deploys.** `ready` follows the
+readiness probe. `serving` is like ready but stays true for a terminating Pod, and
+`terminating` marks a Pod being deleted. A proxy that understands all three can keep sending
+in-flight work to a draining Pod while routing new work elsewhere; kube-proxy's simpler
+behaviour -- remove it from the rules -- is why `preStop` sleeps are still needed.
+
+**Topology fields enable same-zone routing**, which is not a performance nicety but a cost one:
+cross-zone traffic is billed in every major cloud. `trafficDistribution: PreferClose` on the
+Service uses this to keep traffic local when there is a healthy local endpoint and fall back when
+there is not, which is strictly better than the old `Local` traffic policy that just blackholed.

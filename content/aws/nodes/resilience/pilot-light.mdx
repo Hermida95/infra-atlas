@@ -1,0 +1,43 @@
+---
+id: pilot-light
+title: "Pilot light"
+type: pattern
+domain: resilience
+summary: "Data replicating continuously, core services switched off but configured. Tens of minutes to recover, at a fraction of a second region's cost."
+monogram: PL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rto-rpo]
+  alternative_to: [backup-restore, warm-standby, active-active]
+connects:
+  - to: read-replica
+    text: "A cross-region replica or an Aurora global secondary is the light that stays on."
+  - to: auto-scaling
+    text: "Recovery is scaling a group from zero and pointing DNS at it, which is fast only if it has been tested."
+reviewed: 2026-11-05
+---
+
+The data is already in the second region and continuously replicating; the compute is configured
+but switched off or scaled to nothing. On failover you start it, point traffic at it, and the
+data is already there.
+
+**RPO** is seconds to minutes, because replication is continuous -- a cross-region read replica,
+an Aurora global secondary, DynamoDB global tables, S3 replication. **RTO** is tens of minutes,
+because everything that serves traffic has to start: instances launch, containers pull images,
+caches are cold, connection pools fill, and the database has to be promoted.
+
+What stays on is deliberately minimal: the database replica, the replicated object storage, and
+the infrastructure definitions. Auto Scaling groups sit at zero, load balancers may exist but
+have no targets, and the container images and AMIs are replicated so there is nothing to build.
+
+The two things that decide whether it meets its RTO are both measurable, and both are usually
+optimistic in the plan. **Cold start time** for the whole stack, including anything that warms
+up slowly, and **capacity availability** in the second region at the moment you need it -- which
+is what Capacity Reservations exist for when the failover must be certain.
+
+It sits between backup-and-restore (cheaper, hours) and warm standby (more expensive, minutes).
+The step up to warm standby is not conceptual: it is running a small amount of each tier instead
+of none, which removes the cold-start risk and lets you actually serve while scaling. If the RTO
+is near the edge of what pilot light can do, warm standby is usually the honest choice.

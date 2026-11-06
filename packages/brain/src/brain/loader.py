@@ -10,10 +10,12 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from brain.models import Domain, Node, NodeFrontmatter, Requirement
+from brain.models import Case, Domain, Node, NodeFrontmatter, Requirement, WorldManifest
 
+WORLD_FILE = "world.yaml"
 DOMAINS_FILE = "domains.yaml"
 REQUIREMENTS_FILE = "requirements.yaml"
+CASES_FILE = "cases.yaml"
 NODES_DIR = "nodes"
 NODE_GLOB = "*.mdx"
 REPO_MARKER = "pnpm-workspace.yaml"
@@ -34,8 +36,10 @@ class RepoRootNotFoundError(RuntimeError):
 
 @dataclass
 class LoadResult:
+    world: WorldManifest | None = None
     domains: list[Domain] = field(default_factory=list)
     requirements: list[Requirement] = field(default_factory=list)
+    cases: list[Case] = field(default_factory=list)
     nodes: list[Node] = field(default_factory=list)
     errors: list[ContentError] = field(default_factory=list)
 
@@ -117,6 +121,29 @@ def _load_model_list[ModelT: BaseModel](path: Path, model: type[ModelT], what: s
     return items
 
 
+def _load_model[ModelT: BaseModel](path: Path, model: type[ModelT], what: str) -> ModelT:
+    try:
+        data: Any = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        raise ContentError(path, f"cannot read file: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ContentError(path, f"invalid YAML: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise ContentError(path, f"must be a YAML mapping describing the {what}")
+    try:
+        return model.model_validate(data)
+    except ValidationError as exc:
+        raise ContentError(path, "; ".join(format_validation_error(exc))) from exc
+
+
+def load_world(path: Path) -> WorldManifest | None:
+    """Optional file: a content tree with no world.yaml declares no certifications at all."""
+    if not path.exists():
+        return None
+    return _load_model(path, WorldManifest, "world")
+
+
 def load_domains(path: Path) -> list[Domain]:
     return _load_model_list(path, Domain, "domains")
 
@@ -128,6 +155,13 @@ def load_requirements(path: Path) -> list[Requirement]:
     return _load_model_list(path, Requirement, "requirements")
 
 
+def load_cases(path: Path) -> list[Case]:
+    """Optional file: no cases.yaml means no cases. Only the AWS atlas has them today."""
+    if not path.exists():
+        return []
+    return _load_model_list(path, Case, "cases")
+
+
 def node_files(content_dir: Path) -> Iterable[Path]:
     return sorted((content_dir / NODES_DIR).rglob(NODE_GLOB))
 
@@ -135,11 +169,19 @@ def node_files(content_dir: Path) -> Iterable[Path]:
 def load_content(content_dir: Path) -> LoadResult:
     result = LoadResult()
     try:
+        result.world = load_world(content_dir / WORLD_FILE)
+    except ContentError as exc:
+        result.errors.append(exc)
+    try:
         result.domains = load_domains(content_dir / DOMAINS_FILE)
     except ContentError as exc:
         result.errors.append(exc)
     try:
         result.requirements = load_requirements(content_dir / REQUIREMENTS_FILE)
+    except ContentError as exc:
+        result.errors.append(exc)
+    try:
+        result.cases = load_cases(content_dir / CASES_FILE)
     except ContentError as exc:
         result.errors.append(exc)
 

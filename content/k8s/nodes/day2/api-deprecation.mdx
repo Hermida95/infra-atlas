@@ -1,0 +1,54 @@
+---
+id: api-deprecation
+title: "API deprecation"
+type: concept
+domain: day2
+summary: "Versions are removed on a published schedule, and the breakage lands after the upgrade when a pipeline applies an old manifest. Auditing for it is the real upgrade work."
+level: intermediate
+access: free
+monogram: DEP
+exam: [cka]
+relations:
+  related: [api-groups, version-upgrade]
+connects:
+  - to: api-groups
+    text: "Each group version has its own maturity and its own removal release, which is what apiVersion in every manifest is pinned to."
+  - to: version-upgrade
+    text: "This audit is the step that has to happen before an upgrade, because the failures appear afterwards and in someone else's pipeline."
+  - to: audit-log
+    text: "Filtering the audit log by API version lists exactly which clients still call a deprecated one, with their user agents."
+  - to: helm
+    text: "Old charts are a common source: a chart pinned to a removed API version fails to install on a cluster that upgraded cleanly."
+reviewed: 2026-11-05
+---
+
+Kubernetes removes API versions on a schedule it publishes in advance: alpha versions can go in
+any release, beta versions get a deprecation window, and GA versions are not removed within a
+major version. The removals already behind us are instructive --
+`extensions/v1beta1` Ingress and Deployment, `networking.k8s.io/v1beta1` Ingress,
+`policy/v1beta1` PodDisruptionBudget, `batch/v1beta1` CronJob,
+`rbac.authorization.k8s.io/v1beta1` -- and each one broke clusters whose owners thought the
+upgrade had gone fine.
+
+**The failure is delayed, which is what makes it dangerous.** Existing objects are converted and
+keep working after the upgrade, because the API server stores one version and serves another. What
+breaks is the next *write*: a CI pipeline applying a manifest with the removed
+`apiVersion` gets a `no matches for kind` error, days later, to a team that changed nothing. The
+cluster upgrade was last Tuesday and nobody connects the two.
+
+**So the audit comes first, and there are three places to look.** Manifests in your repositories
+(`pluto detect-files`, `kubent`), live objects in the cluster
+(`pluto detect-api-resources`), and the audit log filtered by the deprecated version, which is
+the only one that finds clients you have forgotten -- an old Terraform provider, a script on
+someone's machine, a Helm chart pinned years ago.
+
+**The API server warns you, if anything is listening.** Requests to deprecated versions get a
+`Warning` header, which `kubectl` prints, and the
+`apiserver_requested_deprecated_apis` metric exposes them with the release in which they will be
+removed. An alert on that metric is the cheapest possible early warning, and almost nobody sets
+it up.
+
+**`kubectl-convert` does the mechanical part** of rewriting a manifest to a current version, which
+is usually a one-line change. The work is finding them. And the discipline that prevents the
+whole problem is not using beta APIs for anything long-lived, and upgrading often enough that a
+removal is never more than one version away.

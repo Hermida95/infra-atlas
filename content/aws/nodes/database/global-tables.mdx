@@ -1,0 +1,42 @@
+---
+id: global-tables
+title: "DynamoDB global tables"
+type: service
+domain: database
+summary: "The same table replicated to several regions, writable in all of them, converging with last-writer-wins."
+monogram: DGT
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [dynamodb]
+connects:
+  - to: active-active
+    text: "This is what makes a true active/active application plausible, and the conflict rule is the thing to read twice."
+  - to: multi-region
+    text: "Replication is seconds, not synchronous, so the application has to tolerate reading a value it just overwrote elsewhere."
+reviewed: 2026-11-05
+---
+
+A global table is one DynamoDB table replicated across regions, writable in **all** of them.
+Replication is built on streams, typically completes in about a second, and conflicts are
+resolved **last writer wins** by timestamp.
+
+That last clause is the design constraint and it deserves a moment. There is no merge and no
+application-visible conflict: if two regions update the same item within the replication window,
+one update silently disappears. For an application where each user is served by one region and
+items belong to users, this almost never happens. For a shared counter, an inventory level or
+anything with contention across regions, it is a correctness bug waiting for traffic. Designs
+that work either partition ownership by region, use idempotent writes, or model updates as
+appended items rather than mutations.
+
+Within those limits it is the closest thing to genuine active/active that managed data gets.
+Reads are local and fast everywhere; writes are local and fast everywhere; and if a region is
+lost the others carry on with no promotion step, no DNS change to the database and no RPO beyond
+the replication window. That is why **active/active** designs on AWS so often use DynamoDB
+rather than a relational engine: Aurora Global Database gives a one-second RPO with one writer,
+and global tables remove the single writer entirely.
+
+Operationally: all replicas must have the same table name and key schema, point-in-time recovery
+and streams are enabled per replica, and the cost is replicated write units on top of storage in
+each region.

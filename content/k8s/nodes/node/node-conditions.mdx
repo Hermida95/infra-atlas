@@ -1,0 +1,69 @@
+---
+id: node-conditions
+title: "Node object & conditions"
+type: concept
+domain: node
+summary: "A node is an object too, with a heartbeat and a set of conditions. NotReady is a report, not a cause, and the timings after it explain slow recoveries."
+level: core
+access: free
+monogram: ND
+exam: [cka]
+relations:
+  related: [kubelet, node-drain]
+connects:
+  - to: kubelet
+    text: "The kubelet owns this object's status and renews a Lease every few seconds. No heartbeat is what turns a node NotReady."
+  - to: controller-manager
+    text: "The node lifecycle controller adds the unreachable taint and starts the eviction clock, which is why Pod recovery takes minutes."
+  - to: taints-and-tolerations
+    text: "Pressure conditions automatically add taints, so a node under disk pressure stops receiving new Pods without anyone intervening."
+  - to: cloud-controller-manager
+    text: "Only the cloud controller can tell a terminated instance from an unreachable one, and that distinction decides whether Pods wait or move."
+lead: "The conditions worth reading, and what each one actually means for your Pods."
+parts:
+  - name: "Ready"
+    kind: node
+    text: "The kubelet is reporting and the runtime and network are up. False stops new scheduling; Unknown means no heartbeat at all."
+  - name: "MemoryPressure"
+    kind: bars
+    text: "Above the eviction threshold. Adds a taint that repels BestEffort Pods and starts evictions."
+  - name: "DiskPressure"
+    kind: cylinder
+    text: "Disk or inodes running out. Triggers image garbage collection first, then eviction."
+  - name: "PIDPressure"
+    kind: chips
+    text: "Too many processes on the node. Rare, and usually one container forking out of control."
+  - name: "Lease"
+    kind: ring
+    text: "A tiny object renewed every ten seconds in kube-node-lease. Cheaper than writing node status, and the real heartbeat."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Node is a cluster-scoped object with capacity, allocatable resources, labels, taints and a
+list of conditions. The kubelet creates and maintains it -- which has an odd consequence worth
+knowing: a node joins the cluster by registering itself, and deleting the Node object does not
+remove the machine, it just makes the cluster forget it until its kubelet registers again.
+
+**Two heartbeats, for different reasons.** The kubelet renews a small `Lease` object in
+`kube-node-lease` every ten seconds, and updates the much larger Node status only when
+something changes or every few minutes. Splitting them is what lets a cluster with thousands of
+nodes heartbeat cheaply. If the lease stops being renewed, the node lifecycle controller marks
+`Ready` as `Unknown` after a grace period of around forty seconds.
+
+**What happens next is the part that confuses people during an incident.** `NotReady` does not
+move Pods. The controller adds a `node.kubernetes.io/unreachable` taint with
+`NoExecute`, and every Pod carries a default toleration for it with
+`tolerationSeconds: 300`. So Pods stay bound to a dead node for five more minutes before they
+are deleted and rescheduled. The total time from a node vanishing to replacements running is
+therefore closer to six minutes than to six seconds, and the only ways to shorten it are
+lowering those tolerations in the Pod spec or having a cloud controller confirm the instance is
+gone, which deletes the Node and its Pods at once.
+
+**Pressure conditions taint automatically**, which is a neat piece of design: a node under
+`MemoryPressure` gets a taint that stops new BestEffort Pods landing on it, so the problem does
+not compound while eviction tries to fix it. Nothing has to notice or intervene.
+
+For capacity questions, `kubectl describe node` is the authoritative view: `Capacity` versus
+`Allocatable` (the difference is reserved for the system), and underneath, the requests and
+limits of every Pod on it as a percentage. That table, not `top`, is what the scheduler sees.

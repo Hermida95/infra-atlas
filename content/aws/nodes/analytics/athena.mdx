@@ -1,0 +1,70 @@
+---
+id: athena
+title: "Athena"
+type: service
+domain: analytics
+summary: "Serverless SQL straight over files in S3, charged per terabyte scanned. Partitioning and a columnar format are the entire cost story."
+monogram: AT
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [redshift]
+  alternative_to: [redshift]
+connects:
+  - to: glue
+    text: "The Glue Data Catalog is where Athena gets its table definitions, written by a crawler or by hand."
+  - to: s3
+    text: "Parquet and partitions turn a hundred-dollar query into a one-dollar one, scanning the same data."
+  - to: quicksight
+    text: "QuickSight over Athena is the cheapest dashboard that reads a data lake directly."
+lead: "SQL over files, priced by the bytes it reads. Every optimisation is about reading fewer bytes."
+parts:
+  - name: "The table"
+    kind: sheet
+    text: "A definition in the Glue Data Catalog saying where the files are and what the columns mean. Athena stores no data of its own."
+  - name: "Partitions"
+    kind: lanes
+    text: "Directories named key=value. A WHERE clause on a partition key skips whole prefixes, which is the single biggest saving available."
+  - name: "Columnar format"
+    kind: modules
+    text: "Parquet or ORC: only the columns the query names are read. Usually a 10x reduction over JSON or CSV on its own."
+  - name: "The engine"
+    kind: core
+    text: "Serverless Trino. Nothing to provision; a workgroup sets the limits, the output location and the per-query data cap."
+  - name: "What it costs"
+    kind: bars
+    text: "$5 per terabyte scanned, rounded up to 10 MB per query. A badly partitioned table turns a cheap query into an expensive one."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Athena runs SQL directly against files in S3. There is no cluster, no loading step and no
+database: you define a table that says where the files are and what the columns mean, and query
+it. Pricing is **per terabyte scanned**, which means every performance decision is also the cost
+decision.
+
+Three things reduce the bytes scanned, and together they routinely turn a $100 query into a $1
+one. **Partitioning** -- writing data into `year=2026/month=11/day=05/` directories and
+declaring those as partition keys -- lets a `WHERE` clause skip entire prefixes without reading
+them. **Partition projection** is the version of that with no catalogue updates, which matters
+once there are hundreds of thousands of partitions. **Columnar formats**, Parquet or ORC, mean a
+query naming three columns reads three columns rather than whole rows. And **compression**
+(Snappy, Zstd) reduces what is left. Converting a JSON log archive to partitioned Parquet is the
+single highest-return thing most teams do to their data lake.
+
+The table definitions live in the **Glue Data Catalog**, written by a crawler or declared in
+DDL, and that catalogue is shared -- Redshift Spectrum, EMR and QuickSight read the same tables.
+**Lake Formation** adds column- and row-level permissions over it, which is how a lake is shared
+with analysts who may not see everything.
+
+Practical features: **CTAS** (`CREATE TABLE AS SELECT`) is the usual way to convert and
+repartition data in place; **workgroups** separate teams, set the result location and impose a
+per-query data limit that stops an accidental full scan; **federated queries** reach into RDS,
+DynamoDB and other sources through connectors; and **Athena for Spark** exists when SQL is not
+enough.
+
+Against Redshift: Athena for occasional, ad-hoc querying over a lake, with no infrastructure and
+no cost when idle. Redshift for a warehouse queried continuously by many people, where indexes,
+sort keys and materialised views pay off. The two coexist happily -- Redshift Spectrum queries
+the same S3 data through the same catalogue.

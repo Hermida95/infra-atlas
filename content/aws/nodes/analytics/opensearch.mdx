@@ -1,0 +1,44 @@
+---
+id: opensearch
+title: "OpenSearch Service"
+type: service
+domain: analytics
+summary: "Managed search and log analytics with dashboards, plus a serverless option and vector search for retrieval-augmented generation."
+monogram: OS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [neptune]
+connects:
+  - to: cloudwatch-logs
+    text: "Where logs go when Logs Insights is not enough: full-text search, long retention and dashboards."
+  - to: firehose
+    text: "Firehose is the managed path from a stream into an index, with buffering and retries handled."
+reviewed: 2026-11-05
+---
+
+OpenSearch Service is managed OpenSearch (the Elasticsearch fork), used for two distinct jobs
+that share an engine: **search** over documents, and **log and event analytics** with
+dashboards.
+
+For logs it is where you go when CloudWatch Logs Insights is not enough: full-text search across
+sources, dashboards that update live, long interactive retention, and aggregations that a log
+group cannot do. The usual ingestion path is Data Firehose, a CloudWatch Logs subscription
+filter, or **OpenSearch Ingestion**, which is a managed Data Prepper pipeline.
+
+The storage tiers are the cost story. **Hot** is attached storage for data being queried
+constantly. **UltraWarm** keeps older indices in S3 with local caching at roughly a tenth of the
+price, still searchable. **Cold** is cheaper again and must be attached before querying. An
+index lifecycle policy that rolls indices through hot, UltraWarm and cold, then deletes them, is
+what keeps a logging cluster affordable.
+
+**OpenSearch Serverless** removes the node sizing question, with separate collection types for
+time series, search and **vector** workloads -- that last one is why the service now appears in
+generative-AI designs, as the vector store behind retrieval-augmented generation.
+
+Operational notes that matter: a production domain runs across three Availability Zones with
+dedicated master nodes, and the common failure is a cluster sized for storage but not for the
+shard count -- too many small shards is the classic performance problem. Access control is
+either IAM policies on the domain or **fine-grained access control** with its own users and
+roles, which is what you need for per-index or per-document permissions.

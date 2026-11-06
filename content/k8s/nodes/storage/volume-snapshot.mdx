@@ -1,0 +1,50 @@
+---
+id: volume-snapshot
+title: "VolumeSnapshot"
+type: concept
+domain: storage
+summary: "A point-in-time copy of a volume as a Kubernetes object, and a new volume created from it. Crash-consistent, which for a database is not the same as usable."
+level: intermediate
+access: free
+monogram: VS
+exam: [cka]
+relations:
+  related: [csi, persistent-volume-claim]
+connects:
+  - to: csi
+    text: "Snapshots are an optional CSI capability driven by the external-snapshotter sidecar, so support and semantics vary by driver."
+  - to: persistent-volume-claim
+    text: "A claim can name a snapshot as its data source, which is how a restore becomes an ordinary claim creation."
+  - to: cluster-backup
+    text: "A snapshot is a disk copy; a backup tool adds the Kubernetes objects, scheduling, retention and off-cluster storage around it."
+reviewed: 2026-11-05
+---
+
+VolumeSnapshot, VolumeSnapshotContent and VolumeSnapshotClass mirror the PVC/PV/StorageClass
+trio: you create a snapshot object pointing at a claim, the driver takes a snapshot of the
+underlying disk, and the content object represents the real thing. A new PVC can then name the
+snapshot as `dataSource`, and the driver creates a volume from it.
+
+**That makes restore and cloning ordinary Kubernetes operations**, which is genuinely useful:
+spinning up a copy of production data for a test, rolling back a stateful workload to before a
+bad migration, or seeding a new replica from an existing one without application-level
+replication.
+
+**Crash-consistent is the caveat that matters.** A disk snapshot captures the bytes as they were,
+including whatever was in flight -- the equivalent of pulling the power cord. A journalling
+filesystem recovers; a database usually recovers too, via its write-ahead log, but "usually" is
+not a backup strategy. For anything transactional, the right order is to quiesce or use the
+database's own backup (`pg_basebackup`, a managed snapshot with log shipping) and treat volume
+snapshots as a faster, coarser complement.
+
+**Snapshots usually live in the same failure domain as the disk.** A cloud snapshot is regional
+at best and often zonal, stored by the same provider, deletable by the same credentials. That
+makes it a fine recovery tool for a bad deploy and a poor one for a region outage or a
+compromised account. Copying snapshots to another region or exporting backups to object storage
+with separate credentials is what turns this into disaster recovery.
+
+**Operationally, two things to check per driver.** Whether snapshots are supported at all (the
+CRDs and the snapshot controller are installed separately from Kubernetes -- a cluster can have
+the API and no controller, in which case snapshot objects sit there doing nothing), and
+`deletionPolicy` on the snapshot class, which has exactly the same Delete-versus-Retain trade as
+a reclaim policy and the same capacity to destroy the copy you were relying on.

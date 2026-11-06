@@ -1,0 +1,68 @@
+---
+id: gateway-api
+title: "Gateway API"
+type: concept
+domain: network
+summary: "The successor to Ingress: typed route objects, protocols beyond HTTP, and a split between the team that owns the load balancer and the teams that own routes."
+level: intermediate
+access: free
+monogram: GW
+exam: [ckad, cka]
+relations:
+  related: [ingress, service-mesh]
+  alternative_to: [ingress]
+connects:
+  - to: ingress
+    text: "It replaces it for new work: the same host and path routing, with the annotations promoted to real, validated fields."
+  - to: crd
+    text: "It ships as CRDs rather than built-in types, so the API can evolve on its own schedule and has to be installed."
+  - to: service-mesh
+    text: "The same route objects now describe mesh traffic as well, so north-south and east-west routing stop being two vocabularies."
+  - to: network-policy
+    text: "Routing is not authorisation: a route reaching a Service says nothing about whether the Pod will accept the connection."
+lead: "Four object kinds, split by who owns them. That split is the actual design."
+parts:
+  - name: "GatewayClass"
+    kind: meta
+    text: "Which implementation is available, installed by the infrastructure provider. The analogue of IngressClass, cluster-scoped."
+  - name: "Gateway"
+    kind: gate
+    text: "An actual listener: addresses, ports, protocols, TLS. Owned by the platform team, with rules for which namespaces may attach."
+  - name: "HTTPRoute"
+    kind: lanes
+    text: "The routing rules, owned by the application team in its own namespace: matches on header, method, query, plus rewrites, redirects and weights."
+  - name: "ReferenceGrant"
+    kind: shell
+    text: "Explicit permission for a cross-namespace reference. Nothing may reach into another namespace without the target consenting."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Gateway API is the replacement for Ingress, built by the same community after a decade of
+watching Ingress annotations become an unportable dialect per controller. The things that used to
+be annotations -- header matching, path rewriting, redirects, traffic splitting, timeouts, retries
+-- are typed fields with schema validation, so a mistake is rejected at apply time rather than
+ignored at runtime.
+
+**Role separation is the structural change.** A `Gateway` is infrastructure: a platform team
+declares the listeners, the addresses, the certificates, and *which namespaces may attach routes
+to it*. An `HTTPRoute` is application configuration, living in the team's own namespace, naming
+the Gateway it wants to attach to. The Gateway can refuse. That is a real permission model, where
+Ingress had none -- any Ingress in any namespace could claim any hostname on a shared controller.
+
+**It is not only HTTP.** `GRPCRoute`, `TLSRoute`, `TCPRoute` and `UDPRoute` cover the cases that
+forced people into LoadBalancer Services, so a Postgres listener and a web application can share
+one gateway object model. Weighted backends are first-class, which makes canary routing a
+supported field rather than a controller-specific annotation.
+
+**And it now covers east-west traffic too.** The GAMMA work lets an HTTPRoute attach to a Service
+rather than a Gateway, so a service mesh can be configured with the same objects as the ingress
+-- which removes one of the real costs of adopting a mesh, namely learning a second routing
+vocabulary.
+
+**Practical notes for adopting it.** The CRDs are installed separately and versioned separately
+from Kubernetes, so the version of the standard and the version your implementation supports are
+two facts to check. Implementations differ in conformance -- Envoy Gateway, Istio, Cilium,
+Traefik, NGINX Gateway Fabric and the cloud controllers all support different subsets -- and the
+conformance reports are the honest reference. Ingress continues to work, so migration is per
+route, not per cluster.

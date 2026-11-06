@@ -1,0 +1,44 @@
+---
+id: global-accelerator
+title: "Global Accelerator"
+type: service
+domain: edge
+summary: "Two static anycast IP addresses, entry at the nearest edge and the rest of the journey on the AWS backbone. For TCP and UDP, including non-HTTP."
+monogram: GA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudfront, multi-region]
+  alternative_to: [cloudfront]
+connects:
+  - to: nlb
+    text: "The usual endpoint: an NLB or ALB per region, with traffic dials and health checks deciding the split."
+  - to: route53
+    text: "Failover without DNS: the client's IP address never changes, so a cached record cannot send anyone to a dead region."
+reviewed: 2026-11-05
+---
+
+Global Accelerator gives you two **static anycast IP addresses** advertised from AWS edge
+locations worldwide. A client connects to the nearest edge, and the traffic crosses the rest of
+the distance on AWS's own backbone rather than the public internet.
+
+Two benefits, and they are independent. **Performance**: the backbone is less congested and
+better routed than the internet, so latency and jitter improve, typically most for users far
+from the region. **Failover without DNS**: the client's IP address never changes, so moving
+traffic between regions is a change inside Global Accelerator rather than a DNS record that
+resolvers cache. If a requirement says failover must not depend on DNS TTLs, this is the answer
+and Route 53 is not.
+
+The controls are **endpoint groups** per region, each with a **traffic dial** (what share of
+traffic that region may take) and **endpoint weights** inside it. Health checks remove an
+unhealthy endpoint automatically. That is enough for blue/green across regions, gradual
+migration, and shedding load from a struggling region, all without touching DNS.
+
+Against CloudFront, which also uses the edge network: CloudFront **caches**, speaks HTTP and
+runs functions at the edge. Global Accelerator caches nothing and works for **TCP and UDP** --
+game servers, IoT over MQTT, VoIP, SFTP, anything non-HTTP, and any case where static IPs are
+required. For a cacheable HTTP workload, CloudFront does more and usually costs less. For
+non-HTTP or for static addressing, Global Accelerator is the only one of the two that applies.
+It also charges a fixed hourly fee per accelerator plus data transfer, so it is not something to
+leave running by accident.

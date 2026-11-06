@@ -1,0 +1,50 @@
+---
+id: kube-state-metrics
+title: "kube-state-metrics"
+type: tool
+domain: observability
+summary: "Turns API objects into metrics: desired versus ready replicas, Pod phase, container restarts, job status. The state of the cluster, not its resource usage."
+level: intermediate
+access: free
+monogram: KSM
+exam: [cka]
+relations:
+  related: [metrics]
+connects:
+  - to: metrics
+    text: "It is a scrape target like any other, and it supplies the half of a Kubernetes dashboard that is not resource usage."
+  - to: apiserver
+    text: "It watches objects rather than polling, so its cost to the control plane is one set of watches regardless of scrape frequency."
+  - to: deployment
+    text: "Alerting on desired replicas not matching ready replicas for ten minutes is the single most useful rule it enables."
+reviewed: 2026-11-05
+---
+
+kube-state-metrics watches the API and exposes the state of objects as Prometheus series. It
+reports no usage at all -- no CPU, no memory. It reports that a Deployment wants 5 replicas and
+has 3 ready, that a Pod is in `Pending`, that a container has restarted 12 times, that a
+PersistentVolumeClaim is unbound, that a CronJob last succeeded four hours ago.
+
+**That is exactly the half that usage metrics cannot see.** A dashboard built only on cAdvisor
+shows healthy CPU for the Pods that exist, and says nothing about the two replicas that never
+started. The alerts that catch real incidents come from here:
+`kube_deployment_status_replicas_ready` below `kube_deployment_spec_replicas` for ten minutes,
+`kube_pod_container_status_restarts_total` increasing,
+`kube_pod_status_phase{phase="Pending"}` persisting,
+`kube_persistentvolumeclaim_status_phase{phase="Pending"}`, and a CronJob whose last successful
+run is older than its schedule.
+
+**It is a watcher, not a poller**, which keeps its control plane cost flat: it maintains informers
+for the kinds it covers and answers scrapes from memory. The cost that does scale is its own
+memory, proportional to the number of objects in the cluster -- a large cluster with many Pods
+and Jobs needs a real memory allocation, and sharding is available for very large ones.
+
+**It can also expose your own labels and annotations as metric labels**, which is how a team or
+cost-centre label on a workload becomes a dimension in a dashboard. That is the mechanism behind
+most showback reporting on Kubernetes, and it is one flag
+(`--metric-labels-allowlist`) rather than a separate tool.
+
+**Do not confuse it with metrics-server.** Different APIs, different purposes, both usually
+installed: metrics-server feeds the HPA, kube-state-metrics feeds your alerts. A cluster with
+only the first has no idea when a Deployment is degraded; a cluster with only the second has
+HPAs that do not work.

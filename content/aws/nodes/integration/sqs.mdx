@@ -1,0 +1,71 @@
+---
+id: sqs
+title: "SQS"
+type: service
+domain: integration
+summary: "A queue that decouples a producer from a consumer and absorbs a spike. Standard for throughput, FIFO when order and exactly-once matter."
+logo: aws:sqs
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [eventbridge, amazon-mq]
+  alternative_to: [kinesis-data-streams, amazon-mq]
+connects:
+  - to: lambda
+    text: "An event source mapping polls for you, scales with the backlog, and retries the batch until the visibility timeout is out of patience."
+  - to: sns
+    text: "Fan-out: SNS publishes once, several queues receive, and each consumer keeps its own backlog and its own failures."
+  - to: auto-scaling
+    text: "Scaling on queue depth per instance is the textbook worker pattern, and it beats scaling on CPU."
+lead: "A queue, and four settings that decide whether it works under load."
+parts:
+  - name: "Standard or FIFO"
+    kind: split
+    text: "Standard: unlimited throughput, at-least-once, best-effort order. FIFO: strict order per group, exactly-once processing, 300 or 3,000 messages a second."
+  - name: "Visibility timeout"
+    kind: loop
+    text: "How long a received message is hidden from other consumers. Shorter than the processing time means the message is handed out twice."
+  - name: "Dead-letter queue"
+    kind: gate
+    text: "After N receives, the message moves here instead of looping for ever. The single most important setting, and off by default."
+  - name: "Long polling"
+    kind: orbit
+    text: "WaitTimeSeconds up to 20: the call waits for a message instead of returning empty. Fewer requests, lower cost, lower latency."
+  - name: "Retention and delay"
+    kind: bars
+    text: "Up to 14 days of retention, and a delay queue or per-message timer that holds delivery for up to 15 minutes."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A queue decouples a producer from a consumer. The producer writes and returns; the consumer
+reads when it can. The spike is absorbed by the queue rather than by whatever is behind it, and
+a consumer that is down is a growing backlog rather than lost work. That is the whole value, and
+it is why "the system falls over during a burst" is so often answered with a queue.
+
+**Standard** queues have effectively unlimited throughput, deliver **at least once**, and make a
+best effort at order. Both caveats are real: a message can be delivered twice, so consumers must
+be **idempotent** -- usually by recording a processed id somewhere -- and order is not
+guaranteed. **FIFO** queues give strict ordering within a *message group* and exactly-once
+processing through a five-minute deduplication window, at 300 messages a second (3,000 with
+batching, and much higher in high-throughput mode). Choose a message group id that spreads --
+per customer, per order -- because ordering is only preserved within a group and a single group
+is a single-threaded queue.
+
+**Visibility timeout** is the setting that produces the strangest bugs. When a consumer receives
+a message it becomes invisible for this long; if the consumer has not deleted it by then, it
+reappears and someone else processes it too. A timeout shorter than the real processing time
+means duplicate work that looks like a bug in the application. Set it longer than the worst
+case, or call `ChangeMessageVisibility` to extend while working.
+
+A **dead-letter queue** should exist on every queue. Without one, a message that always fails is
+retried until it expires, consuming capacity and hiding the failure; with one, after
+`maxReceiveCount` attempts it moves aside where it can be inspected and redriven. Alarm on its
+depth.
+
+For scaling consumers, the metric is **`ApproximateNumberOfMessagesVisible`** -- backlog per
+worker -- not CPU. With Lambda, the event source mapping polls and scales for you; with a
+container or instance fleet, target-tracking on queue depth is the textbook pattern. Enable
+**long polling** everywhere (`WaitTimeSeconds: 20`): it cuts empty receives, which are both cost
+and latency.

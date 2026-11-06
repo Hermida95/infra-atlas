@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { activeIndex, moveSelection } from "@/lib/palette";
-import { domainById, type GraphNode } from "@/lib/graph";
+import { type GraphNode, MAP, type World } from "@/lib/graph";
 import { search } from "@/lib/search";
 import { API_URL, MIN_SEMANTIC_QUERY, mergeHits, semanticSearch, type SemanticHit } from "@/lib/semantic";
 import { Mark } from "./brain/Mark";
@@ -14,6 +14,12 @@ type Props = {
   onPick: (node: GraphNode) => void;
   /** Cmd/Ctrl+Enter: always open the concept page. */
   onOpenPage: (node: GraphNode) => void;
+  /** Which graph to search. Defaults to the journey map. */
+  world?: World;
+  /** What the input suggests typing, which differs between a map of tools and one of services. */
+  placeholder?: string;
+  /** Whether the nodes of this graph have concept pages, which only the journey map's do. */
+  hasPages?: boolean;
 };
 
 type Semantic = { query: string; hits: SemanticHit[]; failed: boolean };
@@ -26,10 +32,10 @@ const DEBOUNCE_MS = 250;
  * Meaning search for the current query, through the API's GET /search. Results are kept
  * with the query they answer, so a slow response never shows up under a newer query.
  */
-function useSemanticSearch(query: string): SemanticState {
+function useSemanticSearch(query: string, enabled: boolean): SemanticState {
   const [result, setResult] = useState<Semantic | null>(null);
   const q = query.trim();
-  const wanted = API_URL !== null && q.length >= MIN_SEMANTIC_QUERY;
+  const wanted = enabled && API_URL !== null && q.length >= MIN_SEMANTIC_QUERY;
 
   useEffect(() => {
     if (!wanted) return;
@@ -47,19 +53,28 @@ function useSemanticSearch(query: string): SemanticState {
     };
   }, [q, wanted]);
 
-  if (API_URL === null) return { hits: [], status: "off" };
+  if (!enabled || API_URL === null) return { hits: [], status: "off" };
   if (!wanted) return { hits: [], status: result?.failed ? "offline" : "idle" };
   if (result?.query !== q) return { hits: [], status: "loading" };
   return { hits: result.hits, status: result.failed ? "offline" : "ok" };
 }
 
-export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
+export function CommandPalette({
+  open,
+  onClose,
+  onPick,
+  onOpenPage,
+  world = MAP,
+  placeholder = "Search Docker, etcd, managed postgres...",
+  hasPages = true,
+}: Props) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
-  const local = useMemo(() => search(query), [query]);
-  const semantic = useSemanticSearch(query);
+  const local = useMemo(() => search(query, world.graph.nodes, 8, world), [query, world]);
+  // The meaning index is built from /content only, so it has nothing to say about the atlas.
+  const semantic = useSemanticSearch(query, world === MAP);
   const hits = useMemo(() => mergeHits(local, semantic.hits), [local, semantic.hits]);
   // Meaning hits arrive after the keystroke and reorder the list: follow the concept, not the row.
   const active = activeIndex(hits, selectedId);
@@ -113,7 +128,7 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
           aria-controls={listId}
           aria-activedescendant={hits[active] ? `${listId}-${hits[active].node.id}` : undefined}
           aria-autocomplete="list"
-          placeholder="Search Docker, etcd, managed postgres..."
+          placeholder={placeholder}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -138,7 +153,7 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
               </span>
               <span className="palette-domain">
                 {via === "meaning" && <i className="palette-via">meaning</i>}
-                <span className="palette-domain-name">{domainById.get(node.domain)?.name}</span>
+                <span className="palette-domain-name">{world.domainById.get(node.domain)?.name}</span>
               </span>
             </li>
           ))}
@@ -149,8 +164,14 @@ export function CommandPalette({ open, onClose, onPick, onOpenPage }: Props) {
         </ul>
         <p className="palette-hint">
           <kbd>↑</kbd>
-          <kbd>↓</kbd> move · <kbd>↵</kbd> open · <kbd>⌘</kbd>
-          <kbd>↵</kbd> concept page · <kbd>Esc</kbd> close
+          <kbd>↓</kbd> move · <kbd>↵</kbd> open ·{" "}
+          {hasPages && (
+            <>
+              <kbd>⌘</kbd>
+              <kbd>↵</kbd> concept page ·{" "}
+            </>
+          )}
+          <kbd>Esc</kbd> close
           {semantic.status !== "off" && (
             <span className={`palette-status ${semantic.status}`} aria-live="polite">
               {semantic.status === "offline" ? "meaning search offline" : "meaning search on"}

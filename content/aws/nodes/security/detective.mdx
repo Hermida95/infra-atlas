@@ -1,0 +1,37 @@
+---
+id: detective
+title: "Detective"
+type: service
+domain: security
+summary: "Builds a behaviour graph from CloudTrail, flow logs and GuardDuty so an investigation starts with context instead of a grep."
+monogram: DE
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudtrail]
+connects:
+  - to: guardduty
+    text: "It is the step after a finding: what else did this principal, instance or address do."
+reviewed: 2026-11-05
+---
+
+Detective is the tool for the hour after a finding. It continuously ingests CloudTrail, VPC flow
+logs, GuardDuty findings and EKS audit logs and maintains a **behaviour graph** -- entities
+(principals, instances, IP addresses, findings) and the relationships between them, with
+baselines of what normal looks like for each.
+
+The questions it answers are the ones an investigation actually asks and a log search answers
+badly. What else did this role do in the hour before and after? Is this API call unusual for
+this principal, or do they do it every day? Which other resources has this IP address touched?
+When did this behaviour start? Every answer comes with a time series against a learned baseline,
+so "unusual" has a shape rather than being a judgement.
+
+It is deliberately not a detector. GuardDuty raises the finding; Detective is the pivot from
+that finding into context, and from the console you can jump straight from a GuardDuty finding
+into the graph around it.
+
+Practical notes: enable it organisation-wide from the same delegated administrator account as
+GuardDuty, and accept that there is a two-week baseline period before the behavioural
+comparisons are meaningful. Pricing is per GB of ingested events, so it is the kind of thing
+enabled in a security account for the whole organization rather than per workload.

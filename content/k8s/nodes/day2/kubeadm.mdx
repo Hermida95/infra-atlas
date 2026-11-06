@@ -1,0 +1,52 @@
+---
+id: kubeadm
+title: "kubeadm"
+type: tool
+domain: day2
+summary: "The reference tool for building a conformant cluster: it writes the certificates and the control plane static Pods, and deliberately stops there."
+level: intermediate
+access: free
+monogram: KA
+exam: [cka]
+relations:
+  related: [static-pods, version-upgrade]
+connects:
+  - to: static-pods
+    text: "It installs the API server, etcd, scheduler and controller-manager as static Pod manifests, which is how they start before the cluster exists."
+  - to: certificate-rotation
+    text: "It generates the whole PKI and provides the commands to check and renew it, which is the maintenance it leaves you with."
+  - to: version-upgrade
+    text: "kubeadm upgrade plan and apply is the supported path, one control plane node at a time, with the kubelets after."
+  - to: cni
+    text: "It installs no network plugin on purpose, so a fresh kubeadm cluster has nodes NotReady until you choose one."
+reviewed: 2026-11-05
+---
+
+kubeadm builds a cluster: it generates the certificate authority and every certificate, writes the
+kubeconfigs, lays down the control plane components as static Pod manifests, bootstraps etcd, and
+produces a join token for the other nodes. `kubeadm init`, then `kubeadm join` on each additional
+node. It is the tool the CKA exam uses, and the foundation most higher-level installers sit on.
+
+**It is deliberately incomplete.** It does not install a CNI plugin, so after `init` the nodes are
+`NotReady` and no Pod can start -- which is the first surprise for everyone and is by design, since
+the network is a decision kubeadm refuses to make for you. It also installs no ingress controller,
+no storage driver, no metrics-server and no monitoring. Everything above a conformant control
+plane is yours.
+
+**Knowing what it writes is what makes a broken cluster fixable.**
+`/etc/kubernetes/manifests` holds the control plane static Pods -- edit one and the kubelet
+restarts that component, which is the recovery path when the API server will not start.
+`/etc/kubernetes/pki` holds the entire PKI. `/etc/kubernetes/*.conf` are the component
+kubeconfigs, including `admin.conf`, which is a cluster-admin credential and should be treated
+accordingly. A `kubeadm-config` ConfigMap in kube-system records the cluster's configuration, and
+is what `kubeadm upgrade` reads.
+
+**`kubeadm upgrade` is the supported upgrade path** and the reason to use kubeadm rather than
+assembling a control plane by hand: `upgrade plan` tells you what is available and what it will
+do, `upgrade apply` does the first control plane node, `upgrade node` does the others, and the
+kubelets follow by package upgrade and restart. It also renews the certificates as it goes.
+
+**For a learning cluster, this is the right tool** precisely because nothing is hidden: you can
+see the certificates, the manifests and the flags, and breaking one teaches you what it was for.
+For production, a managed control plane removes this entire category of work, and the trade is
+that the recovery paths above are no longer available to you either.

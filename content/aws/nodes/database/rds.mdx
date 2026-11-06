@@ -1,0 +1,80 @@
+---
+id: rds
+title: "RDS"
+type: service
+domain: database
+hub: true
+summary: "Managed relational databases: PostgreSQL, MySQL, MariaDB, Oracle and SQL Server, with patching, backups and failover handled for you."
+logo: aws:rds
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [dms, aws-backup, elasticache]
+connects:
+  - to: rds-multi-az
+    text: "Multi-AZ buys availability and nothing else: the standby serves no reads at all."
+  - to: read-replica
+    text: "Read replicas buy read capacity and nothing else: they lag, and they do not fail over on their own."
+  - to: aurora
+    text: "Aurora is the upgrade path when one writer and asynchronous replicas stop being enough."
+  - to: secrets-manager
+    text: "Managed rotation of the master credential, with the application reading it at runtime instead of holding it."
+  - to: rds-proxy
+    text: "The connection pool that stands between a serverless front end and a database with a finite connection limit."
+lead: "RDS takes the operations and leaves you the schema. Two knobs do most of the work, and they are not the same knob: one buys availability, the other buys read capacity."
+parts:
+  - name: "Instance and storage"
+    kind: machine
+    text: "A DB instance class and gp3 or io2 storage that can grow but never shrink. The class is where the memory for the buffer pool comes from."
+  - name: "Multi-AZ"
+    kind: zones
+    text: "A synchronous standby in another zone, invisible to the application, with failover in a minute or two by DNS."
+  - name: "Read replicas"
+    kind: satellites
+    text: "Asynchronous copies for read traffic, up to fifteen, possibly in another region, and promotable to standalone."
+  - name: "Backups"
+    kind: discs
+    text: "Automated snapshots plus transaction logs for point-in-time recovery within the retention window, and manual snapshots that outlive the instance."
+  - name: "Access"
+    kind: shell
+    text: "A subnet group in private subnets, a security group that only the application's group can reach, and IAM or Secrets Manager for the credential."
+layout: stack
+reviewed: 2026-11-05
+---
+
+RDS runs PostgreSQL, MySQL, MariaDB, Oracle, SQL Server and Db2 as managed instances: AWS
+handles provisioning, patching, backups, failover and monitoring; the schema, the queries and
+the data model remain yours.
+
+**The two features people conflate.** **Multi-AZ** puts a synchronous standby in another zone
+and fails over automatically in a minute or two; it buys availability and **no read capacity at
+all**. **Read replicas** are asynchronous copies that serve reads and can be promoted manually;
+they buy read capacity and **no availability**. A scenario stating both requirements wants both
+features, and the newer Multi-AZ *cluster* deployment -- one writer, two readable standbys,
+failover under 35 seconds -- is the single answer where it is supported.
+
+**Backups** are two mechanisms. **Automated backups** take a daily snapshot plus transaction
+logs, giving **point-in-time recovery** to any second within the retention window (up to 35
+days), and they are deleted with the instance. **Manual snapshots** persist until you delete
+them, can be copied across regions and shared across accounts, and are what a long-term or
+pre-migration copy should be. Restoring always creates a **new instance** with a new endpoint --
+there is no in-place restore, which is a detail that changes a recovery runbook.
+
+**Connecting to it.** The instance lives in private subnets via a **DB subnet group**, its
+security group allows only the application's security group, and the credential comes from
+**Secrets Manager** with rotation, or from **IAM database authentication** where the engine
+supports it. The application connects to the **endpoint name**, never an address, because
+failover is a DNS change.
+
+**Operating it.** The **maintenance window** is when AWS applies patches -- with Multi-AZ this
+is a failover rather than an outage. **Performance Insights** is the first place to look at a
+slow database: it shows load by wait event and by SQL statement, which is a better starting
+point than CPU. **Enhanced Monitoring** adds operating-system metrics. **Storage autoscaling**
+prevents the classic 3am full-disk incident, and remember that storage can grow but never
+shrink.
+
+**When to move up.** Aurora when you want faster failover, cheap replicas, a global database or
+storage that manages itself; DynamoDB when the access patterns are simple and the scale is
+large; and RDS when you want a standard engine, standard SQL and the smallest possible change
+from what you already run.

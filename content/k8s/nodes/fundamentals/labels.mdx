@@ -1,0 +1,67 @@
+---
+id: labels
+title: "Labels & selectors"
+type: concept
+domain: fundamentals
+summary: "The only way objects find each other. A Service does not know a Pod's name, it knows a query -- which is what makes replacing Pods a non-event."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [object, annotations]
+connects:
+  - to: service
+    text: "A Service is a label selector plus a port. Whichever Pods match are its endpoints, which is why a rolling update does not need to tell it anything."
+  - to: deployment
+    text: "A Deployment owns the Pods matching its selector, and the selector is immutable once set: changing it means a new Deployment."
+  - to: network-policy
+    text: "A NetworkPolicy chooses both the Pods it protects and the Pods allowed to reach them by label, so firewall rules are written in app terms."
+  - to: node-selector
+    text: "Node labels are the other half: a Pod asks for a node by label, which is how zones, instance types and GPUs are expressed."
+lead: "Two kinds of label query, and the difference decides what a controller can and cannot do with it."
+parts:
+  - name: "Equality selector"
+    kind: meta
+    text: "`app=api,tier=backend`. The only form a Service or a ReplicationController accepts, and all most things need."
+  - name: "Set selector"
+    kind: chips
+    text: "`matchExpressions` with `In`, `NotIn`, `Exists`, `DoesNotExist`. Available to Deployments, Jobs and NetworkPolicies, not to a Service."
+  - name: "Recommended keys"
+    kind: sheet
+    text: "`app.kubernetes.io/name`, `instance`, `version`, `component`, `part-of`, `managed-by`. Tooling, dashboards and Helm all assume them."
+  - name: "pod-template-hash"
+    kind: ring
+    text: "Added by the Deployment controller so each ReplicaSet owns exactly its own Pods. Never set it yourself, and never select on it."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A label is a key-value pair in metadata that anything can query. That is the entire mechanism
+by which Kubernetes objects relate to one another, and it explains a property people find
+surprising: almost nothing in the system refers to another object by name. A Service does not
+list its Pods. A Deployment does not list its Pods. They both hold a query, and the answer
+changes as Pods come and go.
+
+**This is why rolling updates work at all.** New Pods appear carrying the same `app` label, the
+Service's query starts matching them, the EndpointSlice is rewritten by a controller, and
+traffic shifts -- with nobody told and nothing reconfigured. It is also why a typo in a label
+produces no error at all: a selector that matches nothing is perfectly valid and simply selects
+nothing, so the Service exists, has no endpoints, and returns connection refused.
+
+**A selector is a contract, so it cannot drift.** `spec.selector` on a Deployment is immutable
+after creation, precisely because changing it would orphan the Pods the old query matched. When
+you need a different selector, you create a new Deployment and delete the old one. The one on a
+Service is mutable, which makes a Service a useful switch: point it at a different `version`
+label and traffic moves, with no change to either Deployment.
+
+**Labels are for selection, annotations are for everything else.** Labels are indexed and
+queryable and therefore size-limited and syntax-constrained; if nothing will ever select on a
+value, it does not belong in a label. The standard `app.kubernetes.io/*` set is worth adopting
+even in a small cluster, because Helm, Kustomize, dashboards and most operators assume it, and
+`kubectl get pods -l app.kubernetes.io/part-of=checkout` is the difference between debugging one
+application and debugging a cluster.
+
+The debugging habit that pays off most: when a Service has no endpoints, compare
+`kubectl get svc <name> -o yaml` against `kubectl get pods --show-labels`. Nine times in ten the
+selector and the labels differ by one character.

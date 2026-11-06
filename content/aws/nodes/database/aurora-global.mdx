@@ -1,0 +1,41 @@
+---
+id: aurora-global
+title: "Aurora Global Database"
+type: service
+domain: database
+summary: "One writer region and up to five read regions with typically sub-second replication, and managed failover in about a minute."
+monogram: AGD
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [aurora, warm-standby]
+connects:
+  - to: multi-region
+    text: "This is the managed answer to a cross-region RPO measured in seconds, which replication alone cannot give you."
+  - to: route53-failover
+    text: "Promoting the secondary is only half of it: something has to move the traffic, and that is usually Route 53."
+reviewed: 2026-11-05
+---
+
+An Aurora Global Database is one cluster spanning regions: a primary that takes writes and up to
+five secondaries that serve reads. Replication happens at the **storage layer** over AWS's own
+network, which is why the typical lag is **under a second** across continents and why it adds
+almost no load to the writer -- there is no logical replication to apply.
+
+It answers two different requirements, and it is worth being clear which one is in play.
+**Latency**: readers in Singapore and São Paulo serve local traffic at local speed, with writes
+still going to one region. **Disaster recovery**: an RPO measured in seconds and an RTO of about
+a minute, which is what makes a warm-standby design meet objectives that backup-and- restore
+cannot approach.
+
+Two failover modes. **Managed planned failover** switches the primary cleanly with no data loss,
+for a rehearsal or a region migration. **Unplanned promotion** takes a secondary in an emergency
+and may lose the sub-second tail of writes. There is also **write forwarding**, where a
+secondary accepts writes and forwards them to the primary -- convenient for an application that
+cannot route writes itself, at the cost of the round trip.
+
+What it does not do is move your traffic. Promoting the database is half a failover; something
+still has to send users to the new region, and that is Route 53 health checks and failover
+records, or Global Accelerator. A DR plan with a global database and no traffic-steering
+mechanism is a plan that fails over the data and leaves the users looking at the dead region.

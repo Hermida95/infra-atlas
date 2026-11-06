@@ -1,0 +1,52 @@
+---
+id: etcd-backup
+title: "etcd backup & restore"
+type: howto
+domain: day2
+summary: "A snapshot of etcd is a snapshot of the whole cluster. The procedure is short, the restore is fiddly, and a backup nobody has restored is a guess."
+level: advanced
+access: free
+monogram: BK
+exam: [cka]
+relations:
+  related: [etcd, cluster-backup]
+connects:
+  - to: etcd
+    text: "etcdctl snapshot save against the API, with the client certificates. Everything in the cluster is in that one file."
+  - to: encryption-at-rest
+    text: "A snapshot inherits whatever encryption was configured, so an unencrypted one is every Secret in the cluster in plain text."
+  - to: cluster-backup
+    text: "This restores the control plane's state; a tool like Velero restores namespaces, objects and volume data selectively."
+reviewed: 2026-11-05
+---
+
+`etcdctl snapshot save` writes a consistent point-in-time copy of the entire etcd keyspace, which
+in Kubernetes means every object in the cluster. It needs the CA, client certificate and key the
+API server uses, and it is a single file. That file plus the control plane's PKI directory is
+everything required to rebuild a cluster's state.
+
+**The restore is the part worth rehearsing.** `etcdctl snapshot restore` creates a *new* data
+directory with a new cluster identity -- it does not merge into a running cluster. The procedure
+is: stop the API servers, restore the snapshot on each control plane node into a fresh data
+directory, correct the peer URLs and the initial cluster configuration, start etcd, start the API
+servers. On a kubeadm cluster, that means moving the static Pod manifests aside so the kubelet
+stops them, which is the detail nobody remembers under pressure.
+
+**The certificates are part of the backup.** A restored etcd whose Kubernetes PKI is different
+serves objects nothing can authenticate against: every ServiceAccount token was signed by a key
+you no longer have, every client certificate was signed by a CA you no longer have. So
+`/etc/kubernetes/pki` belongs in the backup alongside the snapshot, and it is as sensitive as the
+snapshot itself.
+
+**What a restore cannot do** is the thing people assume it does. The cluster's objects come back,
+but the world has moved on: Pods are recreated, so anything stateful is restored to the object
+that pointed at a volume, not to the volume's contents. Cloud load balancers, DNS records and
+external resources created since the snapshot are now orphaned or duplicated. An etcd restore is
+a control plane recovery, not a cluster time machine.
+
+**On a managed cluster you do not have this problem, or this option.** EKS, GKE and AKS run and
+back up etcd themselves and give you no snapshot access, which removes the task and also removes
+"restore to last Tuesday" as a possibility -- making object-level backups with Velero or an
+equivalent the thing you actually need there. On a self-managed cluster: a snapshot on a
+schedule, shipped off the control plane node, encrypted, access-controlled, and restored into a
+throwaway cluster at least once so the runbook is known to work.

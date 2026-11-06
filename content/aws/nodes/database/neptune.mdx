@@ -1,0 +1,37 @@
+---
+id: neptune
+title: "Neptune"
+type: service
+domain: database
+summary: "A managed graph database for relationships themselves: fraud rings, recommendations, network topologies, knowledge graphs."
+monogram: NE
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [opensearch]
+connects:
+  - to: dynamodb
+    text: "Pick it when the question is 'how are these connected'. For anything that is a lookup by key, it is the wrong tool."
+reviewed: 2026-11-05
+---
+
+Neptune is a managed graph database on the Aurora-style storage layer, supporting both property
+graphs (Gremlin, openCypher) and RDF (SPARQL).
+
+Reach for it when the **relationships are the data** and the queries traverse them. Fraud
+detection following rings of shared attributes; recommendations over "people who bought this
+also bought"; identity resolution across accounts; network and infrastructure topology; and
+knowledge graphs. The test is whether queries are multi-hop: *"find accounts within three
+degrees of this one that share a device"* is a self-join three times deep in SQL and a single
+traversal in Gremlin, and the gap widens with depth.
+
+Everything else should not be here. A lookup by key is DynamoDB. Aggregates over rows are
+Redshift or Athena. Full-text search is OpenSearch. Graph databases are slower and more
+expensive than any of them at the jobs those are built for.
+
+Features worth knowing by name: **Neptune Analytics** for running graph algorithms (centrality,
+community detection, shortest path) over a loaded graph; **vector similarity search**, which
+pairs it with retrieval-augmented generation when the retrieval should follow relationships as
+well as embeddings; and bulk loading from S3, which is how a real graph gets in -- loading
+hundreds of millions of edges through the query API is not practical.

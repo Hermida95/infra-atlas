@@ -1,0 +1,52 @@
+---
+id: api-groups
+title: "API groups & versions"
+type: concept
+domain: fundamentals
+summary: "The API is not one surface but dozens, each versioned on its own. This is why apiVersion exists and why a cluster upgrade can break a manifest that never changed."
+level: core
+access: free
+monogram: API
+exam: [cka]
+relations:
+  related: [object, apiserver]
+connects:
+  - to: apiserver
+    text: "Each group and version is a separate path under /apis, and the API server can serve two versions of the same object, converting between them on read."
+  - to: api-deprecation
+    text: "A version is removed on a published schedule, so an upgrade is the moment a manifest written against a beta API stops being accepted."
+  - to: crd
+    text: "A CRD adds a group of your own, with the same versioning rules and the same obligation to convert between versions."
+  - to: aggregation-layer
+    text: "An aggregated API server owns a whole group path and answers for it, instead of storing its objects in etcd like a CRD does."
+reviewed: 2026-11-05
+---
+
+`apiVersion: apps/v1` is a group (`apps`) and a version (`v1`). The core group is the empty one,
+which is why a Pod says `apiVersion: v1` and not `core/v1`. There are around twenty built-in
+groups -- `apps`, `batch`, `networking.k8s.io`, `rbac.authorization.k8s.io`,
+`policy`, `storage.k8s.io` -- plus one per CRD you install, and each is versioned
+independently.
+
+**Why it is split at all:** so that features can mature at different speeds inside one server,
+and so an extension can add a group without touching the core. `kubectl api-resources` lists
+every kind the cluster currently serves with its group and whether it is namespaced, and
+`kubectl api-versions` lists the group/version pairs. Those two commands answer "does this
+cluster have Gateway API installed" faster than anything else.
+
+**Versions are a maturity promise, not decoration.** `v1alpha1` may change or vanish in any
+release and is often off by default. `v1beta1` is enabled by default and will be supported for
+a deprecation window, but its schema can still change. `v1` is stable and cannot be removed
+from a major version. The practical consequence is that a manifest pinned to a beta API is a
+dated artefact: `networking.k8s.io/v1beta1` Ingress, `policy/v1beta1` PodDisruptionBudget and
+`batch/v1beta1` CronJob have all been removed, each one breaking clusters on upgrade day.
+
+**One object, several versions.** The API server stores an object in one version and converts on
+read, so `kubectl get deployment -o yaml` can return `apps/v1` for something applied as
+something else. That conversion is why you can upgrade gradually, and why a CRD with more than
+one served version needs a conversion webhook -- without one, the server has no way to answer a
+request for the version it is not storing.
+
+Before any cluster upgrade, the question is which removed APIs you are still using.
+`kubectl-convert`, and tools like `pluto` or `kubent` against your manifests and your live
+objects, turn that from an outage into a pull request.

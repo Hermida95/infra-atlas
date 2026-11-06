@@ -1,0 +1,62 @@
+---
+id: nlb
+title: "Network Load Balancer"
+type: service
+domain: edge
+summary: "Layer 4 at millions of requests per second, with a static IP per zone, the client address preserved, and support for UDP and TLS passthrough."
+logo: aws:elb
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [alb, gwlb]
+  alternative_to: [alb]
+connects:
+  - to: privatelink
+    text: "An endpoint service is built on an NLB: this is the only load balancer PrivateLink will front."
+  - to: global-accelerator
+    text: "Static IPs at both layers, which is what lets a client hold one address and still fail over."
+lead: "Layer 4, so it mostly forwards. That is a limitation and a feature at the same time."
+parts:
+  - name: "Static IP per zone"
+    kind: disc
+    text: "One address per subnet, and you can bring your own Elastic IP. The reason firewalls and hard-coded clients can work with it."
+  - name: "TCP, UDP and TLS"
+    kind: bus
+    text: "Anything above IP, not just HTTP. It can terminate TLS, or pass it through untouched to the target."
+  - name: "Client IP preserved"
+    kind: orbit
+    text: "Instance targets see the real client address, so there is no X-Forwarded-For to parse and no change to the application."
+  - name: "Extreme scale"
+    kind: bars
+    text: "Millions of requests per second with no pre-warming, and latency measured in tens of microseconds."
+  - name: "PrivateLink endpoint service"
+    kind: shell
+    text: "The only load balancer PrivateLink will front, which is how a service is exposed to other VPCs and accounts."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An NLB operates at layer 4. It does not read the request, which is why it is fast, why it
+handles any TCP or UDP protocol, and why it cannot do host or path routing, redirects or WAF.
+
+Four reasons to choose it. **Static IP addresses**: one per zone, optionally your own Elastic
+IPs, which is what a corporate firewall allow-list or a client with a hard-coded address needs.
+**Non-HTTP protocols**: databases, MQTT, game servers, SIP, DNS over UDP. **Extreme throughput
+and low latency**, with no warm-up period. And **PrivateLink**, which only fronts an NLB -- so
+if the requirement is to expose a service to another VPC or account privately, an NLB is in the
+answer whether you wanted one or not.
+
+**Client IP preservation** is the subtle one. With instance targets the backend sees the real
+client address, so applications that log or rate-limit by IP work unchanged and there is no
+`X-Forwarded-For` to parse. With IP targets it is off by default, and turning it on has
+consequences for health checks and for traffic that loops back.
+
+Two configuration details that surface as incidents. **Cross-zone load balancing is off by
+default** on an NLB (and charged when enabled), unlike an ALB where it is on and free -- so an
+NLB with three targets in one zone and one in another sends half the traffic to the single
+target. And NLB health checks on instance targets come **from the NLB's own addresses**, so the
+security group rule must allow the VPC CIDR or the subnet ranges, not the client's.
+
+A common pattern is both: an NLB at the front for static IPs or Global Accelerator, with an ALB
+as its target for the layer-7 routing behind it.

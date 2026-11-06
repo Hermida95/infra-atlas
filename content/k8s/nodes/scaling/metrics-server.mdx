@@ -1,0 +1,53 @@
+---
+id: metrics-server
+title: "metrics-server"
+type: tool
+domain: scaling
+summary: "A small aggregated API serving current CPU and memory per Pod. It is what kubectl top and the HPA read, and it stores no history at all."
+level: core
+access: free
+monogram: MS
+exam: [ckad, cka]
+relations:
+  related: [hpa, metrics]
+connects:
+  - to: hpa
+    text: "The HPA's resource metrics come from here. Without it, every HPA reports unknown and never scales."
+  - to: aggregation-layer
+    text: "It registers as an APIService for metrics.k8s.io, which is why kubectl top works like any other API call."
+  - to: kubelet
+    text: "It scrapes each kubelet's summary endpoint, which reads from cAdvisor -- so its numbers are cgroup counters, not estimates."
+  - to: metrics
+    text: "It is not a monitoring system: no history, no queries, no alerts. Prometheus is what you want for all of those."
+reviewed: 2026-11-05
+---
+
+metrics-server scrapes every kubelet's resource summary endpoint every fifteen seconds, keeps the
+latest value in memory, and serves it through the `metrics.k8s.io` aggregated API. That is its
+entire scope: current CPU and memory for Pods and nodes, nothing older than the last scrape.
+
+**It is a dependency, not an optional extra.** `kubectl top`, the HorizontalPodAutoscaler and the
+VerticalPodAutoscaler all read this API, and none of them works without it. On a kubeadm or kind
+cluster it is not installed, which is why a first HPA on a self-built cluster reports
+`<unknown>/70%` and does nothing -- an outcome that looks like a broken HPA and is a missing
+component.
+
+**The two installation problems are both TLS.** It connects to each kubelet over HTTPS, and on
+many clusters the kubelet's serving certificate is self-signed and not in the cluster CA, so the
+scrape fails with a certificate error. The two answers are enabling kubelet serving certificate
+rotation so the certificates are signed properly (correct), or passing
+`--kubelet-insecure-tls` (common in test clusters, and a real downgrade). The other is node
+address resolution, fixed with `--kubelet-preferred-address-types`.
+
+**Its numbers are cgroup counters, which is worth knowing when they disagree with something
+else.** The CPU figure is a rate computed between two samples, so a short spike between scrapes
+is invisible -- an HPA will not react to a two-second burst. The memory figure is working set,
+which includes page cache the kernel could reclaim, so it reads higher than an application's own
+idea of its heap. Neither is wrong; they are just not the numbers an application reports about
+itself.
+
+**It is not monitoring.** No history means no "what did this look like yesterday", no queries, no
+alerts and no capacity trend. Prometheus with kube-state-metrics and cAdvisor is the actual
+observability stack, and the two coexist happily -- metrics-server for the control loops,
+Prometheus for the humans. The Prometheus Adapter exists for the case where you want the HPA to
+scale on a Prometheus query instead.

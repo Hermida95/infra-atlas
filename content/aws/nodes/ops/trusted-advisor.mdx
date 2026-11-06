@@ -1,0 +1,40 @@
+---
+id: trusted-advisor
+title: "Trusted Advisor"
+type: service
+domain: ops
+summary: "Account-wide checks for cost, performance, security, fault tolerance and service limits, with the full set on Business support and above."
+monogram: TA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [well-architected]
+connects:
+  - to: service-quotas
+    text: "The limit checks are the early warning that a launch is about to hit a quota."
+  - to: cost-explorer
+    text: "Idle load balancers, unattached volumes and underused instances show up here before they show up in a budget alert."
+reviewed: 2026-11-05
+---
+
+Trusted Advisor runs checks against your account in five categories -- cost optimisation,
+performance, security, fault tolerance and service limits -- and tells you what to do about
+them.
+
+The support plan decides how much you get. On Basic and Developer you get a handful of core
+checks: service limits and some security basics. The **full set requires Business, Enterprise
+On-Ramp or Enterprise** support, and that is the detail exam questions hinge on.
+
+What it is genuinely good at: **idle and underused resources** (unattached EBS volumes, idle
+load balancers, low-utilisation instances, unassociated Elastic IPs) that quietly cost money;
+**service limits** approaching their quota, which is the early warning before a launch fails;
+**security basics** such as open security groups, public snapshots, exposed access keys and
+missing MFA on root; and **fault tolerance** gaps such as a single-AZ Auto Scaling group or an
+RDS instance without Multi-AZ.
+
+Where it fits among the overlapping tools: **Compute Optimizer** gives better right-sizing
+recommendations because it reads actual utilisation metrics; **Cost Explorer** and **Budgets**
+own the money; **Security Hub** owns security findings at depth. Trusted Advisor is the broad,
+low-effort sweep that catches the obvious, and its checks are available through EventBridge and
+the API so they can feed a weekly report instead of waiting for someone to open the console.

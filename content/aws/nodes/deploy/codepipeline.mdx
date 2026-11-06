@@ -1,0 +1,46 @@
+---
+id: codepipeline
+title: "CodePipeline"
+type: service
+domain: deploy
+summary: "Stages, artefacts, manual approvals and cross-account deployment, wiring source to build to deploy inside AWS."
+monogram: CO
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [oidc-federation]
+connects:
+  - to: codebuild
+    text: "The build stage is almost always CodeBuild, publishing an artefact to S3 or an image to ECR."
+  - to: codedeploy
+    text: "The deploy stage hands the artefact to CodeDeploy, ECS or CloudFormation, depending on what is being replaced."
+  - to: iam-role
+    text: "Cross-account deployment is a role per target account plus a KMS key the artefact bucket shares."
+reviewed: 2026-11-05
+---
+
+CodePipeline is the orchestration layer: **stages** in order, each with **actions**, passing
+**artifacts** through an S3 bucket. A typical shape is Source → Build → Deploy to staging →
+Manual approval → Deploy to production.
+
+Sources are CodeCommit, S3, ECR, or GitHub and Bitbucket through a **CodeStar connection**.
+Build is usually CodeBuild. Deploy is CodeDeploy, CloudFormation, ECS, EKS, S3 or Elastic
+Beanstalk. Actions within a stage can run in parallel with `runOrder`, and a **manual approval**
+action pauses the pipeline and notifies through SNS.
+
+The feature that shapes real pipelines is **cross-account deployment**, because the accounts
+should be separate. The pattern: the pipeline lives in a tools account; each target account has
+a deployment role the pipeline assumes; the artifact bucket is encrypted with a **customer
+managed KMS key** whose policy grants the target accounts decrypt. Forgetting the key policy is
+the single most common reason a cross-account pipeline fails with an unhelpful error.
+
+**Variables** pass values between actions, and the **V2 pipeline type** adds triggers with
+filters on branch and path, parameters, and stage-level conditions and rollback -- which make
+monorepos and more complex flows practical.
+
+Against GitHub Actions or GitLab CI: CodePipeline's advantages are native IAM (no stored
+credentials), cross-account deployment and tight integration with CloudFormation and CodeDeploy.
+Its disadvantage is that the developer experience is less pleasant and the ecosystem smaller. A
+common hybrid is GitHub Actions for build and test, assuming a role through **OIDC federation**,
+with CodePipeline or CloudFormation for the deployment into AWS accounts.

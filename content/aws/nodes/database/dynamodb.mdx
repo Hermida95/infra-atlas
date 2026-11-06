@@ -1,0 +1,77 @@
+---
+id: dynamodb
+title: "DynamoDB"
+type: service
+domain: database
+hub: true
+summary: "A key-value and document store with single-digit millisecond reads at any scale, no servers, no connections and no capacity planning if you want none."
+logo: aws:dynamodb
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [lambda, aws-backup, elasticache]
+  alternative_to: [rds, documentdb]
+connects:
+  - to: dynamodb-index
+    text: "You design the access patterns first, then the keys and indexes. Doing it the other way round is the classic mistake."
+  - to: dax
+    text: "A write-through cache that turns milliseconds into microseconds, for read-heavy tables that re-read the same items."
+  - to: dynamodb-streams
+    text: "The change log is what makes DynamoDB event-driven: a Lambda per change, with no polling."
+  - to: vpc-endpoint
+    text: "A free gateway endpoint, like S3, so a private subnet reaches it without a NAT Gateway."
+  - to: global-tables
+    text: "Multi-region, multi-writer with last-writer-wins, which is as close to active/active as managed data gets."
+lead: "DynamoDB is fast because it refuses to do the things that make a relational database slow. Every design decision happens before the table exists."
+parts:
+  - name: "Partition key"
+    kind: core
+    text: "The hash of this value picks the partition. An even spread is the whole performance story; a hot key is the whole failure story."
+  - name: "Sort key"
+    kind: lanes
+    text: "Orders items inside a partition and makes range queries possible. Key plus sort key is the item's identity."
+  - name: "Indexes"
+    kind: satellites
+    text: "A local secondary index for another sort order, a global one for another partition key. One per access pattern."
+  - name: "Capacity"
+    kind: jobs
+    text: "On-demand for unknown or spiky traffic, provisioned with auto scaling when the shape is known and you want it cheaper."
+  - name: "Streams and TTL"
+    kind: trigger
+    text: "An ordered change log per partition to trigger functions, and a timestamp attribute that expires items for free."
+layout: stack
+reviewed: 2026-11-05
+---
+
+DynamoDB is a managed key-value and document store with single-digit millisecond reads at any
+scale. There are no servers, no connections, no version upgrades and no capacity to plan if you
+do not want any. What it asks in return is that you design for the access patterns before the
+table exists, because there is no query planner to rescue a bad key choice.
+
+**The model.** An item is up to 400 KB. The **partition key** is hashed to choose a partition;
+the optional **sort key** orders items within it and enables range queries. Together they are
+the item's identity. Anything the keys do not support becomes a `Scan`, which reads the whole
+table -- and a Scan in production is almost always a design error rather than a tuning problem.
+
+**Capacity.** **On-demand** charges per request and handles any traffic shape, which makes it
+the right default for new or spiky workloads. **Provisioned** with auto scaling is cheaper for
+predictable load. Either way, an uneven partition key produces a **hot partition** that
+throttles while the rest of the table idles, and the fix is a better key or **write sharding**.
+
+**Consistency and transactions.** Reads are eventually consistent by default and strongly
+consistent on request at twice the cost -- and strongly consistent reads do not work through DAX
+or against a global secondary index. `TransactWriteItems` gives ACID across up to 100 items in
+one region, and **conditional writes** are how optimistic locking and idempotency are
+implemented without a transaction.
+
+**The features that come free and change designs.** **TTL** expires items at a timestamp with no
+cost, which is how sessions and temporary data clean themselves up. **Streams** turn every
+change into an event for Lambda. **Point-in-time recovery** gives any second in the last 35
+days. **Global tables** replicate multi-writer across regions. **DAX** adds a microsecond read
+cache that invalidates itself.
+
+**Where it is the wrong answer:** ad-hoc queries, reporting and aggregations across the whole
+table, anything needing joins, and access patterns that are not known in advance. Those are
+relational or analytics problems, and forcing them into DynamoDB produces the scans it is
+designed to avoid.

@@ -1,0 +1,73 @@
+---
+id: crd
+title: "CustomResourceDefinition"
+type: concept
+domain: extend
+hub: true
+summary: "A new kind in the API, stored in etcd and served like any built-in. It gives you the object for free, and nothing happens until a controller watches it."
+level: intermediate
+access: free
+monogram: CRD
+exam: [cka]
+relations:
+  related: [operator, custom-resource]
+connects:
+  - to: operator
+    text: "A CRD without a controller is a database table nobody reads: the object is accepted and inert until something reconciles it."
+  - to: api-groups
+    text: "A CRD adds a group and version of your own, with the same maturity and deprecation obligations as a built-in."
+  - to: conversion-webhook
+    text: "More than one served version needs a converter, or the API server cannot answer a request for the version it is not storing."
+  - to: validating-admission-policy
+    text: "CEL validation rules embedded in the schema reject bad resources with no webhook to run."
+  - to: rbac
+    text: "Nothing can read or write the new kind until a role names its apiGroup, which is the step people forget after installing one."
+lead: "The parts of a CRD, and which of them you cannot change later."
+parts:
+  - name: "group and names"
+    kind: meta
+    text: "The API group, the kind, the plural, and the short names kubectl accepts. Fixed for the life of the definition."
+  - name: "versions"
+    kind: discs
+    text: "One or more, each served or not, exactly one marked as storage. Adding a version later means a conversion strategy."
+  - name: "openAPIV3Schema"
+    kind: sheet
+    text: "Structural schema with types, required fields, defaults and CEL validation rules. Without it, any YAML is accepted."
+  - name: "subresources"
+    kind: panel
+    text: "status and scale. A status subresource is what lets a controller write status without being able to overwrite spec."
+  - name: "additionalPrinterColumns"
+    kind: lanes
+    text: "What kubectl get shows. A few minutes of work that makes the resource usable from the command line."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A CustomResourceDefinition registers a new kind with the API server. Apply it and you
+immediately have a working resource: validated, versioned, watchable, RBAC-controlled, visible to
+`kubectl`, stored in etcd. You get the entire API machinery for the cost of a schema, which is
+the single most important extensibility decision Kubernetes made.
+
+**And nothing happens.** A custom resource is a record. Creating a `Database` object produces no
+database until a controller is watching that kind and acting on it. The most common confusion
+after installing a CRD -- objects accepted, nothing occurring -- is exactly this, and the
+diagnosis is whether the operator's Deployment is running.
+
+**The schema is where the quality is.** A structural `openAPIV3Schema` with types, required
+fields, enums, defaults and `x-kubernetes-validations` CEL rules means mistakes are rejected at
+apply time with a useful message, instead of becoming a controller crash loop an hour later.
+Without a schema the API accepts anything that is YAML. `status` as a subresource is the other
+piece of hygiene: it separates what users write from what the controller writes, so RBAC can
+grant them separately and a user cannot overwrite status by re-applying their file.
+
+**Versioning is a promise you are making.** Once a version is served, something will depend on
+it. Serving two means providing a conversion strategy -- `None` only works if the schemas are
+compatible field-for-field, otherwise a conversion webhook, with all the availability
+considerations any webhook has. Starting at `v1alpha1` and being honest about it is far better
+than shipping `v1` and breaking it.
+
+**Operationally, two things bite.** Deleting a CRD deletes every object of that kind, instantly
+and cluster-wide -- a one-line command that can remove every `Certificate` or every
+`Database` in the cluster. And custom resources with finalizers whose controller has been
+uninstalled can never be deleted, which is the usual reason a namespace is stuck
+`Terminating` forever.

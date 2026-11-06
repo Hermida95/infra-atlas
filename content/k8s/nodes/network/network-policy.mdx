@@ -1,0 +1,70 @@
+---
+id: network-policy
+title: "NetworkPolicy"
+type: concept
+domain: network
+summary: "A per-Pod allow-list for traffic. It does nothing until a policy selects the Pod, and nothing at all if your CNI does not implement it."
+level: intermediate
+access: free
+monogram: NPO
+exam: [cka, cks]
+relations:
+  related: [cni, namespace]
+connects:
+  - to: cni
+    text: "Enforcement is the plugin's job. Flannel ignores these objects entirely, so a policy can be applied and silently do nothing."
+  - to: namespace
+    text: "Pods in different namespaces can reach each other by default, so namespace isolation only exists once a policy says so."
+  - to: coredns
+    text: "A default-deny egress policy that forgets UDP 53 to kube-system breaks every DNS lookup in the namespace."
+  - to: labels
+    text: "Both the protected Pods and the allowed peers are chosen by label, so rules are written in application terms rather than addresses."
+  - to: service-mesh
+    text: "A mesh adds identity-based and L7 rules; NetworkPolicy stays the L3/L4 floor that applies whether the sidecar is there or not."
+lead: "The model, in the order it is evaluated. The first point is the one that causes mistakes."
+parts:
+  - name: "podSelector"
+    kind: shell
+    text: "Which Pods this policy protects. An empty selector means every Pod in the namespace -- the basis of a default-deny."
+  - name: "policyTypes"
+    kind: lanes
+    text: "Ingress, Egress or both. A Pod selected by any Ingress policy denies all ingress except what is allowed, and the same for egress."
+  - name: "from and to"
+    kind: gate
+    text: "podSelector, namespaceSelector or ipBlock. Several in one rule are ORed; podSelector and namespaceSelector in the same block are ANDed."
+  - name: "ports"
+    kind: chips
+    text: "Protocol and port, or a named port. Without a ports list, all ports on the allowed peers are permitted."
+layout: stack
+reviewed: 2026-11-05
+---
+
+By default every Pod in a cluster can talk to every other Pod, in any namespace. A NetworkPolicy
+changes that for the Pods it selects: once a Pod is selected by any policy of a given type, all
+traffic of that type is denied except what some policy allows. Policies are purely additive --
+there is no deny rule and no ordering -- so the model is "nothing selects you and everything is
+allowed, or something selects you and only the union of allowances applies".
+
+**The standard starting point is a default-deny per namespace:** a policy with an empty
+`podSelector` and both policy types, allowing nothing. Then add allowances per workload. Doing it
+the other way round -- allow rules without a default-deny -- feels productive and protects
+nothing, because unselected Pods are still wide open.
+
+**DNS is the first thing a default-deny breaks**, and it breaks everything at once. Egress to UDP
+and TCP port 53 towards kube-system must be allowed explicitly, or no Pod in the namespace can
+resolve a name, and the symptom is every application reporting that every dependency is
+unreachable. It is the single most common incident caused by a NetworkPolicy rollout.
+
+**The `from` block's AND/OR rule is the syntax trap.** Inside one element, a
+`namespaceSelector` and a `podSelector` together mean "Pods matching this selector *in*
+namespaces matching that one". As two separate elements they mean "any Pod in those namespaces,
+or any Pod matching that selector in my namespace". The two YAMLs differ by two characters of
+indentation and say completely different things, with no feedback either way.
+
+**What it cannot do.** It is L3/L4: no HTTP paths, no methods, no hostnames -- an `ipBlock`
+cannot usefully name `api.stripe.com`, whose addresses change. It does not apply to
+`hostNetwork` Pods. It cannot express "deny". And egress policies interact badly with
+Services, since policy is evaluated on the translated Pod addresses rather than on the ClusterIP
+you wrote in your head. For named-host egress, L7 rules or identity-based policy, the answer is
+a CNI with extensions (Cilium) or a mesh -- with NetworkPolicy still underneath as the floor
+that applies even when the sidecar is missing.

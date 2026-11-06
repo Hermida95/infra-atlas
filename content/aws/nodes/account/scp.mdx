@@ -1,0 +1,66 @@
+---
+id: scp
+title: "Service Control Policies"
+type: service
+domain: account
+summary: "Organization-wide guardrails. An SCP never grants a permission; it caps what IAM in a member account is able to grant."
+monogram: SCP
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [organizations]
+connects:
+  - to: iam-policy
+    text: "A request is allowed only if the SCP and an IAM policy both allow it. The intersection, never the union."
+  - to: permission-boundary
+    text: "Same idea one level down: SCPs cap an account, boundaries cap an identity inside it."
+  - to: region
+    text: "The classic SCP denies every region but the two you operate in, so nothing can be launched somewhere nobody is watching."
+lead: "A filter on what IAM in a member account is allowed to allow. It grants nothing, ever."
+parts:
+  - name: "Attached to an OU or account"
+    kind: shell
+    text: "Inherited down the tree. The management account is never affected, which is why nothing should run in it."
+  - name: "Allow and Deny"
+    kind: gate
+    text: "Deny lists are the usual form: start from FullAWSAccess and subtract. Allow lists are precise and break every time AWS launches a service."
+  - name: "Conditions"
+    kind: chips
+    text: "aws:RequestedRegion to pin regions, aws:PrincipalArn to exempt a break-glass role, aws:ResourceTag, aws:ViaAWSService."
+  - name: "The intersection"
+    kind: split
+    text: "A request needs an allow in IAM and no deny in any SCP above it. Effective permission is the overlap, never the sum."
+  - name: "Service-linked roles"
+    kind: orbit
+    text: "Not affected by SCPs, which is both a safety valve and something to remember when a policy appears not to apply."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A service control policy is a ceiling. It never grants a permission -- it only limits what the
+IAM policies inside a member account are able to grant. A user with `AdministratorAccess` in an
+account whose SCP allows only S3 and CloudWatch can use S3 and CloudWatch, and nothing else.
+
+Policies attach to the organization root, an OU or an individual account, and they are inherited
+down the tree. A request must be permitted by every SCP on the path from the root to the
+account, plus the account's own IAM. The **management account is exempt** from SCPs entirely,
+which is the single best argument for running no workloads in it.
+
+Two styles. **Deny lists** start from the default `FullAWSAccess` and subtract specific actions
+-- this is what nearly everyone uses, because it keeps working when AWS launches a service.
+**Allow lists** replace the default with an explicit set, which is precise and requires a change
+every time a team adopts something new.
+
+The guardrails worth having, almost regardless of organisation: deny every region except the
+ones you operate in, with `aws:RequestedRegion`; deny disabling CloudTrail, GuardDuty, Config
+and Security Hub; deny deleting or modifying the log archive bucket; deny leaving the
+organization; deny creating IAM users and access keys, so people federate; deny making a
+snapshot or AMI public. Each of those closes a class of incident that cannot then happen by
+mistake.
+
+Two details that cause confusion. SCPs do not apply to **service-linked roles**, so a policy
+that looks ignored may be hitting one. And because they are a ceiling, an SCP alone changes
+nothing visible until someone tries the thing it denies -- test them in a sandbox OU first,
+because the symptom of an over-broad SCP is a wide, unexplained `AccessDenied` across an
+account.

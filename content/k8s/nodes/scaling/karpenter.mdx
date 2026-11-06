@@ -1,0 +1,53 @@
+---
+id: karpenter
+title: "Karpenter"
+type: tool
+domain: scaling
+summary: "Provisions right-sized nodes directly from pending Pods, with no node groups. Faster, cheaper and a bigger change in how you think about capacity."
+level: advanced
+access: free
+monogram: KAR
+exam: [cka]
+relations:
+  related: [cluster-autoscaler]
+  alternative_to: [cluster-autoscaler]
+connects:
+  - to: cluster-autoscaler
+    text: "The older model scales pre-defined groups; this one chooses an instance type per batch of pending Pods and launches it directly."
+  - to: node-affinity
+    text: "It reads the pending Pods' affinity, selectors and tolerations as purchasing constraints, so a Pod spec becomes an instance choice."
+  - to: node-drain
+    text: "Consolidation and expiry mean it actively replaces nodes, so workloads need budgets and graceful shutdown to survive routine churn."
+  - to: taints-and-tolerations
+    text: "A NodePool's taints keep unrelated workloads off the nodes it creates, which is how spot and GPU pools stay purposeful."
+reviewed: 2026-11-05
+---
+
+Karpenter watches for unschedulable Pods, looks at what they actually need -- CPU, memory,
+architecture, zone, taints they tolerate, volumes they use -- and launches an instance that fits,
+chosen from a wide range of types. No node groups, no pre-declared shapes. When Pods go away it
+removes or replaces nodes to reduce waste.
+
+**The conceptual shift is that node shape becomes an output.** With the Cluster Autoscaler you
+decide the instance types in advance and the autoscaler counts them; with Karpenter you declare
+constraints -- these families, these architectures, these zones, spot or on-demand -- and the
+shape is derived from the workload. A batch of Pods needing 30 cores becomes one large instance
+instead of eight small ones, with less per-node overhead and fewer DaemonSet copies.
+
+**Consolidation is the feature that saves the money and causes the surprises.** Karpenter
+continuously looks for nodes it could remove by moving their Pods elsewhere, and will replace a
+node with a cheaper one that still fits. That means nodes come and go during normal operation --
+not only when load changes. Workloads therefore need what they should have had anyway:
+PodDisruptionBudgets, correct `terminationGracePeriodSeconds`, and no state on local disk.
+`do-not-disrupt` annotations exist for the genuine exceptions.
+
+**It makes spot capacity practical.** Karpenter understands interruption notices, drains the node
+before the instance goes, and can be told to prefer spot with an on-demand fallback -- so a
+fault-tolerant workload runs at a fraction of the price with the handling built in rather than
+scripted.
+
+**Two things to set deliberately.** `expireAfter` on a NodePool forces nodes to be replaced
+periodically, which is how you get patched node images without a migration project -- genuinely
+valuable, and it means the churn is permanent. And the NodePool's instance-type requirements want
+a real floor: left wide open, Karpenter will happily pick a tiny instance that technically fits
+and leaves no room for the DaemonSets.

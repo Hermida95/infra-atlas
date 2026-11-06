@@ -1,0 +1,48 @@
+---
+id: custom-resource
+title: "Custom resources"
+type: concept
+domain: extend
+summary: "Objects of a kind you defined. They behave exactly like built-ins -- which is the point, and the reason they inherit every RBAC and GitOps habit you already have."
+level: intermediate
+access: free
+monogram: CR
+exam: [cka]
+relations:
+  related: [crd, operator]
+connects:
+  - to: crd
+    text: "The definition creates the kind; these are its instances, validated against its schema and stored like any other object."
+  - to: rbac
+    text: "Permissions are granted by apiGroup and resource exactly as for built-ins, so a new kind needs new rules nobody has written yet."
+  - to: gitops
+    text: "Because they are ordinary objects, a custom resource in git is reconciled by the same controller as a Deployment."
+reviewed: 2026-11-05
+---
+
+A custom resource is an instance of a kind a CRD defined. There is nothing second-class about it:
+it is stored in etcd, validated against its schema, served under its own API path, watchable,
+labellable, and subject to RBAC, admission control and quota like anything else.
+
+**That uniformity is why the ecosystem converged on this pattern.** A `Certificate` from
+cert-manager, a `ScaledObject` from KEDA, an `HTTPRoute` from Gateway API, a
+`Cluster` from a database operator -- all of them are managed with `kubectl`, stored in git,
+reconciled by Argo CD or Flux, templated by Helm, and controlled with the same Roles as a
+Deployment. Nobody has to learn a new tool, and your existing practices apply unchanged.
+
+**The RBAC consequence is the one to remember when installing something.** A new apiGroup is
+invisible to every existing Role. After installing an operator, the teams that will use its
+resources need rules naming that group -- and the operator itself needs a ClusterRole for the
+kinds it manages, which is worth reading before applying, because operators commonly ask for
+broad permissions and some ask for more than they need.
+
+**Status conventions are what make them pleasant or unpleasant to use.** A well-built resource
+sets `status.conditions` with `Ready`, a reason and a message, and reports
+`observedGeneration` so you can tell whether the controller has seen your latest edit. One that
+writes nothing to status leaves you reading the controller's logs to find out whether anything
+happened, which is the main difference between a mature operator and a weekend one.
+
+**Two practical cautions.** `kubectl explain <kind>` reads the schema from the server, so it works
+for custom kinds too and is the fastest documentation available. And `kubectl get <kind> -A` after
+installing an operator tells you whether anything is actually using it -- which is how you find
+the forgotten resources holding a CRD you want to remove.

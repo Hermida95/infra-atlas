@@ -9,9 +9,11 @@ import { Planner } from "./Planner";
 import { Teardown } from "../teardown/Teardown";
 import { Header } from "../Header";
 import type { Route } from "@/lib/planner";
+import { routeLit } from "@/lib/lit";
+import { doorway, JOURNEY } from "@/lib/worlds";
 
 export default function BrainMap() {
-  const store = useRef<MapStore>({ hover: null, selected: null, route: null, routeAt: 0, shiftX: 0 });
+  const store = useRef<MapStore>({ hover: null, selected: null, lit: null, litAt: 0, shiftX: 0, view: null, hidden: null });
   const labels = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
@@ -57,8 +59,8 @@ export default function BrainMap() {
   }, []);
 
   const showRoute = useCallback((next: Route | null) => {
-    store.current.route = next;
-    store.current.routeAt = performance.now();
+    store.current.lit = next ? routeLit(next) : null;
+    store.current.litAt = performance.now();
     store.current.selected = null;
     setSelected(null);
     setRoute(next);
@@ -108,6 +110,12 @@ export default function BrainMap() {
               <button type="button" className="btn gold" onClick={() => setTeardown(selected)}>
                 Take it apart
               </button>
+            )}
+            {/* Some nodes have a map of their own behind them: aws and kubernetes (lib/worlds.ts). */}
+            {doorway(JOURNEY, selected.id) && (
+              <Link className="btn primary enter-aws" href={doorway(JOURNEY, selected.id)!.href}>
+                {doorway(JOURNEY, selected.id)!.label}
+              </Link>
             )}
             <p className="detail-more">
               <Link href={`/c/${selected.id}`}>Open concept page →</Link>

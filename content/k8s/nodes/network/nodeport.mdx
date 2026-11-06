@@ -1,0 +1,48 @@
+---
+id: nodeport
+title: "NodePort"
+type: concept
+domain: network
+summary: "A port in the 30000-32767 range opened on every node, forwarding to a Service. Crude on its own, and the mechanism underneath most cloud load balancers."
+level: core
+access: free
+monogram: NP
+exam: [ckad, cka]
+relations:
+  related: [service, loadbalancer-service]
+connects:
+  - to: loadbalancer-service
+    text: "A LoadBalancer Service is a NodePort with a cloud load balancer pointed at it, so the cloud path is this mechanism plus an address."
+  - to: kube-proxy
+    text: "kube-proxy opens the port on every node and forwards it to the ClusterIP, whether or not a Pod of that Service runs there."
+  - to: ingress-controller
+    text: "On bare metal an Ingress controller is often exposed this way, behind whatever load balancer already exists outside the cluster."
+reviewed: 2026-11-05
+---
+
+A NodePort Service allocates a port from the node port range -- 30000 to 32767 by default -- and
+every node in the cluster starts accepting traffic on it, forwarding to the Service's ClusterIP
+and from there to a Pod. Any node works, including nodes running none of the Service's Pods,
+which is what makes it usable behind a dumb external load balancer.
+
+**That second hop is the detail with consequences.** With the default
+`externalTrafficPolicy: Cluster`, traffic arriving at node A for a Pod on node B is forwarded,
+and it is also source-NATed -- so the Pod sees node A's address as the client, and the real
+client IP is lost. Switching to `Local` preserves the client IP and removes the hop, at the price
+of blackholing traffic sent to any node that has no local Pod; with a cloud load balancer that
+is fine, because its health checks stop sending to those nodes, and with a naive round-robin
+balancer it is a 50% failure rate.
+
+**As a production front door on its own it is poor.** The port is high and arbitrary, so clients
+need `:31234` in the URL or something in front doing the translation; there is no TLS
+termination and no host or path routing; and every Service consumes a port from a finite,
+cluster-wide range. The legitimate uses are a local cluster, a quick test, a non-HTTP protocol
+that needs a raw port, and -- the common one -- exposing an Ingress controller behind an
+external load balancer that someone else manages.
+
+**It is what the cloud path is built on.** A `LoadBalancer` Service on AWS, GCP or Azure in the
+usual (instance target) mode creates a NodePort and registers the nodes as the load balancer's
+targets on that port. Knowing this explains the health check configuration, the SNAT behaviour,
+and why `externalTrafficPolicy` shows up in cloud load balancer discussions at all. The newer
+IP-target modes skip the NodePort and send straight to Pod addresses, which removes the hop and
+the SNAT together.

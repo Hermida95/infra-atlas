@@ -1,0 +1,60 @@
+---
+id: nacl
+title: "Network ACLs"
+type: service
+domain: network
+summary: "Stateless allow and deny rules on a subnet, evaluated in rule order. The only place inside a VPC you can block an address outright."
+monogram: NA
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [security-group]
+connects:
+  - to: subnet
+    text: "Attached to the subnet, so it applies to everything in it, including resources whose security group you do not control."
+  - to: waf
+    text: "For an attack at layer 7 the answer is WAF, not a NACL: a NACL knows nothing above IP and port."
+lead: "Stateless, ordered, and the only place inside a VPC where you can say no."
+parts:
+  - name: "Rule numbers"
+    kind: lanes
+    text: "Evaluated low to high, first match wins, and evaluation stops there. Leave gaps -- 100, 200, 300 -- so a rule can be inserted later."
+  - name: "Inbound and outbound"
+    kind: split
+    text: "Two independent lists. Stateless means a reply needs its own rule, on the ephemeral range 1024-65535."
+  - name: "Allow and deny"
+    kind: gate
+    text: "The only deny inside a VPC below layer 7. One rule blocks an address for every resource in the subnet at once."
+  - name: "The implicit *"
+    kind: shell
+    text: "An unnumbered final rule denies everything that matched nothing. The default NACL instead allows everything, both ways."
+  - name: "Subnet association"
+    kind: disc
+    text: "Attached to subnets, one NACL per subnet, many subnets per NACL. It applies to resources whose security groups you do not own."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Network ACLs are the subnet-level firewall, and most accounts should leave the default one alone
+and do their work in security groups. There are exactly two reasons to touch a NACL, and knowing
+them is most of what an exam asks.
+
+The first is **blocking**. Security groups cannot deny, so when an address has to be refused --
+an abusive IP, a compromised CIDR, a partner range that must never reach a subnet -- a NACL is
+the only tool below layer 7 that can do it, and it does it for everything in the subnet at once,
+including resources whose security groups you do not control. The second is **defence in depth
+at a boundary**: an isolated database tier where a deny-by-default NACL means a misconfigured
+security group somewhere else still cannot open a path.
+
+Stateless is the part that goes wrong. Every flow needs a rule in each direction. Allowing
+inbound 443 is not enough -- the response leaves from port 443 to the client's **ephemeral
+port**, so the outbound list needs 1024-65535 allowed too, and the same in reverse for traffic
+your instances initiate. A NACL that permits inbound HTTPS and nothing outbound will time out
+every request, and the symptom looks nothing like a firewall rule.
+
+Rules are numbered and evaluated in order, first match wins, evaluation stops. A deny at 100 is
+final even if an allow sits at 200. Number in hundreds so there is room to insert. The list ends
+with an implicit `*` that denies anything unmatched; the **default** NACL that comes with a VPC
+instead carries allow-all rules in both directions, which is why a brand new VPC works before
+you have configured anything.

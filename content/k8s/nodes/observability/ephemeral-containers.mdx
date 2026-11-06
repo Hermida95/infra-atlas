@@ -1,0 +1,52 @@
+---
+id: ephemeral-containers
+title: "Ephemeral containers"
+type: concept
+domain: observability
+summary: "A debug container added to a running Pod, sharing its namespaces. The answer to debugging a distroless image with no shell and no tools."
+level: intermediate
+access: free
+monogram: EC
+exam: [ckad, cka]
+relations:
+  related: [logs, troubleshooting]
+connects:
+  - to: kubectl
+    text: "kubectl debug is the interface: attach to a Pod, copy it with changes, or get a shell on a node through a privileged Pod."
+  - to: pod
+    text: "The container is added to the existing Pod and shares its network, and optionally its process namespace, so it sees the real thing."
+  - to: security-context
+    text: "A debug container with more privileges than the workload is an escalation path, so who may create them is an RBAC decision worth making."
+reviewed: 2026-11-05
+---
+
+An ephemeral container is added to an already-running Pod through a subresource. It shares the
+Pod's network namespace and volumes, has no probes or restart policy, and cannot be removed --
+it lives until the Pod does. `kubectl debug -it <pod> --image=busybox --target=<container>` is
+the whole workflow.
+
+**It exists because hardened images have nothing in them.** A distroless or scratch image has no
+shell, no `curl`, no `ps`, no `netstat`, which is excellent for security and leaves you with
+`kubectl exec` returning "executable file not found". An ephemeral container with a debug image
+gives you the tools alongside the real process, in the real Pod, with the real network -- which
+is the one place the problem actually reproduces.
+
+**`--target` is the flag that makes it powerful.** Targeting a specific container joins its
+process namespace, so your debug container can see, inspect and trace the application's processes
+-- `ps`, `/proc/<pid>/`, a profiler, `strace` if capabilities allow. Without it you share only the
+network, which is still enough to test DNS resolution, reach a ClusterIP, or check whether the
+app is really listening.
+
+**`kubectl debug` has two other modes worth knowing.** Copying a Pod
+(`--copy-to=<name> --set-image=...`) creates a modified duplicate, so you can run the same
+workload with a shell, different arguments or probes disabled, without touching the original --
+the right tool for a Pod that crashes before you can attach to it. And
+`kubectl debug node/<name>` starts a privileged Pod in the node's namespaces with its filesystem
+mounted, which is how you inspect a node without SSH.
+
+**It is an escalation path, so treat it as one.** Creating an ephemeral container with a
+privileged security context in someone else's Pod is a way to gain access the original workload
+did not have, and the permission is `pods/ephemeralcontainers` -- a separate subresource, which
+means it can be granted to the people who need it and withheld from everyone else. On clusters
+that take Pod Security seriously, the debug image also has to satisfy the namespace's level,
+which is worth checking before an incident rather than during one.

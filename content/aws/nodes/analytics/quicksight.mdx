@@ -1,0 +1,36 @@
+---
+id: quicksight
+title: "QuickSight"
+type: service
+domain: analytics
+summary: "Dashboards over Athena, Redshift, RDS or a file, with SPICE in-memory caching, priced per reader rather than per server."
+monogram: QU
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: athena
+    text: "The serverless reporting stack: S3 for the data, Athena for the SQL, QuickSight for the people."
+reviewed: 2026-11-05
+---
+
+QuickSight is the dashboard layer: it connects to Athena, Redshift, RDS, S3, OpenSearch and
+others, and is priced **per user** -- authors by subscription and readers either by subscription
+or pay-per-session -- rather than by server. That pricing model is usually why it is chosen over
+running something else on EC2.
+
+**SPICE** is its in-memory engine. Importing a dataset into SPICE makes dashboards fast and
+stops every viewer's filter click becoming an Athena query that costs money; the alternative,
+direct query, is always current but passes the cost and latency through. The usual pattern is
+SPICE with a scheduled refresh for most dashboards, and direct query where freshness genuinely
+matters.
+
+Two features to know. **Row-level security** restricts rows by the signed-in user or group from
+a rules dataset, so one dashboard serves many customers or regions without duplicating it. And
+**embedded analytics** puts dashboards inside your own application with the session
+authenticated by your identity, which is how a SaaS product ships customer-facing reporting
+without building a charting stack.
+
+The natural stack it completes: S3 for the data, Glue for the catalogue, Athena for the SQL,
+QuickSight for the people -- entirely serverless, with no infrastructure between raw files and a
+dashboard.

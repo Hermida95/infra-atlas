@@ -1,0 +1,72 @@
+---
+id: alb
+title: "Application Load Balancer"
+type: service
+domain: edge
+summary: "Layer 7 load balancing: routes on host, path, header, query and source IP, terminates TLS, and reaches targets in two or more zones."
+logo: aws:elb
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [nlb, api-gateway, igw]
+  alternative_to: [nlb, api-gateway]
+connects:
+  - to: ecs
+    text: "Dynamic port mapping and target groups per service are why ALB is the default front door for containers."
+  - to: auto-scaling
+    text: "The Auto Scaling group registers and drains instances in the target group, and uses its health checks."
+  - to: waf
+    text: "WAF attaches directly to an ALB, which is the answer when there is no CloudFront in front."
+lead: "Layer 7, so it can read the request. Everything it does that an NLB cannot comes from that."
+parts:
+  - name: "Listener"
+    kind: gate
+    text: "A port and protocol, with a certificate for HTTPS. SNI means one listener can serve many certificates and many domains."
+  - name: "Rules"
+    kind: lanes
+    text: "Evaluated in priority order on host, path, header, query string, source IP or HTTP method. Actions: forward, redirect, fixed response, authenticate."
+  - name: "Target groups"
+    kind: satellites
+    text: "Instances, IP addresses, Lambda functions or another ALB. Each with its own health check, protocol and algorithm."
+  - name: "Health checks"
+    kind: bell
+    text: "A path and the thresholds that make a target healthy or not. Deregistration delay drains in-flight requests before a target leaves."
+  - name: "Built-in auth"
+    kind: shell
+    text: "An OIDC or Cognito action on a rule: unauthenticated users are redirected to sign in before any request reaches your code."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An ALB terminates the connection, reads the HTTP request, and decides what to do with it. That
+is the whole difference from an NLB, and everything in its feature list follows: routing on host
+and path, header-based routing, redirects, fixed responses, sticky sessions by cookie, HTTP/2
+and gRPC, WebSockets, and request tracing.
+
+**Rules** are the routing table. A listener holds rules in priority order, each with conditions
+(host, path, header, query, source IP, method) and an action. One ALB in front of several
+services, routing `/api/*` to one target group and `/` to another, is the standard shape and it
+is why path-based routing is the first thing people reach for when consolidating load balancers.
+
+**Target groups** decide what is behind it, and the protocol version and health check live there
+rather than on the listener. Targets can be instances, raw **IP addresses** (which is how
+Fargate tasks and on-premises servers are registered), a **Lambda function**, or another ALB
+behind an NLB. Two settings in a target group do most of the work in production: the **health
+check** path and thresholds, and the **deregistration delay**, which is how long in-flight
+requests get to finish before a target is removed -- set to zero, every deployment drops
+requests.
+
+Three features worth knowing because they remove code. **Built-in authentication**: an
+`authenticate-oidc` or `authenticate-cognito` action means the load balancer handles the whole
+sign-in redirect and passes verified claims to your application. **WAF** attaches directly, so
+an ALB with no CloudFront in front still gets layer-7 filtering. And **weighted target groups**
+on one rule give you blue/green and canary at the load balancer, with a shift that is one API
+call to roll back.
+
+Operationally: it is multi-zone by definition (at least two subnets) with **cross-zone load
+balancing on and free**, unlike NLB where it is charged. It scales on its own, which means its
+IP addresses change -- always use the DNS name, and an **alias** record at the zone apex. For
+client IP, your application reads **`X-Forwarded-For`**, because the connection it sees comes
+from the load balancer. And access logs go to S3, off by default, which is the thing you wish
+you had turned on during the incident.

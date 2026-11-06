@@ -40,11 +40,18 @@ jobs:
       # content.yml, which only runs when the content or the pipeline changes. What stays here
       # is what the two jobs below consume: the graph and the vector index.
       - run: uv run brain graph
+      - run: uv run brain graph --content content/aws --out apps/web/src/data/aws.json
+      - run: uv run brain graph --content content/k8s --out apps/web/src/data/k8s.json
       - run: uv run brain embed
+      # All three graphs: the journey map, the AWS atlas and the Kubernetes atlas
+      # (decisions 13 and 14).
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: graph
-          path: apps/web/src/data/graph.json
+          path: |
+            apps/web/src/data/graph.json
+            apps/web/src/data/aws.json
+            apps/web/src/data/k8s.json
 
   web:
     name: Web build

@@ -4,10 +4,12 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Mark } from "@/components/brain/Mark";
 import { Header } from "@/components/Header";
+import { inline, Prose } from "@/components/Prose";
 import { conceptBody, evidenceSnippet, evidenceUrl, sourceUrl } from "@/lib/content";
 import { domainById, graph, neighbours, nodeById } from "@/lib/graph";
 import { STAGE_LABEL } from "@/lib/planner";
 import { readableRule } from "@/lib/rule";
+import { doorway, JOURNEY } from "@/lib/worlds";
 
 // Every concept page is fully static: generateStaticParams prerenders every id at build time,
 // and `output: "export"` makes the build fail if anything request-time sneaks in later -- the
@@ -60,6 +62,8 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
   const domain = domainById.get(node.domain);
   const body = conceptBody(node).filter((p) => p !== node.summary);
   const related = [...(neighbours.get(node.id) ?? [])].map((id) => nodeById.get(id)!);
+  // A concept with a world of its own behind it: aws and kubernetes (lib/worlds.ts).
+  const deeper = doorway(JOURNEY, node.id);
 
   return (
     <>
@@ -84,6 +88,11 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
                 Take it apart
               </Link>
             )}
+            {deeper && (
+              <Link className="btn" href={deeper.href}>
+                {deeper.label}
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -91,7 +100,7 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
       {body.length > 0 && (
         <section className="concept-body">
           {body.map((p) => (
-            <p key={p}>{p}</p>
+            <Prose key={p} text={p} />
           ))}
         </section>
       )}
@@ -104,7 +113,7 @@ async function Concept({ params }: { params: PageProps<"/c/[id]">["params"] }) {
             {node.parts.map((p) => (
               <li key={p.name}>
                 <b>{p.name}</b>
-                <span>{p.text}</span>
+                <span>{inline(p.text)}</span>
               </li>
             ))}
           </ol>

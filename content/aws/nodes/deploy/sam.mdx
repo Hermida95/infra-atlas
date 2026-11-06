@@ -1,0 +1,41 @@
+---
+id: sam
+title: "SAM"
+type: service
+domain: deploy
+summary: "A short CloudFormation dialect for serverless, plus a local runner for functions and APIs. Transforms into plain CloudFormation on deploy."
+monogram: SAM
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  alternative_to: [cdk, cloudformation]
+connects:
+  - to: lambda
+    text: "Twenty lines describe a function, its API, its role and its alarms, instead of two hundred."
+  - to: cloudformation
+    text: "A SAM template is a CloudFormation template with a transform, so the two mix freely."
+reviewed: 2026-11-05
+---
+
+SAM is a CloudFormation **transform**: a short dialect for serverless resources that expands
+into plain CloudFormation at deploy time. `AWS::Serverless::Function` becomes a function, its
+role, its log group, its permissions and its API route -- twenty lines instead of two hundred.
+
+Because it is a transform, SAM and ordinary CloudFormation resources mix freely in one template,
+which matters when the serverless part is only part of the stack.
+
+The piece people actually use it for is **`sam local`**: invoking a function locally in a
+container that matches the Lambda runtime, running the API Gateway locally, and generating
+sample events for S3, SQS and the rest. That shortens the loop from deploy-and-watch-logs to
+run-and-debug. **`sam sync`** goes further for development, pushing code changes to a deployed
+function in seconds without a full CloudFormation update.
+
+It also wires in the safe-deployment pieces by default: an `AutoPublishAlias` plus a
+`DeploymentPreference` gives you CodeDeploy canary or linear traffic shifting on a Lambda alias,
+with CloudWatch alarms as the rollback trigger, in a few lines of YAML.
+
+Against CDK: SAM is declarative YAML, small, and specifically about serverless; CDK is a
+general-purpose program. Teams building mostly-serverless applications often prefer SAM for its
+simplicity and its local tooling; teams with mixed infrastructure usually end up in CDK or
+Terraform, where the serverless parts are a smaller share of the whole.

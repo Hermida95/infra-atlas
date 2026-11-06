@@ -1,0 +1,53 @@
+---
+id: capabilities
+title: "Linux capabilities"
+type: concept
+domain: security
+summary: "Root split into about forty separate privileges. Dropping all and adding back one is the difference between a container that is root and one that can only bind a port."
+logo: linux
+level: intermediate
+access: free
+exam: [cks]
+relations:
+  related: [security-context, seccomp]
+connects:
+  - to: security-context
+    text: "drop ALL then add what is needed is a container-level field, and the single highest-value line in a hardened Pod spec."
+  - to: cri
+    text: "The capability set becomes part of the OCI spec and is applied by runc, so the kernel enforces it rather than Kubernetes."
+  - to: pod-security-admission
+    text: "The baseline level blocks the dangerous additions and restricted requires dropping everything, so the levels are mostly capability policy."
+reviewed: 2026-11-05
+---
+
+Linux capabilities break the single root privilege into granular pieces: `CAP_NET_BIND_SERVICE`
+to bind below port 1024, `CAP_NET_ADMIN` to configure interfaces,
+`CAP_SYS_ADMIN` to do an enormous and badly bounded list of things,
+`CAP_CHOWN`, `CAP_SETUID` and so on. A container runtime starts a container with a default set
+that is already narrower than full root, and Kubernetes lets you add and drop from it.
+
+**The default set is still too wide.** A container running as root with the runtime default
+retains `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`, `KILL`,
+`NET_RAW` and others -- enough for a compromised process to do real damage inside the container
+and to attempt several known escapes. `drop: ["ALL"]` removes the lot, and then you add back what
+the application genuinely needs, which for almost every web service is nothing.
+
+**The one you will actually need is `NET_BIND_SERVICE`**, for a process that insists on listening
+on port 80 or 443. Even that is avoidable: listen on 8080 and let the Service map port 80 to it,
+which is how most images are built now. The others worth recognising are
+`SYS_TIME` (NTP agents), `NET_ADMIN` and `NET_RAW` (CNI plugins, network debugging tools), and
+`SYS_PTRACE` (profilers and debuggers attaching to another process).
+
+**`CAP_SYS_ADMIN` is effectively privileged.** It permits mounting filesystems, entering
+namespaces, and a long tail of operations that have repeatedly been escape primitives. Treat a
+request for it exactly as you would treat `privileged: true`, and ask what the workload is really
+trying to do -- often it is a mount that an init container or a CSI volume could perform instead.
+
+**`NET_RAW` deserves a special mention** because it is in the runtime default and is what lets a
+compromised Pod craft arbitrary packets, enabling ARP spoofing and DNS spoofing against its
+neighbours. Dropping it costs nothing for a normal application and removes a whole category of
+lateral movement -- which is why `baseline` discourages adding it and `restricted` requires it
+gone.
+
+`capsh --print` inside a running container shows what it actually has, which is the quickest way
+to check that a manifest's intent reached the process.

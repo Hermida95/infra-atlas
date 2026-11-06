@@ -1,0 +1,74 @@
+---
+id: vpc-endpoint
+title: "VPC endpoints"
+type: service
+domain: network
+summary: "Reach AWS services from a private subnet without the internet. Gateway endpoints for S3 and DynamoDB are free; interface endpoints are hourly plus per GB."
+monogram: VPC
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [nat-gateway, route-table]
+connects:
+  - to: s3
+    text: "A gateway endpoint adds a route for S3 prefixes. No NAT, no public addresses, no data processing charge."
+  - to: resource-policy
+    text: "An endpoint policy plus a bucket policy that requires that endpoint is the standard anti-exfiltration pair."
+  - to: privatelink
+    text: "Interface endpoints are PrivateLink: an ENI in your subnet with a private address for the service."
+lead: "Two different things share one name, and the difference is the whole answer: one is a route, the other is a network interface."
+parts:
+  - name: "Gateway endpoint"
+    kind: gate
+    text: "S3 and DynamoDB only. A prefix-list route in your route table. No hourly fee, no per-GB charge, and it cannot be reached from on-premises."
+  - name: "Interface endpoint"
+    kind: bus
+    text: "Everything else. An ENI with a private address in each subnet you pick, billed per hour per zone plus per GB. This is PrivateLink."
+  - name: "Private DNS"
+    kind: orbit
+    text: "On by default for interface endpoints: the public service name resolves to the private address, so the SDK needs no change."
+  - name: "Endpoint policy"
+    kind: shell
+    text: "A resource policy on the endpoint itself: which buckets, which actions, which accounts may pass through it."
+  - name: "Security group"
+    kind: chips
+    text: "Interface endpoints have one, so you control which subnets may even reach the endpoint. Gateway endpoints have none."
+layout: stack
+reviewed: 2026-11-05
+---
+
+An endpoint keeps traffic to AWS services inside the AWS network. No Internet Gateway, no NAT
+Gateway, no public addresses, and nothing that leaves through the internet. Getting the two
+kinds straight is the single most useful piece of VPC knowledge for both the exam and the bill.
+
+A **gateway endpoint** exists for exactly two services, S3 and DynamoDB. It is not a device: it
+is an entry in a route table pointing at a managed prefix list, so traffic to those services is
+routed away from the NAT Gateway. It costs nothing -- no hourly charge and no data processing --
+which makes it the first fix for any workload moving serious volume to S3 from private subnets.
+Two limits: it only works from inside the VPC, so on-premises traffic over Direct Connect cannot
+use it, and it must be associated with every route table that needs it.
+
+An **interface endpoint** is PrivateLink: an elastic network interface with a private address in
+each subnet you choose. It works for nearly every AWS API, for SaaS partners, and for services
+another account exposes. It is charged per endpoint per zone per hour plus per gigabyte -- still
+cheaper than NAT above a modest volume, but three zones means paying three times for each
+endpoint, so put them only where they are needed. Unlike gateway endpoints they **are**
+reachable from on-premises over Direct Connect or VPN, which is often the real reason to choose
+one.
+
+**Private DNS** is why this is invisible to your code. With it enabled, `s3.eu-west-1.
+amazonaws.com` resolves to the endpoint's private address inside the VPC, so the SDK is
+unchanged. It needs `enableDnsSupport` and `enableDnsHostnames` on the VPC; without them the
+endpoint exists and nothing uses it.
+
+The security pattern worth memorising is the pair. An **endpoint policy** says which buckets may
+be reached through this endpoint; a **bucket policy** with a `aws:SourceVpce` condition says
+this bucket may only be reached through that endpoint. Together, credentials stolen from the
+environment are useless from anywhere else, and data cannot be copied into a bucket outside the
+list. That is the standard answer to any exam question containing the words "prevent data
+exfiltration".
+
+Services that need an endpoint more often than people expect: ECR (two of them, `api` and `dkr`,
+plus S3 for the layers), Systems Manager (`ssm`, `ssmmessages`, `ec2messages` for Session
+Manager), Secrets Manager, KMS and CloudWatch Logs.

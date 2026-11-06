@@ -1,0 +1,52 @@
+---
+id: vpa
+title: "VerticalPodAutoscaler"
+type: concept
+domain: scaling
+summary: "Right-sizing requests instead of changing the replica count. Its recommendation mode is valuable to everyone; its automatic mode restarts Pods to apply changes."
+level: intermediate
+access: free
+monogram: VPA
+exam: [cka]
+relations:
+  related: [hpa, requests-and-limits]
+  alternative_to: [hpa]
+connects:
+  - to: requests-and-limits
+    text: "It observes real usage over time and recommends the requests you should have set, which is the hardest number to guess by hand."
+  - to: hpa
+    text: "Both on CPU is a feedback loop: the VPA raises the request, which lowers reported utilisation, which removes replicas."
+  - to: pod
+    text: "Applying a new request means replacing the Pod, since resources are immutable -- which is why automatic mode is disruptive."
+  - to: metrics-server
+    text: "It needs the same usage metrics, plus a history store to see beyond the last few minutes."
+reviewed: 2026-11-05
+---
+
+The VerticalPodAutoscaler watches a workload's actual CPU and memory usage, and recommends
+requests and limits that fit it. In `Auto` mode it applies them, which -- because a Pod's
+resources are immutable -- means evicting and recreating the Pods.
+
+**Recommendation mode is the part everyone should use.** `updateMode: "Off"` makes the VPA compute
+and publish recommendations without touching anything, and `kubectl describe vpa` then shows a
+target, a lower bound and an upper bound per container based on observed usage percentiles. That
+is the number nobody can guess: the honest request for a workload. Feeding those recommendations
+into the manifests by hand, at review time, is the highest-return, lowest-risk use of the tool,
+and it is how an over-provisioned cluster gets smaller.
+
+**Automatic mode is disruptive and conditional.** Evicting Pods to resize them is a real
+disruption, bounded only by the PodDisruptionBudget, so it suits workloads that tolerate
+restarts and not those that do not. The in-place resize feature is gradually removing this
+limitation, but on most clusters today automatic VPA on a user-facing service is a trade people
+regret.
+
+**Do not run it with an HPA on the same resource.** The HPA scales out when utilisation against
+the request is high; the VPA raises the request so utilisation drops; the HPA then scales in. The
+two chase each other. The supported combination is a VPA on memory and an HPA on CPU, or an HPA
+on a custom metric (requests per second, queue depth) with the VPA sizing the Pod -- which is
+actually a good arrangement, because then each controller owns a different dimension.
+
+**Its memory recommendations are conservative by design**, driven by peak rather than average,
+because being wrong about memory means an OOM kill while being wrong about CPU only means
+throttling. That asymmetry is correct, and it means VPA memory numbers tend to look generous --
+they are pricing the cost of a crash.

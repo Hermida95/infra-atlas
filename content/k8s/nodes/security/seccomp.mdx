@@ -1,0 +1,53 @@
+---
+id: seccomp
+title: "seccomp"
+type: concept
+domain: security
+summary: "A syscall filter on the container's processes. RuntimeDefault is nearly free and blocks dozens of syscalls no normal application makes."
+logo: linux
+level: intermediate
+access: free
+exam: [cks]
+relations:
+  related: [security-context, capabilities]
+connects:
+  - to: security-context
+    text: "seccompProfile RuntimeDefault is one field, and it is the cheapest kernel-level hardening a Pod can get."
+  - to: cri
+    text: "The profile is applied by the runtime when the container is created, as a BPF filter attached to the process."
+  - to: pod-security-admission
+    text: "The restricted level requires a profile to be set, which is why adopting it means turning seccomp on cluster-wide."
+reviewed: 2026-11-05
+---
+
+seccomp (secure computing mode) attaches a filter to a process that decides, per syscall, whether
+to allow it, return an error, or kill the process. The container runtime ships a default profile
+that blocks around forty of the roughly four hundred syscalls -- the ones used for kernel module
+loading, keyring manipulation, `ptrace` in some configurations, and other operations no
+application in a container should be making.
+
+**`RuntimeDefault` should be on everywhere.** It is one field,
+`seccompProfile: {type: RuntimeDefault}` on the Pod, and it is what Docker has applied by default
+for years while Kubernetes defaulted to `Unconfined`. The compatibility risk is close to zero for
+ordinary applications, and it removes syscalls that several container escapes have depended on.
+Recent Kubernetes versions can default it cluster-wide with a kubelet flag, which is the right
+switch to find.
+
+**Custom profiles are where the effort-to-value ratio collapses.** A `Localhost` profile is a JSON
+file on every node under the kubelet's seccomp directory, which means distributing files to nodes
+outside the API -- awkward in a managed cluster -- and an allow-list tight enough to be worth it
+will break the moment a library changes its I/O implementation. The Security Profiles Operator
+makes this manageable by recording a profile from a running workload and distributing it as a
+custom resource, and that is the only approach worth attempting for a handful of
+genuinely high-risk workloads.
+
+**Failure looks like a crash with no explanation.** A blocked syscall returns `EPERM` or kills the
+process, and the application reports something unrelated -- an unexpected error from a library,
+or nothing at all. Auditing before enforcing is the way through: a profile with
+`defaultAction: SCMP_ACT_LOG` records every syscall to the audit log without blocking, which both
+tells you what the workload needs and proves whether seccomp is the cause of a problem.
+
+**It composes with capabilities rather than replacing them.** Capabilities gate privileged
+operations; seccomp gates the syscall interface itself, including syscalls that need no
+capability. `drop: ["ALL"]` plus `RuntimeDefault` plus `allowPrivilegeEscalation: false` is the
+combination, and all three are one line each.

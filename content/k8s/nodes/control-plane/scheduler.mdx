@@ -1,0 +1,73 @@
+---
+id: scheduler
+title: "kube-scheduler"
+type: service
+domain: control-plane
+summary: "It does one thing: write a node name into a Pod that has none. Everything about placement -- affinity, taints, spread, priority -- is an input to that one decision."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [scheduler-profiles, requests-and-limits]
+connects:
+  - to: pod
+    text: "The scheduler only writes spec.nodeName through a binding. A Pod created with nodeName already set skips scheduling completely."
+  - to: requests-and-limits
+    text: "Requests, not usage, are what the scheduler adds up to decide whether a Pod fits, which is why a half-idle cluster can refuse to place one."
+  - to: taints-and-tolerations
+    text: "A taint removes a node from consideration unless the Pod tolerates it: the filter phase, expressed from the node's side."
+  - to: node-affinity
+    text: "Affinity is both a filter and a preference, so it can make placement impossible or merely unbalanced."
+  - to: pod-priority
+    text: "When nothing fits, a higher-priority pending Pod can have lower-priority ones evicted to make room."
+  - to: topology-spread
+    text: "Spread constraints are scored across zones and nodes, which is how replicas end up somewhere other than all together."
+lead: "Two phases per Pod, and every placement feature is one or the other."
+parts:
+  - name: "Filter"
+    kind: split
+    text: "Which nodes could hold this Pod at all: free requests, node selectors, taints, volume zone, port conflicts. The output is a set, often empty."
+  - name: "Score"
+    kind: bars
+    text: "Which of the survivors is best: spread, affinity preferences, image locality, least or most allocated. Scores are summed and weighted."
+  - name: "Reserve and permit"
+    kind: gate
+    text: "Where extenders and plugins can hold a decision -- the hook a gang scheduler or a GPU-aware scheduler uses."
+  - name: "Bind"
+    kind: trigger
+    text: "A Binding written to the API server. The kubelet on that node then notices a Pod assigned to it and starts work."
+layout: row
+reviewed: 2026-11-05
+---
+
+The scheduler watches for Pods with an empty `spec.nodeName` and, for each one, picks a node and
+writes a binding. That is all it does. It does not start containers, does not move running Pods,
+and does not revisit a decision -- once a Pod is bound, the scheduler is finished with it
+forever. Rebalancing a cluster is therefore not something the scheduler does; it is something a
+descheduler or an eviction does, by deleting Pods so new ones get scheduled fresh.
+
+**Filter then score.** Filtering is boolean and produces the set of feasible nodes: does the
+Pod's CPU and memory request fit in what is unallocated, does it tolerate the node's taints,
+does its node affinity match, can its volume be attached in that zone, is the host port free.
+Scoring ranks what is left. Almost every placement question is answered by asking which of the
+two phases a feature belongs to -- `requiredDuringScheduling` is a filter and can make a Pod
+unschedulable, `preferredDuringScheduling` is a score and can only make it badly placed.
+
+**Requests are the currency, not usage.** The scheduler sums the requests of everything already
+bound to a node and compares against allocatable. A node at 10% real CPU usage whose Pods
+request all of it is full. This is the mechanism behind the most common `Pending` message in
+Kubernetes -- `0/5 nodes are available: Insufficient cpu` -- and the reason oversized requests
+cost more than oversized limits.
+
+**When nothing fits, the Pod stays Pending and says why.** `kubectl describe pod` prints one
+line per reason with a node count, and that line is the diagnosis: insufficient resources means
+scale up or shrink requests, untolerated taint means add a toleration, node affinity means your
+selector matches no labelled node, no volume zone conflict means your PVC is pinned to a zone
+with no room. Preemption is the one case where the system acts on its own: a pending Pod with a
+higher PriorityClass can cause lower-priority Pods to be evicted so it can be placed.
+
+For special needs -- gang scheduling for batch jobs, topology-aware placement for AI
+workloads -- you do not patch the scheduler, you run a second one with its own profile, or the
+whole-cluster schedulers like Volcano or Kueue, and point Pods at it with
+`spec.schedulerName`.

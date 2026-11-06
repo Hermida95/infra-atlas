@@ -1,0 +1,9 @@
+# What this content tree is. One content directory is one world, and this file is what makes a
+# world self-describing: its id, its name, and the certifications its nodes can be tagged with.
+#
+# The journey map declares none. It is not studied for an exam -- it answers "what do I need in
+# order to deploy this" -- so an `exam:` tag anywhere under content/nodes is an error, which is
+# exactly the check that used to be impossible while the vocabulary was a Literal in models.py.
+id: journey
+name: "The journey"
+exams: []

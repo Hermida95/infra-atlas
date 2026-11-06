@@ -1,0 +1,52 @@
+---
+id: daemonset
+title: "DaemonSet"
+type: concept
+domain: workloads
+summary: "One Pod per node, including nodes that join later. Every node agent you run -- CNI, kube-proxy, log shipper, CSI driver -- is one of these."
+level: core
+access: free
+monogram: DS
+exam: [ckad, cka]
+relations:
+  related: [deployment]
+connects:
+  - to: taints-and-tolerations
+    text: "A DaemonSet needs tolerations to land on tainted nodes, which is why system agents tolerate everything and your log shipper misses the GPU pool."
+  - to: node-drain
+    text: "Drain skips DaemonSet Pods by default, because the agent should keep running while the node's workloads leave."
+  - to: cni
+    text: "The network plugin itself ships this way, which is the bootstrap problem: it has to run with host networking before Pod networking exists."
+  - to: allocatable
+    text: "A DaemonSet's requests are charged on every node, so a 200 MiB agent across 100 nodes costs 20 GiB of cluster capacity."
+reviewed: 2026-11-05
+---
+
+A DaemonSet runs one Pod on every node that matches its node selector, and it keeps that true:
+add a node and the Pod appears, remove the node and it is cleaned up. It is not scheduled by
+replica count -- there is no `replicas` field -- which is why the scheduler treats these Pods
+specially and why they are the only workload whose count you cannot set.
+
+**Nearly all cluster infrastructure is a DaemonSet.** kube-proxy, the CNI agent, the CSI node
+plugin, the log collector, the metrics exporter, the security agent. They have a common shape:
+host networking or a host mount, a wide set of tolerations so they land on every node including
+the tainted ones, and a `priorityClassName` of `system-node-critical` so they are not evicted to
+make room for workloads.
+
+**Tolerations are the thing people get wrong.** By default a DaemonSet Pod tolerates the standard
+node condition taints (unschedulable, pressure) so agents keep running on a struggling node, but
+it does not tolerate *your* taints. So the cluster's GPU pool, tainted to keep ordinary
+workloads off, silently has no log shipper and no metrics agent -- which is discovered during the
+first incident on those nodes. A deliberate `tolerations: [{operator: Exists}]` is the usual
+answer for genuinely cluster-wide agents.
+
+**Updates are rolling, with its own strategy.** `maxUnavailable` on a DaemonSet means "how many
+nodes may be without the agent at once", which for a CNI plugin or kube-proxy is a real traffic
+decision rather than a capacity one. `OnDelete` exists for agents too dangerous to update
+automatically: new Pods only appear as you delete the old ones.
+
+**The cost is per node and worth doing the arithmetic on.** Each DaemonSet's requests are
+subtracted from every node's allocatable, before any of your workloads are placed. Five agents at
+100m CPU and 128 MiB each is half a gigabyte and half a core per node -- on fifty small nodes
+that is a meaningful fraction of the cluster, and one of the clearest arguments for fewer, larger
+nodes.

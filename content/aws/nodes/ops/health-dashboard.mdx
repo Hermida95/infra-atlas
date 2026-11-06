@@ -1,0 +1,35 @@
+---
+id: health-dashboard
+title: "AWS Health"
+type: service
+domain: ops
+summary: "Events that affect your own resources: degradations, scheduled retirements, certificate expiries, with an API and organization-wide view."
+monogram: AWS
+level: core
+access: free
+exam: [saa, sap]
+connects:
+  - to: eventbridge
+    text: "Health events are on the bus, so an instance retirement can open a ticket on its own."
+reviewed: 2026-11-05
+---
+
+AWS Health is the feed of events that affect **your** resources, which is what separates it from
+the public status page. The Service Health Dashboard says a service is degraded in a region;
+Health says that *your* instance is on hardware scheduled for retirement next Tuesday, that
+*your* certificate expires in thirty days, or that *your* RDS instance will be patched in the
+next maintenance window.
+
+Three kinds of event: **issues** (a service problem), **scheduled changes** (retirements,
+maintenance, deprecations) and **account notifications**. The **Organizational View** aggregates
+them for every account from the management account, which is the only practical way to see them
+across an estate.
+
+The reason to care operationally is that these are **EventBridge events**. An EC2 instance
+retirement notice can automatically open a ticket, or trigger an Auto Scaling instance refresh
+that replaces the instance before the deadline, with no human reading an email. The same is true
+for certificate expiry, EBS volume degradation and service deprecations.
+
+The common failure mode is that these notices go to the account's root email address, which
+nobody reads. Routing them through EventBridge to the team's actual alerting is a small piece of
+setup that prevents a whole category of avoidable incident.

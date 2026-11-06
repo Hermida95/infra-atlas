@@ -1,0 +1,45 @@
+---
+id: mgn
+title: "Application Migration Service"
+type: service
+domain: migrate
+summary: "Continuous block-level replication of a running server into a staging area, then a short cutover into EC2. The default rehost."
+monogram: AMS
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [migration-hub, drs]
+connects:
+  - to: ec2
+    text: "The output is an EC2 instance from a replicated disk, with the same operating system and the same software on it."
+  - to: site-to-site-vpn
+    text: "Replication needs a path out of the data centre, which is usually a VPN or a Direct Connect."
+reviewed: 2026-11-05
+---
+
+Application Migration Service is the default rehost tool. An agent on the source server
+replicates its disks **block by block** into a staging area in your AWS account, continuously,
+while the server keeps running and serving. When you are ready, a **test** launch creates real
+EC2 instances from the replicated data in an isolated subnet, which you can boot and verify as
+many times as you like without touching the source. The **cutover** is then a short window: stop
+the application, let the final blocks replicate, launch, and repoint.
+
+That shape is why it dominates. The pre-cutover work is all repeatable testing, the downtime is
+minutes rather than a weekend, and the application and operating system are byte-identical --
+nothing is reinstalled or reconfigured, so nothing behaves differently for a reason nobody can
+find.
+
+**Launch templates** per server control what the EC2 instance looks like: instance type (from
+the right-sizing recommendation, not like-for-like), subnet, security groups, instance profile
+and tags. **Post-launch actions** run automation on the new instance -- install the SSM agent,
+join a domain, attach to a load balancer, run validation -- which is how a wave of fifty servers
+becomes a repeatable process.
+
+Prerequisites: a network path for the replication traffic (VPN or Direct Connect, and the
+bandwidth determines how long the initial sync takes), an agent on each source server, and the
+staging subnet's cost while replication runs.
+
+Its twin is **Elastic Disaster Recovery (DRS)**: the same replication engine kept running
+indefinitely as a standing recovery capability rather than a one-way move. If a question is
+about moving, it is MGN; if it is about being able to fail over, it is DRS.

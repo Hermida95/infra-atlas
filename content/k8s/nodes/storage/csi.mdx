@@ -1,0 +1,67 @@
+---
+id: csi
+title: "CSI"
+type: concept
+domain: storage
+summary: "The plugin interface every storage system implements. It moved storage drivers out of the Kubernetes release, which is why there are hundreds of them."
+level: intermediate
+access: free
+monogram: CSI
+exam: [cka]
+relations:
+  related: [storage-class, dynamic-provisioning]
+connects:
+  - to: dynamic-provisioning
+    text: "The controller half of a driver is what actually creates a volume when a claim asks for one."
+  - to: kubelet
+    text: "The node half stages and mounts the volume, so a Pod stuck in ContainerCreating is usually this component's problem."
+  - to: volume-snapshot
+    text: "Snapshots, cloning and expansion are all optional CSI capabilities, which is why support differs per driver."
+  - to: secrets-store-csi
+    text: "The same interface is used for things that are not disks at all, like projecting an external secret store as a file."
+lead: "A driver is two halves with very different jobs and very different blast radius."
+parts:
+  - name: "Controller plugin"
+    kind: core
+    text: "A Deployment, usually one replica with leader election. Creates, deletes, snapshots and expands volumes by calling the storage API."
+  - name: "Node plugin"
+    kind: node
+    text: "A privileged DaemonSet. Stages and publishes the volume into the Pod's directory, which needs host mount access."
+  - name: "Sidecars"
+    kind: plugin
+    text: "external-provisioner, attacher, resizer, snapshotter: generic controllers that translate Kubernetes objects into CSI calls."
+  - name: "CSIDriver object"
+    kind: meta
+    text: "Declares the driver's capabilities -- whether it needs attach, whether it supports fsGroup, whether it wants Pod info."
+layout: cluster
+reviewed: 2026-11-05
+---
+
+The Container Storage Interface is a gRPC contract: create a volume, delete it, attach it to a
+node, stage it, publish it into a Pod, and optionally snapshot, clone or expand it. Kubernetes
+calls the driver; the driver talks to the storage system. Before CSI, every storage integration
+lived in the Kubernetes tree ("in-tree volume plugins"), which meant a new storage vendor needed
+a Kubernetes release. All of those are now migrated out.
+
+**The two halves fail differently.** The controller plugin creates and deletes volumes; when it
+is down, new claims stay `Pending` and nothing already running is affected. The node plugin
+mounts volumes into Pods; when it is down on a node, Pods there sit in
+`ContainerCreating` and existing mounts usually keep working. Knowing which half is broken is the
+first branch of any storage incident, and the respective logs are in a Deployment and a
+DaemonSet in the driver's namespace.
+
+**The node plugin is heavily privileged** -- it needs to mount filesystems on the host, so it
+runs with host paths, `privileged: true` and bidirectional mount propagation. That is unavoidable
+and worth knowing: installing a CSI driver is granting a component node-root, so the driver's
+provenance matters as much as any other supply-chain decision.
+
+**Capabilities are per driver, which is why features look inconsistent.** Snapshots, volume
+cloning, online expansion, `ReadWriteMany`, topology awareness and fsGroup handling are each
+optional. `kubectl get csidrivers -o yaml` and the driver's own documentation are the only
+reliable answer to "can I resize this without downtime", and the answer differs between EBS,
+EFS, Ceph and your on-premise array.
+
+**`CSIDriver` and `CSINode` are the objects to look at when things are odd.** The first declares
+what the driver supports; the second records which drivers are registered on each node and with
+what topology. A volume that will not attach on one node and will on another is almost always a
+missing registration or a topology mismatch recorded right there.

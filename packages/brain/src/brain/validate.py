@@ -8,8 +8,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
-from brain.loader import DOMAINS_FILE, REQUIREMENTS_FILE, load_content
-from brain.models import Domain, Node, Requirement
+from brain.loader import CASES_FILE, DOMAINS_FILE, REQUIREMENTS_FILE, WORLD_FILE, load_content
+from brain.models import Case, Domain, Node, Requirement, WorldManifest
 from brain.planner import KEYWORDS, ExpressionError, parse, variables
 
 STALE_AFTER = timedelta(days=365)
@@ -26,8 +26,10 @@ class Issue:
 
 @dataclass
 class ValidationReport:
+    world: WorldManifest | None = None
     domains: list[Domain] = field(default_factory=list)
     requirements: list[Requirement] = field(default_factory=list)
+    cases: list[Case] = field(default_factory=list)
     nodes: list[Node] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
 
@@ -55,12 +57,67 @@ def validate_content(
     requirements_path = content_dir / REQUIREMENTS_FILE
     issues += check_requirements(loaded.requirements, requirements_path)
     issues += check_planner_rules(loaded.nodes, loaded.requirements, requirements_path)
+    issues += check_cases(loaded.cases, loaded.nodes, content_dir / CASES_FILE)
+    issues += check_exams(loaded.world, loaded.nodes, loaded.cases, content_dir)
     return ValidationReport(
+        world=loaded.world,
         domains=loaded.domains,
         requirements=loaded.requirements,
+        cases=loaded.cases,
         nodes=loaded.nodes,
         issues=issues,
     )
+
+
+def check_exams(
+    world: WorldManifest | None,
+    nodes: Sequence[Node],
+    cases: Sequence[Case],
+    content_dir: Path,
+) -> list[Issue]:
+    """`exam` tags come from the world's own vocabulary, not from a list baked into the schema.
+
+    A world declares its certifications in world.yaml, so `saa` is meaningful in content/aws and
+    meaningless in content/k8s. A tag nothing declares is an error rather than a typo that
+    silently disappears from a filter, and a certification nothing is tagged with is a warning:
+    it would show up as a filter chip that empties the map.
+    """
+    world_path = content_dir / WORLD_FILE
+    issues: list[Issue] = []
+    known: set[str] = set()
+
+    if world is not None:
+        for exam in world.exams:
+            if exam.id in known:
+                issues.append(Issue(world_path, f"duplicate exam id '{exam.id}'"))
+            known.add(exam.id)
+
+    declared = ", ".join(sorted(known)) if known else "none"
+    tagged: set[str] = set()
+    for node in nodes:
+        for tag in node.meta.exam:
+            tagged.add(tag)
+            if tag not in known:
+                issues.append(
+                    Issue(node.source, f"exam: '{tag}' is not declared by this world ({declared})")
+                )
+    for case in cases:
+        for tag in case.exam:
+            tagged.add(tag)
+            if tag not in known:
+                issues.append(
+                    Issue(
+                        content_dir / CASES_FILE,
+                        f"case '{case.id}': exam '{tag}' is not declared by this world "
+                        f"({declared})",
+                    )
+                )
+
+    issues += [
+        Issue(world_path, f"exam '{exam_id}' is not used by any node or case", "warning")
+        for exam_id in sorted(known - tagged)
+    ]
+    return issues
 
 
 def check_domains(domains: Sequence[Domain], source: Path) -> list[Issue]:
@@ -106,6 +163,18 @@ def _check_node(
     if meta.domain not in domain_ids:
         issues.append(Issue(path, f"unknown domain '{meta.domain}'"))
 
+    for index, connection in enumerate(meta.connects):
+        location = f"connects[{index}]"
+        if connection.to == meta.id:
+            issues.append(Issue(path, f"{location}: node connects to itself"))
+        elif connection.to not in node_ids:
+            issues.append(Issue(path, f"{location}: unknown node '{connection.to}'"))
+    seen_targets: set[str] = set()
+    for connection in meta.connects:
+        if connection.to in seen_targets:
+            issues.append(Issue(path, f"connects: '{connection.to}' is explained twice"))
+        seen_targets.add(connection.to)
+
     for kind, target in meta.relations.targets():
         if target == meta.id:
             issues.append(Issue(path, f"relations.{kind}: node relates to itself"))
@@ -114,6 +183,11 @@ def _check_node(
 
     if meta.lab and not meta.parts:
         issues.append(Issue(path, f"lab '{meta.lab}' requires non-empty parts"))
+
+    # `lead` is the sentence that introduces a teardown, so it only means something when there
+    # is something to take apart.
+    if meta.lead and not meta.parts:
+        issues.append(Issue(path, "lead without parts: there is nothing for it to introduce"))
 
     rule = meta.planner
     if (
@@ -210,4 +284,49 @@ def check_planner_rules(
         for rid in (requirement.id for requirement in requirements)
         if rid not in referenced
     ]
+    return issues
+
+
+def check_cases(cases: Sequence[Case], nodes: Sequence[Node], source: Path) -> list[Issue]:
+    """A case names real nodes, offers a real choice and commits to one best answer."""
+    node_ids = {node.id for node in nodes}
+    seen: set[str] = set()
+    issues: list[Issue] = []
+
+    for case in cases:
+        where = f"case '{case.id}'"
+        if case.id in seen:
+            issues.append(Issue(source, f"duplicate case id '{case.id}'"))
+        seen.add(case.id)
+
+        for unknown in [nid for nid in case.nodes if nid not in node_ids]:
+            issues.append(Issue(source, f"{where}: unknown node '{unknown}'"))
+
+        if len(case.options) < 2:
+            issues.append(
+                Issue(source, f"{where}: needs at least two options, or it is not a choice")
+            )
+        best = [option for option in case.options if option.verdict == "best"]
+        if len(best) != 1:
+            issues.append(
+                Issue(source, f"{where}: exactly one option must be 'best', found {len(best)}")
+            )
+
+        option_ids: set[str] = set()
+        touched = set(case.nodes)
+        for option in case.options:
+            label = f"{where} option '{option.id}'"
+            if option.id in option_ids:
+                issues.append(Issue(source, f"{where}: duplicate option id '{option.id}'"))
+            option_ids.add(option.id)
+            if not option.nodes:
+                issues.append(Issue(source, f"{label}: names no service to light up"))
+            for unknown in [nid for nid in option.nodes if nid not in node_ids]:
+                issues.append(Issue(source, f"{label}: unknown node '{unknown}'"))
+            # The case lights everything it touches, an option lights its own share. An option
+            # that named a service the case did not would make the map grow when you pick it.
+            for extra in [nid for nid in option.nodes if nid in node_ids and nid not in touched]:
+                issues.append(Issue(source, f"{label}: '{extra}' is not in the case's own nodes"))
+            if option.verdict == "avoid" and not option.watch:
+                issues.append(Issue(source, f"{label}: an 'avoid' option must say what goes wrong"))
     return issues

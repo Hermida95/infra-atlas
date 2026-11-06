@@ -8,7 +8,8 @@ from brain.loader import load_content
 
 def build(content_dir: Path):
     loaded = load_content(content_dir)
-    return loaded.nodes, {d.id: d for d in loaded.domains}, related_links(loaded.nodes)
+    links = [(source, target) for source, target, _ in related_links(loaded.nodes)]
+    return loaded.nodes, {d.id: d for d in loaded.domains}, links
 
 
 def test_layout_is_deterministic_and_finite(content_dir: Path, write_node) -> None:
@@ -42,4 +43,4 @@ def test_related_links_are_undirected_and_deduplicated(content_dir: Path, write_
     write_node("image", relations={"related": ["docker"]})
     nodes, _, _ = build(content_dir)
 
-    assert related_links(nodes) == [("docker", "image")]
+    assert related_links(nodes) == [("docker", "image", "")]

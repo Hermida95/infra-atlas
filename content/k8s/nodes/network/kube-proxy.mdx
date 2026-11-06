@@ -1,0 +1,67 @@
+---
+id: kube-proxy
+title: "kube-proxy"
+type: service
+domain: network
+summary: "The DaemonSet that turns Services into forwarding rules on every node. It is not a proxy in the data path, and in modern clusters it can be gone entirely."
+logo: kubernetes
+level: intermediate
+access: free
+exam: [cka]
+relations:
+  related: [service, cni]
+connects:
+  - to: endpointslice
+    text: "It watches these objects and rewrites the node's rules when they change, so endpoint propagation delay is really kube-proxy's reaction time."
+  - to: clusterip
+    text: "A ClusterIP exists only as the DNAT rules this component programs. It is the implementation of the virtual address."
+  - to: cni
+    text: "Some CNI plugins implement Service handling in eBPF and replace it, which removes the iptables chains and their scaling behaviour."
+  - to: nodeport
+    text: "It opens the node port on every node and forwards it, which is the mechanism cloud load balancers target."
+lead: "Three implementations, with quite different behaviour at scale."
+parts:
+  - name: "iptables mode"
+    kind: lanes
+    text: "The long-time default. One chain per Service with probabilistic jumps per endpoint. Correct, and the rule set grows linearly with Services."
+  - name: "IPVS mode"
+    kind: ring
+    text: "Kernel load balancing with hash tables instead of sequential rules, plus real algorithms -- round robin, least connection. Scales to thousands of Services."
+  - name: "nftables mode"
+    kind: split
+    text: "The modern replacement for iptables mode: the same model on a backend designed for large rule sets and incremental updates."
+  - name: "No kube-proxy"
+    kind: plugin
+    text: "Cilium and others implement Service forwarding in eBPF at the socket layer, which removes both the component and the per-packet rule traversal."
+layout: row
+reviewed: 2026-11-05
+---
+
+kube-proxy runs on every node and watches Services and EndpointSlices. When they change, it
+rewrites the node's packet-filtering rules so that traffic to a ClusterIP or a NodePort is
+destination-NATed to a Pod address. It does not sit in the data path -- the kernel does the work
+-- which is why there is no proxy to overload and no hop to measure.
+
+**Its weakness is rule-set size, not throughput.** In iptables mode, each Service produces a
+chain and each endpoint a rule, and the whole set is re-synced on changes. At a few hundred
+Services this is invisible. At several thousand, with churn, the sync takes seconds, during which
+new endpoints are not yet programmed -- which appears as connections to recently started Pods
+being refused, or to deleted ones hanging. IPVS and nftables modes exist to fix exactly that,
+with hash-based lookup and incremental updates.
+
+**The SNAT behaviour is worth knowing because it hides client IPs.** With
+`externalTrafficPolicy: Cluster`, traffic entering a node for a Pod elsewhere is source-NATed so
+the reply comes back the same way -- so the receiving Pod sees a node IP as the client. Anything
+that needs the real client address (rate limiting, geo rules, audit logging) needs
+`Local`, an IP-target-mode cloud load balancer, or an Ingress controller that sets
+`X-Forwarded-For`.
+
+**Replacing it is now a normal choice.** Cilium's kube-proxy replacement implements Services in
+eBPF, attaching at the socket level so a connection from a Pod to a ClusterIP is translated
+before a packet is even built. That removes the DNAT, removes the rule traversal, and preserves
+the source address -- at the cost of a newer kernel and a tighter coupling to the CNI.
+
+For debugging in iptables mode, `iptables-save | grep <service-name>` on the node shows the chain
+and whether the endpoints you expect are in it; a Service whose EndpointSlice is correct but
+whose chain is stale points at kube-proxy itself, which is one of the few times restarting a
+DaemonSet Pod is the actual fix.

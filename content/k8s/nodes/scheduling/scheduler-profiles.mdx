@@ -1,0 +1,51 @@
+---
+id: scheduler-profiles
+title: "Scheduler profiles & plugins"
+type: concept
+domain: scheduling
+summary: "The scheduler is a framework of plugins at fixed extension points. Changing placement policy means a profile or a second scheduler, not a patched binary."
+level: advanced
+access: free
+monogram: SF
+exam: [cka]
+relations:
+  related: [scheduler]
+connects:
+  - to: scheduler
+    text: "Every placement feature -- affinity, taints, spread, resource fit -- is a plugin at one of the framework's extension points."
+  - to: pod
+    text: "A Pod selects a profile with spec.schedulerName, which is how batch workloads use a queueing scheduler while everything else uses the default."
+  - to: device-plugins
+    text: "Gang scheduling and topology-aware placement for accelerators are the usual reason to run a second scheduler at all."
+reviewed: 2026-11-05
+---
+
+kube-scheduler is a framework. It defines extension points -- `QueueSort`, `PreFilter`,
+`Filter`, `PostFilter`, `PreScore`, `Score`, `Reserve`, `Permit`, `PreBind`, `Bind`,
+`PostBind` -- and the behaviour you think of as "the scheduler" is a set of in-tree plugins
+registered at them: `NodeResourcesFit`, `TaintToleration`,
+`PodTopologySpread`, `InterPodAffinity`, `VolumeBinding` and a dozen more.
+
+**A profile is a named configuration of that set**, declared in the scheduler's
+`KubeSchedulerConfiguration`: which plugins are enabled, their weights, and their arguments. One
+scheduler binary can serve several profiles, and a Pod chooses one by name with
+`spec.schedulerName`. This is how you give batch work different scoring from online work without
+running separate infrastructure.
+
+**The most commonly changed knob is the resource scoring strategy.**
+`LeastAllocated` (the default) spreads Pods across nodes, which is good for resilience and bad
+for your bill, because every node ends up partly used and none can be removed.
+`MostAllocated` packs them, which lets the autoscaler delete nodes -- the right default for a
+cost-sensitive cluster, and the wrong one for a cluster where a single node failure must not take
+many replicas. `RequestedToCapacityRatio` lets you tune the curve between them.
+
+**When a profile is not enough, you run another scheduler.** Kueue, Volcano and the Kubernetes
+scheduler-plugins project add capabilities the default scheduler deliberately lacks: gang
+scheduling (all N Pods of a job are placed or none are, which matters for distributed training),
+queueing with fair share across teams, and coscheduling with topology awareness. They run as a
+normal Deployment, watch for Pods naming them, and bind. Nothing in the API changes.
+
+**Two things to be careful about.** Two schedulers acting on the same Pods will race and
+double-bind, so `schedulerName` must partition the work cleanly. And a Pod naming a scheduler
+that does not exist stays `Pending` silently forever -- no event, no error, because the component
+that would complain is the one that is not there.

@@ -1,0 +1,69 @@
+---
+id: control-tower
+title: "Control Tower"
+type: service
+domain: account
+summary: "A managed landing zone: an organization, a log archive and audit account, mandatory guardrails and an account factory."
+monogram: CT
+level: core
+access: free
+exam: [sap]
+connects:
+  - to: organizations
+    text: "Control Tower is Organizations with opinions: the OUs, the SCPs and the shared accounts come set up."
+  - to: cloudtrail
+    text: "An organization trail into the log archive account is one of the controls you cannot turn off."
+  - to: aws-config
+    text: "Detective guardrails are Config rules, aggregated into the audit account."
+  - to: service-catalog
+    text: "The account factory is a Service Catalog product, so a new account is a form, not a runbook."
+lead: "An opinionated landing zone, built from services you already have, set up correctly the first time."
+parts:
+  - name: "Landing zone"
+    kind: shell
+    text: "An organization, a Security OU, a log archive account and an audit account, with CloudTrail, Config and the baseline already wired."
+  - name: "Controls"
+    kind: gate
+    text: "Preventive (SCPs), detective (Config rules) and proactive (CloudFormation Hooks), grouped as mandatory, strongly recommended and elective."
+  - name: "Account Factory"
+    kind: trigger
+    text: "A Service Catalog product that creates an account with the baseline applied, networking included. A form instead of a runbook."
+  - name: "Customizations"
+    kind: modules
+    text: "CfCT or Account Factory for Terraform: your own StackSets and policies applied on top of the baseline, automatically."
+  - name: "Drift detection"
+    kind: loop
+    text: "Tells you when someone changed an SCP, moved an account or edited a guardrail by hand."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Control Tower is not a new service so much as an opinionated assembly of Organizations,
+CloudTrail, Config, IAM Identity Center, Service Catalog and StackSets, set up the way AWS
+recommends. The value is that a landing zone built by hand takes weeks and is subtly wrong in
+ways that surface two years later.
+
+What it creates: an organization with a **Security OU** containing a **log archive** account and
+an **audit** account, an organization CloudTrail writing into the log archive, Config recording
+everywhere and aggregating into audit, Identity Center for human access, and a set of
+**controls**.
+
+Controls come in three kinds and the distinction is worth knowing. **Preventive** controls are
+SCPs -- the action is refused. **Detective** controls are Config rules -- the action happens and
+is reported as non-compliant. **Proactive** controls are CloudFormation Hooks -- the resource is
+blocked before it is created, during the deployment. They are grouped as mandatory (always on),
+strongly recommended and elective.
+
+**Account Factory** is the piece teams interact with: a Service Catalog product that provisions
+an account with the baseline, the OU placement, the networking and the Identity Center
+assignments already applied. An account becomes a request rather than a project, which is what
+makes "one account per team per environment" practical.
+
+Its limits are real. It is opinionated, and an existing estate that does not match its opinions
+can be awkward to enrol -- though enrolling existing accounts and OUs is supported. Some regions
+are not covered. And **drift** happens when people change things by hand underneath it, which
+Control Tower detects but which still has to be repaired.
+
+The honest alternative is building the same structure yourself with Organizations and StackSets,
+which is the right choice when the opinions do not fit. Everyone else should start here, because
+the thing Control Tower prevents is a landing zone that was never finished.

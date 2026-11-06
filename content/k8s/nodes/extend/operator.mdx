@@ -1,0 +1,56 @@
+---
+id: operator
+title: "Operators"
+type: pattern
+domain: extend
+summary: "A controller for a custom resource: operational knowledge as code. The reason to run a database in Kubernetes, and the reason to be careful which one you install."
+level: advanced
+access: free
+monogram: OP
+exam: [cka]
+relations:
+  related: [crd, reconciliation]
+connects:
+  - to: reconciliation
+    text: "An operator is the same loop the built-in controllers run, applied to a kind you invented: watch, compare, act, write status."
+  - to: crd
+    text: "The CRD is the API it offers; the operator is the thing that makes an object of that kind mean something."
+  - to: statefulset
+    text: "A StatefulSet gives identity and storage; an operator adds backup, failover, promotion and version upgrades on top."
+  - to: leader-election
+    text: "More than one replica needs a lease, or two loops reconcile the same object and fight."
+  - to: rbac
+    text: "An operator's ClusterRole is often very broad, which makes installing one a trust decision as much as a technical one."
+reviewed: 2026-11-05
+---
+
+An operator is a controller plus one or more custom resources, packaging the operational
+knowledge for a piece of software. The canonical example is a database: a
+`PostgresCluster` object describes what you want, and the operator handles provisioning,
+replication, failover, backups, restores, connection pooling and minor version upgrades --
+the things a StatefulSet knows nothing about.
+
+**It is the honest answer to "can I run a database on Kubernetes".** A StatefulSet gives you
+stable names and volumes, and leaves every interesting failure to you: which replica is primary,
+how a failover is decided, how a backup is taken consistently, how a restore works, how a major
+version upgrade proceeds. A mature operator -- CloudNativePG, the Strimzi Kafka operator,
+Crunchy, Vitess -- encodes answers that have been tested by people who were paged for them.
+
+**Writing one is less work than it used to be, and the hard part is not the code.**
+`controller-runtime` with Kubebuilder or the Operator SDK generates the scaffolding and gives you
+a reconcile function. The difficulty is semantics: an idempotent reconcile (it will run again
+with nothing to do), honest status conditions with `observedGeneration`, finalizers for external
+cleanup, and never assuming you are the only writer. A reconcile that creates without checking,
+or that treats its own status write as a trigger, produces an infinite loop -- the classic first
+operator bug.
+
+**Installing someone else's is a trust decision.** Operators typically request a ClusterRole over
+the kinds they manage, often including Secrets, and sometimes cluster-wide. That is a component
+with wide permissions, in the critical path of your data, from a third party. Reading the
+ClusterRole in the chart before applying it, scoping the operator to specific namespaces where
+it supports that, and preferring projects with real maintenance are the proportionate responses.
+
+**The uninstall path is the one people discover too late.** Removing an operator while its custom
+resources still exist leaves objects with finalizers nobody will clear, which blocks namespace
+deletion. The correct order is always: delete the resources, let the operator clean up, then
+remove the operator and its CRDs.

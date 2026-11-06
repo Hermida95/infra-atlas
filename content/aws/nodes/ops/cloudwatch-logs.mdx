@@ -1,0 +1,66 @@
+---
+id: cloudwatch-logs
+title: "CloudWatch Logs"
+type: service
+domain: ops
+summary: "Log groups with retention, metric filters that turn a line into a metric, Logs Insights queries, and subscriptions to ship them elsewhere."
+monogram: CL
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [cloudwatch, flow-logs]
+connects:
+  - to: firehose
+    text: "A subscription filter into Firehose is the standard route to S3 for long retention at a tenth of the price."
+  - to: opensearch
+    text: "When the requirement is full-text search and dashboards over logs, this is where they go next."
+  - to: cloudwatch-alarms
+    text: "A metric filter plus an alarm is how 'alert me when ERROR appears' is built."
+lead: "Log groups, retention, and three ways to get value out of them. The default retention is the expensive one."
+parts:
+  - name: "Log groups and streams"
+    kind: cylinder
+    text: "A group per application or resource, holding streams -- one per instance, container or function. Retention is set on the group, and defaults to never expire."
+  - name: "Metric filters"
+    kind: trigger
+    text: "A pattern that turns matching lines into a CloudWatch metric, which an alarm can then watch. How \"alert me when ERROR appears\" is built."
+  - name: "Logs Insights"
+    kind: panel
+    text: "A query language over the groups: parse, filter, stats, sort. Charged per GB scanned, so narrow the time range first."
+  - name: "Subscription filters"
+    kind: bus
+    text: "Stream matching events in near real time to Firehose, Lambda or OpenSearch -- the route to S3 for cheap long retention."
+  - name: "Live Tail and anomalies"
+    kind: bell
+    text: "A real-time tail during an incident, and automatic pattern detection that surfaces new or spiking error shapes."
+layout: stack
+reviewed: 2026-11-05
+---
+
+CloudWatch Logs is where almost everything on AWS writes: Lambda automatically, ECS and EKS
+through log drivers, EC2 through the unified agent, and most managed services through an option
+you enable. It is reliable, integrated and, left alone, one of the larger lines on a bill.
+
+Two settings control that. **Retention never expires by default** -- set it per log group,
+deliberately, and the number is usually far smaller than people assume once there is an archive
+elsewhere. And ingestion is the dominant charge, so the second lever is not sending what you do
+not need: debug logging left on in production is the usual culprit.
+
+The pattern for long retention is a **subscription filter to Data Firehose**, landing compressed
+Parquet in S3 with hourly partitions, queried with Athena. CloudWatch Logs then holds days
+rather than years, and the archive costs a fraction per gigabyte. Export to S3 also exists for
+one-off bulk extraction, but the subscription is the standing arrangement.
+
+For getting value out: **metric filters** convert a matching line into a numeric metric, which
+is how a log pattern becomes an alarm -- the canonical use being a filter on specific CloudTrail
+events such as root account usage or a security group change. **Logs Insights** is the query
+language for investigation (`fields`, `filter`, `parse`, `stats`, `sort`), charged per gigabyte
+scanned, so the habit worth forming is narrowing the time range before refining the query.
+**Live Tail** replaces `tail -f` during an incident.
+
+Design the log groups deliberately: one per application and environment, retention set at
+creation, and **structured JSON** rather than free text, because Logs Insights can then filter
+on fields instead of regex. When full-text search, dashboards or long interactive retention are
+the requirement, the answer is to ship to **OpenSearch** rather than to push CloudWatch Logs
+further than it goes.

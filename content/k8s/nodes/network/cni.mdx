@@ -1,0 +1,68 @@
+---
+id: cni
+title: "CNI"
+type: concept
+domain: network
+summary: "The plugin that gives a Pod its IP and makes Pod-to-Pod routing work. Kubernetes ships none, so this is a choice every cluster has to make."
+logo: cncf
+level: intermediate
+access: free
+exam: [cka, cks]
+relations:
+  related: [kube-proxy, network-policy]
+connects:
+  - to: kubelet
+    text: "The kubelet calls the CNI binary when it creates a Pod sandbox, and a failure there is a Pod stuck in ContainerCreating with a network error."
+  - to: network-policy
+    text: "NetworkPolicy objects do nothing unless the CNI enforces them, which is why a policy can be applied and silently ignored."
+  - to: kube-proxy
+    text: "An eBPF-based plugin can take over Service handling as well, replacing kube-proxy and its iptables rules entirely."
+  - to: pod
+    text: "Every Pod gets its address from here, so a plugin that hands out real VPC addresses makes address exhaustion a cluster design constraint."
+lead: "What any CNI has to provide, and where implementations diverge."
+parts:
+  - name: "IP allocation"
+    kind: sheet
+    text: "An address per Pod from a pool. Either a cluster-internal CIDR carved per node, or real addresses from the underlying network."
+  - name: "Routing"
+    kind: lanes
+    text: "Every Pod reachable from every other Pod without NAT -- the one rule Kubernetes actually requires. Overlay, native routing or BGP."
+  - name: "Policy enforcement"
+    kind: shell
+    text: "NetworkPolicy, if the plugin implements it. Flannel does not; Calcico, Cilium and the cloud plugins do."
+  - name: "Datapath"
+    kind: bus
+    text: "iptables, IPVS or eBPF. The choice shows up as latency under load and as how large a cluster can get."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Kubernetes requires that every Pod has its own IP and that every Pod can reach every other Pod
+without NAT. It does not implement any of it. The Container Network Interface is the contract:
+the kubelet invokes a plugin when it creates a Pod sandbox, the plugin sets up the interface and
+returns an address. Everything about how that works is the plugin's business.
+
+**The choice has three practical consequences.** Whether NetworkPolicy works at all -- Flannel,
+still common in small clusters, does not enforce it, so policies apply cleanly and do nothing,
+which is a security failure with no error message. Whether Pod addresses are routable outside the
+cluster -- the AWS VPC CNI gives Pods real VPC IPs, so security groups and flow logs see them,
+at the price of running out of addresses per node and per subnet. And how large the cluster can
+grow before the data path becomes the bottleneck.
+
+**Overlay versus native routing** is the other axis. An overlay (VXLAN, Geneve) encapsulates Pod
+traffic so it can cross any underlying network, costs some MTU and a little CPU, and works
+everywhere. Native routing (Calico with BGP, the cloud CNIs) puts Pod addresses in the real
+network, which is faster and more observable, and requires the network to cooperate. MTU
+mismatch between the two is the cause of the classic bug where small requests work and large
+ones hang.
+
+**eBPF has changed what a CNI can take over.** Cilium can implement policy, Service load
+balancing, encryption and observability in the kernel, replacing kube-proxy and offering
+identity-based policy and L7 rules that the NetworkPolicy API cannot express. That is why "which
+CNI" is now closer to a platform decision than a plumbing one.
+
+**When a Pod cannot start with a network error**, the trail is the kubelet's log on that node and
+the CNI agent's own Pod logs. The two most common causes are exhaustion -- no free addresses in
+the node's allocated range, which on the VPC CNI is also a per-instance ENI limit -- and the
+agent DaemonSet not running on a new node yet, which makes early Pods on fresh nodes fail and
+then succeed on retry.

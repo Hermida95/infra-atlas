@@ -1,0 +1,51 @@
+---
+id: keda
+title: "KEDA"
+type: tool
+domain: scaling
+summary: "Event-driven autoscaling: replicas from queue depth, topic lag or any external metric, including down to zero. It generates an HPA rather than replacing it."
+level: intermediate
+access: free
+monogram: KED
+exam: [ckad]
+relations:
+  related: [hpa]
+connects:
+  - to: hpa
+    text: "A ScaledObject produces a managed HPA under the hood, so scaling behaviour and stabilisation are still the HPA's fields."
+  - to: job
+    text: "ScaledJob creates one Job per batch of messages instead of scaling a Deployment, which fits work that should run once and finish."
+  - to: metrics
+    text: "Its scalers read the source directly -- Kafka, SQS, Prometheus, a database -- rather than relying on in-cluster metrics."
+reviewed: 2026-11-05
+---
+
+KEDA scales workloads on whatever actually drives them. A `ScaledObject` names a target workload
+and one or more triggers -- Kafka consumer lag, SQS queue length, RabbitMQ messages, a Prometheus
+query, a cron schedule, rows in a database -- and KEDA converts them into a
+HorizontalPodAutoscaler with an external metric it serves itself.
+
+**Queue depth is a better signal than CPU for queue consumers**, and this is the main reason to
+use it. A worker pulling from SQS may be at 15% CPU with ten thousand messages waiting, because
+it spends its time on network I/O. CPU-based scaling never reacts; queue length reacts
+immediately and in proportion. The same applies to Kafka lag, which is the single most useful
+autoscaling metric a streaming service has.
+
+**Scale to zero is the capability nothing else offers.** A plain HPA has a minimum of one. KEDA
+can take a Deployment to zero replicas when there is no work and bring it back when a message
+arrives -- which for a dozen infrequently used internal services is a meaningful amount of
+cluster capacity returned. The cost is cold-start latency on the first message, so it fits
+asynchronous work far better than request-serving.
+
+**`ScaledJob` is the other half, and it is underused.** Rather than scaling a long-running
+Deployment, it creates a Job per unit of work: each message becomes a Pod that processes it and
+exits. For batch work that is genuinely per-item -- a video transcode, a report, a large import
+-- that is a cleaner model than a worker pool, with retries and completion semantics from the
+Job object.
+
+**Operationally it is two components with different failure modes.** The operator reconciles
+ScaledObjects into HPAs, and the metrics adapter serves the external metric API; if the adapter is
+unavailable, HPAs lose their metric and stop adjusting while workloads keep running at their
+current size. Credentials for the triggers come from a
+`TriggerAuthentication` object, which can use a ServiceAccount's projected token -- so the
+scaling path needs no static cloud credential either.

@@ -1,0 +1,69 @@
+---
+id: rolling-update
+title: "Rolling update"
+type: concept
+domain: workloads
+summary: "Replace Pods a few at a time, keeping capacity. The default settings are not zero-downtime on their own -- that needs probes and a drain on shutdown."
+level: core
+access: free
+monogram: RU
+exam: [ckad, cka]
+relations:
+  related: [deployment, graceful-shutdown]
+connects:
+  - to: deployment
+    text: "maxSurge and maxUnavailable live in the Deployment's strategy, and together they set how much extra capacity and how much loss you accept."
+  - to: probes
+    text: "A new Pod counts as available only when it is Ready, so the readiness probe is the gate the rollout waits on."
+  - to: graceful-shutdown
+    text: "Old Pods are sent SIGTERM while they may still be receiving connections, which is why a preStop delay is the usual fix for 502s during deploys."
+  - to: endpointslice
+    text: "Traffic follows endpoints, and endpoint propagation to every node takes a moment, which is the window a request can be sent to a dying Pod."
+  - to: progressive-delivery
+    text: "A rolling update has no notion of metrics or of stopping: canary and blue-green controllers add the judgement it lacks."
+lead: "The two numbers, and what each one buys."
+parts:
+  - name: "maxUnavailable"
+    kind: split
+    text: "How many Pods may be missing during the roll. 25% by default, so a 4-replica Deployment runs on 3 while it updates."
+  - name: "maxSurge"
+    kind: lanes
+    text: "How many extra Pods may exist above the replica count. 25% by default, and the thing to raise for a faster roll if you have the capacity."
+  - name: "minReadySeconds"
+    kind: trigger
+    text: "How long a new Pod must be Ready before it counts. Zero by default, which means a Pod that passes one probe and dies still advanced the rollout."
+  - name: "progressDeadlineSeconds"
+    kind: bell
+    text: "When to declare the rollout failed. The only thing that turns a permanently stuck deploy into a non-zero exit code."
+layout: row
+reviewed: 2026-11-05
+---
+
+A rolling update replaces Pods incrementally: bring up some new ones, wait for them to be Ready,
+take down some old ones, repeat. The two numbers that control it are `maxSurge` (how far above
+the replica count you may go) and `maxUnavailable` (how far below). Setting `maxUnavailable: 0`
+with `maxSurge: 1` is the conservative shape -- never less capacity than you asked for, one
+extra Pod at a time -- and it needs room in the cluster to work.
+
+**"Rolling update" and "zero downtime" are not the same claim**, and the gap is where most
+deploy-time errors come from. Three things have to be true as well. First, a readiness probe that
+is only satisfied when the application can actually serve -- otherwise new Pods take traffic
+before they are ready. Second, a shutdown sequence that drains: when a Pod is deleted, endpoint
+removal and `SIGTERM` happen concurrently, and the endpoint change takes time to reach every
+node's kube-proxy, so a Pod that exits promptly on SIGTERM will refuse requests that were already
+in flight. Third, a `terminationGracePeriodSeconds` long enough to finish them.
+
+**The standard fix for the second point is a `preStop` hook that sleeps** for a few seconds: the
+container keeps serving while the endpoint deletion propagates, then exits cleanly. It feels like
+a hack and it is the documented answer; `sleep 5` plus a grace period of 30 removes almost all
+502s during deploys. The alternative -- having the app handle SIGTERM by failing readiness,
+waiting, then draining -- is better and requires application changes.
+
+**`minReadySeconds` is underused.** With it at zero, a Pod that becomes Ready and crashes two
+seconds later has already let the rollout advance, so a bad version can march through every
+replica. Ten or fifteen seconds costs a slower deploy and catches the class of failure that
+happens on first real traffic.
+
+**And `Recreate` has one legitimate use**: a workload that cannot have two versions running at
+once -- an incompatible schema, a single-writer lock. It accepts downtime explicitly, which is
+better than pretending a rolling update is safe for it.

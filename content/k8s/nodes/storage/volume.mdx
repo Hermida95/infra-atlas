@@ -1,0 +1,68 @@
+---
+id: volume
+title: "Volume"
+type: concept
+domain: storage
+summary: "A directory the Pod declares and its containers mount. Its lifetime is the Pod's, not the container's, which is the only reason restarts do not lose data."
+level: core
+access: free
+monogram: VOL
+exam: [ckad, cka]
+relations:
+  related: [emptydir, persistent-volume-claim]
+connects:
+  - to: pod
+    text: "Volumes belong to the Pod and are mounted per container, which is how two containers in a Pod share files."
+  - to: persistent-volume-claim
+    text: "For data that must outlive the Pod the volume source is a claim, which is the only durable option among them."
+  - to: volume-projection
+    text: "ConfigMaps, Secrets and the ServiceAccount token are all mounted as volumes, so configuration arrives through the same mechanism as data."
+  - to: kubelet
+    text: "The kubelet sets the mounts up before the containers start, so a volume that will not mount is a Pod stuck in ContainerCreating."
+lead: "The sources worth knowing, ordered by how long the data survives."
+parts:
+  - name: "emptyDir"
+    kind: sheet
+    text: "Created with the Pod, deleted with it. Survives a container restart and nothing else. Scratch space and sharing between containers."
+  - name: "configMap and secret"
+    kind: meta
+    text: "Read-only files from an API object, updated in place when the object changes -- unless subPath was used, which freezes them."
+  - name: "persistentVolumeClaim"
+    kind: cylinder
+    text: "Real storage with its own lifecycle, outliving the Pod. The only source for data you cannot lose."
+  - name: "projected"
+    kind: modules
+    text: "Several sources combined into one directory: tokens, ConfigMaps, Secrets, downward API."
+  - name: "hostPath"
+    kind: node
+    text: "A path on the node. Necessary for node agents, and a complete container escape for anything else."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A volume is declared on the Pod and mounted into containers at a path. The key fact is the
+lifetime: a volume belongs to the Pod, so it survives a container crashing and being restarted
+by the kubelet, and it is destroyed when the Pod is -- which includes every rescheduling, every
+rolling update and every node failure. Only a `persistentVolumeClaim` source breaks that rule.
+
+**`emptyDir` is the one people misuse.** It is genuinely useful: scratch space, a cache, a
+directory two containers in a Pod share, a place for an init container to leave something. It is
+not storage. A Pod rescheduled to another node starts with an empty one, so an
+`emptyDir` holding anything you would miss is a data-loss incident waiting for a node upgrade.
+Two details matter: `medium: Memory` makes it a tmpfs that counts against the Pod's memory limit,
+and `sizeLimit` is what stops a runaway log from filling the node's disk and triggering eviction.
+
+**`subPath` has a trap worth knowing before you hit it.** Mounting a single key from a ConfigMap
+with `subPath` gives you one file rather than a directory -- which is what you want for
+`/etc/nginx/nginx.conf` -- but it breaks the automatic update: the file is copied once and never
+refreshed when the ConfigMap changes. Without `subPath`, the kubelet keeps the mounted contents
+in sync (within a minute or so, via a symlink swap). Half the "my ConfigMap change did not take
+effect" reports are this.
+
+**`hostPath` is the security answer to several questions, and the wrong one.** Mounting
+`/var/run/docker.sock`, `/`, or `/etc` into a Pod is a full escape to node root: anyone who can
+create such a Pod owns the cluster. Legitimate uses are node agents in a DaemonSet -- a log
+collector reading `/var/log`, a CSI driver, a monitoring agent -- and nothing else.
+Blocking it is one of the main jobs of Pod Security Admission's baseline level. For "I need a
+local disk for performance", local PersistentVolumes are the supported alternative, with real
+scheduling awareness.

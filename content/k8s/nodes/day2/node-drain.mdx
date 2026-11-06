@@ -1,0 +1,53 @@
+---
+id: node-drain
+title: "Cordon & drain"
+type: howto
+domain: day2
+summary: "Stop scheduling on a node, then evict what is on it through the eviction API -- which is where PodDisruptionBudgets are enforced."
+level: core
+access: free
+monogram: DR
+exam: [cka]
+relations:
+  related: [pdb, taints-and-tolerations]
+connects:
+  - to: pdb
+    text: "Drain uses the eviction API, so a budget can refuse an eviction and the drain waits -- which is both the protection and the usual reason it hangs."
+  - to: taints-and-tolerations
+    text: "Cordon adds the unschedulable taint, so draining is really tainting plus evicting."
+  - to: daemonset
+    text: "DaemonSet Pods are skipped by default, because the node agent should keep running while the workloads leave."
+  - to: graceful-shutdown
+    text: "Each evicted Pod gets its normal termination sequence, so a workload that ignores SIGTERM makes every drain slow."
+reviewed: 2026-11-05
+---
+
+`kubectl cordon` marks a node unschedulable -- it adds the
+`node.kubernetes.io/unschedulable` taint, so nothing new lands there while everything already
+running continues. `kubectl drain` cordons and then evicts the Pods, one API call per Pod, through
+the eviction subresource rather than by deleting them.
+
+**Using the eviction API is the whole point.** A delete bypasses PodDisruptionBudgets; an eviction
+respects them. So a drain on a node holding one of three replicas protected by
+`maxUnavailable: 1` succeeds, and a drain that would take the second one waits until the first
+replacement is Ready. That is the mechanism that makes a rolling node upgrade safe, and it only
+works if budgets exist.
+
+**Two flags are always needed and worth understanding rather than copying.**
+`--ignore-daemonsets` is required because DaemonSet Pods will be recreated on the same node
+immediately; skipping them is correct, since the log shipper and CNI agent should keep working
+while the node empties. `--delete-emptydir-data` is required when any Pod has an
+`emptyDir`, and it is a genuine confirmation: that data is being destroyed. If a Pod's
+`emptyDir` holds something you need, the drain is not the time to discover it.
+
+**A hanging drain has a short list of causes**, and the command prints which. A PodDisruptionBudget
+that cannot be satisfied -- often because the workload is already unhealthy, which
+`unhealthyPodEvictionPolicy: AlwaysAllow` fixes. A Pod not managed by any controller, which
+nothing will recreate elsewhere, so drain refuses without
+`--force`. A Pod with a very long `terminationGracePeriodSeconds`. Or a workload whose replicas
+cannot be scheduled anywhere else, which makes the eviction permanently unsafe.
+
+**Remember to uncordon.** A cordoned node that was never uncordoned is capacity you are paying for
+and not using, and it is invisible unless someone looks: `kubectl get nodes` shows
+`Ready,SchedulingDisabled`. It is one of the most common findings in a cluster review, usually
+left over from an incident months earlier.

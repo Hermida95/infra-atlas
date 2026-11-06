@@ -1,0 +1,49 @@
+---
+id: immutable-config
+title: "Immutable ConfigMaps & Secrets"
+type: concept
+domain: config
+summary: "A one-way flag that forbids changes to the data. It prevents accidental edits and, more importantly, removes the kubelet watch that costs real API load at scale."
+level: intermediate
+access: free
+monogram: IMM
+exam: [cka]
+relations:
+  related: [configmap, secret]
+connects:
+  - to: configmap
+    text: "Setting immutable true means the data can never be edited again: the only change is to create a new object and point the Pod at it."
+  - to: apiserver
+    text: "The kubelet stops watching immutable objects, which removes a per-Pod watch and measurably reduces control plane load in large clusters."
+  - to: kustomize
+    text: "Name-suffixed generated ConfigMaps are the natural fit: each version is a new object, so immutability costs nothing."
+reviewed: 2026-11-05
+---
+
+Setting `immutable: true` on a ConfigMap or Secret makes its `data` unchangeable. The API server
+rejects any update to the data from then on, and the flag itself cannot be removed -- the only
+path forward is to delete the object or create a new one under a different name.
+
+**The performance reason is the serious one.** The kubelet watches every ConfigMap and Secret
+mounted by a Pod on its node so it can keep the files in sync. In a cluster with thousands of
+Pods, that is thousands of watches against the API server, each consuming memory in the watch
+cache and bandwidth on every change. Immutable objects do not need watching, so the kubelet skips
+them, and clusters at scale see a real drop in API server load. This was the motivation for the
+feature.
+
+**The safety reason is the one teams feel.** An immutable Secret cannot be edited in place by
+someone debugging at 2am, so the change has to be a new object and therefore a new Pod template
+and therefore a rollout -- which is auditable, reversible and visible in git. It converts the
+whole category of "someone changed a ConfigMap and the cluster drifted from the repository" into
+something that cannot happen.
+
+**It fits the versioned-name pattern naturally.** Kustomize's ConfigMap and Secret generators
+append a content hash to the name (`app-config-7f8d9`), so every change is a new object and the
+Deployment references the new name -- which already triggers a rollout and already gives you the
+old version to roll back to. Immutability is then free, because nothing was ever going to edit
+those objects anyway. Helm users get the equivalent by hashing the content into a Pod annotation.
+
+**The one thing to plan is cleanup.** A new object per change means objects accumulate, and
+nothing deletes the old ones automatically. Kustomize's pruning or a GitOps controller's garbage
+collection handles it; without either, a busy cluster slowly fills with superseded
+configuration that still counts against quota and etcd.

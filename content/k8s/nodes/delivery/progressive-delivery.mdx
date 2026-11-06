@@ -1,0 +1,68 @@
+---
+id: progressive-delivery
+title: "Progressive delivery"
+type: pattern
+domain: delivery
+summary: "Canary and blue-green releases that judge themselves on metrics. A rolling update can only ask whether Pods are Ready; this asks whether the release is good."
+level: advanced
+access: free
+monogram: PD
+exam: [ckad]
+relations:
+  related: [rolling-update, argocd]
+connects:
+  - to: rolling-update
+    text: "A rolling update has no notion of success beyond readiness, so it will happily replace every replica with a version that returns errors."
+  - to: gateway-api
+    text: "Weighted backends make a canary a routing field rather than a trick with replica counts, which is what controllers now target."
+  - to: metrics
+    text: "The analysis step queries Prometheus for error rate and latency, which is what turns a release into a decision."
+  - to: service-mesh
+    text: "A mesh or gateway can split traffic by percentage independently of replica counts, which is what makes a 5% canary possible."
+lead: "The strategies, and what each one costs."
+parts:
+  - name: "Canary"
+    kind: split
+    text: "A small share of traffic to the new version, increased if the metrics hold. Cheap in capacity, and needs real traffic splitting."
+  - name: "Blue-green"
+    kind: lanes
+    text: "Both versions fully deployed, traffic switched at once. Instant rollback, double the capacity while it lasts."
+  - name: "Analysis"
+    kind: bars
+    text: "Queries against Prometheus or a provider at each step: error rate, latency, a business metric. The step that makes it progressive rather than slow."
+  - name: "Automatic rollback"
+    kind: trigger
+    text: "Failing the analysis sends traffic back and stops the rollout, with no human in the loop at 3am."
+layout: row
+reviewed: 2026-11-05
+---
+
+A rolling update's only question is whether new Pods become Ready. A version that starts
+successfully and returns 500s to a third of requests passes that test and rolls through the whole
+fleet. Progressive delivery adds the missing question -- is this release actually good -- and
+answers it from metrics, automatically, before the release is complete.
+
+**Argo Rollouts and Flagger are the two implementations.** Argo Rollouts replaces the Deployment
+with a `Rollout` object carrying a strategy: steps of traffic weight, pauses, and
+`AnalysisTemplate` references that query a metrics provider between steps. Flagger keeps the
+Deployment and drives the traffic shifting around it. Both support canary and blue-green, both
+integrate with meshes and ingress controllers for the traffic splitting, and both can abort and
+roll back on their own.
+
+**Traffic splitting is the prerequisite people underestimate.** Shifting 5% of traffic needs
+something that can weight routes -- a mesh, an ingress controller that supports canary
+annotations, or Gateway API's weighted backends. Without one, the only lever is replica counts:
+1 new Pod out of 20 is roughly 5%, which is approximate, coupled to capacity, and useless below
+that granularity.
+
+**The analysis is the part that requires thought.** A canary judged on "no 500s in 60 seconds" at
+5% traffic may see thirty requests -- not enough signal to conclude anything. Useful analysis
+needs enough traffic and enough time per step, metrics that reflect the user (error rate and
+latency at the right percentile, perhaps a conversion metric), and a baseline to compare against
+rather than an absolute threshold.
+
+**It is worth the complexity for some services and not for others.** A payment path or a
+public API, where a bad release is expensive and a rollback is slow, justifies it. An internal
+tool with ten users does not -- there, a rolling update with a good readiness probe and a known
+`kubectl rollout undo` is the proportionate answer, and pretending otherwise just adds machinery
+nobody maintains.

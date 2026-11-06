@@ -2,8 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
-import { domainById, type GraphNode, neighbours, nodeById } from "@/lib/graph";
+import { edgeTextBetween, type GraphNode, MAP, type World } from "@/lib/graph";
 import { Mark } from "../brain/Mark";
+import { inline } from "../Prose";
 import { DockerLab, freshDockerLab } from "./labs/DockerLab";
 import type { TeardownStore } from "./TeardownScene";
 
@@ -12,9 +13,17 @@ const TeardownScene = dynamic(() => import("./TeardownScene"), { ssr: false });
 /** Interactive labs, keyed by the `lab` id declared in a node's frontmatter. */
 const LABS = { "docker-layers": DockerLab } as const;
 
-type Props = { node: GraphNode; onClose: () => void; onSelect: (node: GraphNode) => void };
+type Props = {
+  node: GraphNode;
+  onClose: () => void;
+  onSelect: (node: GraphNode) => void;
+  /** Which graph the node belongs to. Defaults to the journey map. */
+  world?: World;
+  /** Label of the button that leaves the teardown, when it is not the journey map. */
+  backLabel?: string;
+};
 
-export function Teardown({ node, onClose, onSelect }: Props) {
+export function Teardown({ node, onClose, onSelect, world = MAP, backLabel = "Back to map" }: Props) {
   const Lab = node.lab ? LABS[node.lab as keyof typeof LABS] : undefined;
   const store = useRef<TeardownStore>({
     act: -1,
@@ -58,7 +67,7 @@ export function Teardown({ node, onClose, onSelect }: Props) {
 
   return (
     <section className="teardown" ref={scroller} aria-label={`${node.title} taken apart`}>
-      <button type="button" className="btn td-back" onClick={onClose}>Back to map</button>
+      <button type="button" className="btn td-back" onClick={onClose}>{backLabel}</button>
       <div className="td-grid">
         <div
           className="td-stage"
@@ -79,15 +88,15 @@ export function Teardown({ node, onClose, onSelect }: Props) {
         <div className="td-col" ref={column}>
           <section className="td-sec intro" data-part="">
             <Mark node={node} size={64} />
-            <p className="tag">{domainById.get(node.domain)?.name}</p>
+            <p className="tag">{world.domainById.get(node.domain)?.name}</p>
             <h2>{node.title}</h2>
-            <p>{node.lead ?? node.summary}</p>
+            <p>{inline(node.lead ?? node.summary)}</p>
             <p className="td-hint">Scroll to take it apart</p>
           </section>
           {node.parts.map((p, i) => (
             <section key={p.name} className="td-sec" data-part={i} ref={i === 0 ? firstPart : undefined}>
               <h3>{p.name}</h3>
-              <p>{p.text}</p>
+              <p>{inline(p.text)}</p>
             </section>
           ))}
           {Lab && (
@@ -97,18 +106,22 @@ export function Teardown({ node, onClose, onSelect }: Props) {
           )}
           <section className="td-sec outro" data-part="">
             <h3>Connected concepts</h3>
-            <div className="links">
-              {[...(neighbours.get(node.id) ?? [])].map((id) => {
-                const n = nodeById.get(id)!;
+            <ul className="td-links">
+              {[...(world.neighbours.get(node.id) ?? [])].map((id) => {
+                const n = world.nodeById.get(id)!;
+                const text = edgeTextBetween(world, node.id, id);
                 return (
-                  <button key={id} type="button" className="chip" onClick={() => onSelect(n)}>
-                    {n.title}
-                  </button>
+                  <li key={id}>
+                    <button type="button" className="chip" onClick={() => onSelect(n)}>
+                      {n.title}
+                    </button>
+                    {text && <span>{inline(text)}</span>}
+                  </li>
                 );
               })}
-            </div>
+            </ul>
             <div className="row">
-              <button type="button" className="btn" onClick={onClose}>Back to map</button>
+              <button type="button" className="btn" onClick={onClose}>{backLabel}</button>
             </div>
           </section>
         </div>

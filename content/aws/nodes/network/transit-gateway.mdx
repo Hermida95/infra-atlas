@@ -1,0 +1,66 @@
+---
+id: transit-gateway
+title: "Transit Gateway"
+type: service
+domain: network
+summary: "A regional hub that every VPC, VPN and Direct Connect attaches to, with its own route tables for segmenting who may reach whom."
+monogram: TG
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [vpc-peering, site-to-site-vpn, multi-region]
+connects:
+  - to: ram
+    text: "One Transit Gateway shared with the organization, rather than one per account to be stitched together."
+  - to: direct-connect
+    text: "A Direct Connect gateway attaches to it, so one circuit reaches every VPC in the region."
+  - to: network-firewall
+    text: "The inspection pattern: spoke routes point at the Transit Gateway, which sends traffic through a firewall VPC and back."
+lead: "A router in the middle, with route tables of its own. Everything hub-and-spoke on AWS is this."
+parts:
+  - name: "Attachments"
+    kind: satellites
+    text: "One per VPC, VPN, Direct Connect gateway, peered Transit Gateway or Connect. The attachment lands in subnets you choose, one per zone."
+  - name: "Its own route tables"
+    kind: lanes
+    text: "Separate from the VPCs'. This is where segmentation happens: a table per environment, so dev attachments cannot route to prod."
+  - name: "Associations and propagations"
+    kind: split
+    text: "An attachment is associated with one table (which routes it uses) and can propagate its routes into many (who can reach it)."
+  - name: "Appliance mode"
+    kind: loop
+    text: "Keeps both directions of a flow on the same zone's appliance, which stateful firewalls need or they drop the return packet."
+  - name: "Shared with the organization"
+    kind: shell
+    text: "Shared through RAM, so one gateway in a network account serves every workload account."
+layout: stack
+reviewed: 2026-11-05
+---
+
+A Transit Gateway is a regional router. Everything attaches to it -- VPCs, site-to-site VPNs, a
+Direct Connect gateway, other Transit Gateways in other regions -- and it routes between them.
+It replaces a mesh of peering connections with a hub, and it is transitive, which peering is
+not.
+
+The feature that makes it more than a convenience is its **own route tables**. An attachment is
+*associated* with exactly one table, which decides what that attachment can route to, and it
+*propagates* its own routes into any number of tables, which decides who can reach it. Those two
+words are the exam, and the pattern they enable is segmentation: a production table and a
+development table that do not propagate into each other, plus a shared-services table both
+propagate into. Dev and prod then reach the shared services and never each other, enforced in
+the network rather than in security groups.
+
+The inspection pattern builds on the same mechanism. Spoke VPCs send `0.0.0.0/0` to the Transit
+Gateway, a dedicated table sends that traffic to an inspection VPC running Network Firewall or a
+Gateway Load Balancer, and the inspected traffic comes back out to its destination. For anything
+stateful, turn on **appliance mode** on the inspection attachment: without it the return path
+can pick a different zone's appliance, the firewall has no state for the flow, and it drops the
+packet.
+
+Practical notes. It is **regional**: cross-region needs Transit Gateway peering, which is
+encrypted over the AWS backbone. Share it with the organization through **RAM** rather than
+building one per account. Billing is per attachment per hour plus per gigabyte processed, so it
+is not free the way peering is -- the trade is operability. And CIDRs still must not overlap:
+IPAM is the tool that stops that happening, because it is the one thing a Transit Gateway cannot
+route around.

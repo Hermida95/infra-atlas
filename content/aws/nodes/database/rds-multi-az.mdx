@@ -1,0 +1,65 @@
+---
+id: rds-multi-az
+title: "Multi-AZ deployments"
+type: service
+domain: database
+summary: "A synchronous standby in a second zone with automatic failover. It buys availability, not read throughput: the standby serves nothing."
+monogram: MAD
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [rds, multi-az]
+  alternative_to: [read-replica]
+connects:
+  - to: az
+    text: "Synchronous replication only works because the zones are close enough for the write latency to be acceptable."
+  - to: read-replica
+    text: "The pair that gets confused in every exam: Multi-AZ for uptime, read replicas for reads. Multi-AZ cluster deployments do both."
+lead: "Two shapes with the same name. One buys availability; the newer one buys availability and reads."
+parts:
+  - name: "Multi-AZ instance"
+    kind: zones
+    text: "One standby in a second zone, synchronous, serving nothing. Failover in 60-120 seconds by flipping the endpoint's DNS."
+  - name: "Multi-AZ DB cluster"
+    kind: orbit
+    text: "One writer and two readable standbys across three zones, semi-synchronous. Failover in under 35 seconds, and the readers actually serve."
+  - name: "The endpoint"
+    kind: bus
+    text: "The application connects to a DNS name, never an address. Failover changes what it resolves to -- which is why connection pools need a short DNS TTL."
+  - name: "What triggers it"
+    kind: trigger
+    text: "Zone failure, host failure, storage failure, network loss, and also a patch or an instance-type change, which is how maintenance becomes a 60-second blip."
+  - name: "Backups come free"
+    kind: discs
+    text: "Snapshots are taken from the standby, so the backup window stops causing I/O latency on the primary."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Multi-AZ is the availability feature, and the single most common mistake in RDS design is
+expecting it to help with read load. In the classic **Multi-AZ instance** deployment the standby
+serves nothing: no reads, no connections, nothing. It exists to take over. Replication is
+synchronous, so there is no data loss, and failover takes roughly 60 to 120 seconds, during
+which the endpoint's DNS record is repointed at the standby.
+
+Because failover is DNS, the application has to cooperate. A connection pool that caches the
+resolved address, or a JVM with an infinite DNS cache, will keep trying the dead instance long
+after AWS has finished failing over. Short TTLs and a pool that retries on connection failure
+are part of the design, not an afterthought.
+
+The newer **Multi-AZ DB cluster** deployment changes the trade-off: one writer and **two
+readable standbys** across three zones, semi-synchronous replication, failover typically under
+35 seconds, and a reader endpoint that actually serves traffic. It is available for MySQL and
+PostgreSQL and costs more, but it collapses the "Multi-AZ or read replica" question into one
+answer where it is supported.
+
+What triggers a failover is broader than a disaster: a zone outage, an instance or storage
+failure, and also **planned maintenance** -- patching and instance resizing are applied to the
+standby and then failed over, which turns an hour of downtime into about a minute. That is a
+real operational benefit on its own.
+
+The exam distinction to keep crisp: **Multi-AZ is availability, within one region, synchronous,
+automatic.** **Read replicas are read scale, asynchronous, possibly cross-region, promoted
+manually.** They are not alternatives, and a scenario that states both requirements wants both
+features.

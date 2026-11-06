@@ -1,0 +1,50 @@
+---
+id: sns
+title: "SNS"
+type: service
+domain: integration
+summary: "Publish once, deliver to many: SQS queues, Lambda functions, HTTPS endpoints, email, SMS and mobile push. FIFO topics for ordered fan-out."
+monogram: SNS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [eventbridge]
+  alternative_to: [eventbridge]
+connects:
+  - to: sqs
+    text: "The fan-out pattern: a topic in front of queues, so adding a consumer never touches the producer."
+  - to: cloudwatch-alarms
+    text: "Almost every alarm, budget and pipeline approval notifies through a topic."
+reviewed: 2026-11-05
+---
+
+SNS is publish-subscribe: a publisher sends to a **topic**, and every subscriber gets a copy.
+The publisher knows nothing about who is listening, which is what makes adding a consumer a
+zero-change operation on the producing side.
+
+Subscribers can be SQS queues, Lambda functions, HTTPS endpoints, email, SMS, mobile push, Data
+Firehose or an event bus. **Topic types** mirror SQS: standard for unlimited throughput and
+best-effort ordering, FIFO for strict ordering and deduplication -- and a FIFO topic can only
+deliver to FIFO queues.
+
+The pattern worth naming is **fan-out**: SNS in front of several SQS queues. Each consumer gets
+its own queue, its own backlog, its own retry behaviour and its own dead-letter queue, so one
+slow or broken consumer does not affect the others. SNS straight to Lambda is simpler and has no
+buffer: a throttled or failing function loses the delivery after the retry policy is exhausted
+unless a dead-letter queue is attached. For anything that must not be lost, put a queue in
+between.
+
+**Message filtering** is what stops every subscriber receiving everything. A subscription filter
+policy matches on message attributes or on the message body, so one topic serves many consumers
+each taking only their slice, instead of a topic per event type.
+
+Other details that come up: **message delivery retries** are built in with an exponential policy
+and per-subscription dead-letter queues; **encryption** uses KMS and the key policy must allow
+the publishing service; and **cross-account** publishing and subscribing is a topic policy,
+which is a resource-based policy like any other.
+
+Against EventBridge: SNS is fan-out to subscribers you register, with high throughput and low
+latency. EventBridge routes on content with a schema registry, archive and replay, and
+integrates with hundreds of SaaS and AWS event sources. For simple broadcast, SNS. For
+event-driven architecture with many producers and routing rules, EventBridge.

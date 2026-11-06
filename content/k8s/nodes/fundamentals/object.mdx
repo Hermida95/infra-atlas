@@ -1,0 +1,71 @@
+---
+id: object
+title: "Kubernetes object"
+type: concept
+domain: fundamentals
+hub: true
+summary: "Every noun in Kubernetes is a record in one database with the same five fields. Learn the shape once and every resource you meet afterwards is already familiar."
+logo: kubernetes
+level: core
+access: free
+exam: [ckad, cka]
+relations:
+  related: [reconciliation, api-groups, kubectl]
+connects:
+  - to: apiserver
+    text: "The API server is the only thing that writes an object. Nothing in the cluster talks to etcd directly, so the object is whatever the API says it is."
+  - to: namespace
+    text: "Most objects are namespaced, which decides their name's scope and which RBAC rules reach them."
+  - to: labels
+    text: "Labels live in metadata, and they are how one object finds others without naming them."
+  - to: server-side-apply
+    text: "Several writers on one object collide in the spec; field ownership is what makes the collision an error instead of a silent overwrite."
+lead: "A Pod, a Service and a CustomResource you have never seen are the same five fields in a different order."
+parts:
+  - name: "apiVersion and kind"
+    kind: meta
+    text: "Which API group and version this record belongs to, and which schema validates it. `apps/v1` and `Deployment` together pick the endpoint the request goes to."
+  - name: "metadata"
+    kind: sheet
+    text: "Name, namespace, labels, annotations, ownerReferences, finalizers, resourceVersion. Identity and bookkeeping, none of it about what the object does."
+  - name: "spec"
+    kind: code
+    text: "What you want. The only part you write, and the part a controller reads as an instruction."
+  - name: "status"
+    kind: panel
+    text: "What is actually true, written by a controller and never by you. The gap between spec and status is the work still outstanding."
+  - name: "resourceVersion"
+    kind: ring
+    text: "An opaque version stamp. It powers optimistic concurrency on writes and watch streams on reads, which is how controllers avoid polling."
+layout: stack
+reviewed: 2026-11-05
+---
+
+Everything in Kubernetes is an object: a record in one database, served by one HTTP API, with
+the same five fields. There are no special cases -- a Pod, a ClusterRole and a CRD you wrote
+yesterday are stored, validated, versioned and watched by exactly the same machinery. This is
+why the system is learnable: the shape is paid for once.
+
+**Spec and status are the whole model.** `spec` is desired state, written by you. `status` is
+observed state, written by the controller that owns the object. You never write status and the
+controller never writes spec, and that one rule is what makes the system declarative rather
+than a remote-procedure call. `kubectl get -o yaml` on anything shows the two side by side, and
+the difference between them is the answer to "why is this not working yet".
+
+**Names are scoped and immutable.** A name is unique for a kind inside a namespace, and you
+cannot rename an object -- you delete it and create another, which for a Pod means a new
+container and for a PersistentVolumeClaim can mean losing a volume. `generateName` exists for
+when you want the server to pick. Cluster-scoped kinds (Node, PersistentVolume, ClusterRole)
+have no namespace at all, which is also why a RoleBinding cannot grant access to them.
+
+**metadata is where the cluster keeps its own notes.** `ownerReferences` makes garbage
+collection work, `finalizers` block deletion until some cleanup runs, `resourceVersion` makes
+concurrent writes safe, and `managedFields` records who owns which field. None of it is about
+what your application does, and all of it explains behaviour that otherwise looks like magic:
+why deleting a Deployment deletes its Pods, why a namespace sits in `Terminating` forever, why
+your `kubectl apply` undid someone's change.
+
+The practical habit is to read any new resource by asking the same three questions: what does
+its spec let me ask for, what does its status tell me, and which controller is watching it. If
+nothing is watching it, nothing will ever happen -- which is exactly what a CRD without its
+operator installed looks like.

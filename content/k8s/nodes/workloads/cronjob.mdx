@@ -1,0 +1,51 @@
+---
+id: cronjob
+title: "CronJob"
+type: concept
+domain: workloads
+summary: "A Job factory on a cron schedule, in UTC by default. It guarantees at-least-once, not exactly-once, and the concurrency policy is the field that matters most."
+level: core
+access: free
+monogram: CJ
+exam: [ckad, cka]
+relations:
+  related: [job]
+connects:
+  - to: job
+    text: "Every firing creates a Job, so retries, parallelism and cleanup are the Job's settings and not the schedule's."
+  - to: events
+    text: "A missed schedule is reported as an event rather than retried silently, which is the only warning that the controller fell behind."
+  - to: etcd
+    text: "History limits matter here more than anywhere: a job every minute with no cleanup is half a million objects a year."
+reviewed: 2026-11-05
+---
+
+A CronJob holds a cron expression and a Job template, and creates a Job each time the schedule
+fires. Everything about how that work runs -- retries, parallelism, timeouts, cleanup -- belongs
+to the Job, so a CronJob is a thin scheduler on top of the previous object and should be read
+that way.
+
+**Time zone and clock.** The schedule is interpreted in UTC unless you set `spec.timeZone`, which
+is a newer field and the only correct way to do it -- the old workaround of shifting the
+expression breaks twice a year with daylight saving. The firing itself is driven by the
+controller-manager, so a control plane that was down over a scheduled time simply misses it; if
+the miss window exceeds `startingDeadlineSeconds` the run is skipped entirely and recorded as a
+`MissedSchedule` event.
+
+**`concurrencyPolicy` is the field to decide deliberately.** `Allow` (the default) lets a new Job
+start while the previous one is still running, which for a report that takes eleven minutes on a
+ten-minute schedule means ever-growing overlap. `Forbid` skips the new run. `Replace` kills the
+old one and starts fresh. Picking the default by accident is how a nightly export ends up with
+six copies competing for the same rows.
+
+**At-least-once, not exactly-once.** The controller can create two Jobs for one schedule in rare
+cases, and a Job can run a Pod more than once on retry. So anything a CronJob does should be
+idempotent, or guarded by its own lock -- a row in a database, an advisory lock, a lease object.
+Treating a CronJob as a guarantee of singularity is the mistake behind most duplicated-email
+incidents.
+
+**History limits are not optional in practice.** `successfulJobsHistoryLimit` (3) and
+`failedJobsHistoryLimit` (1) keep a useful trail; combined with `ttlSecondsAfterFinished` on the
+Job template they keep the object count bounded. And `suspend: true` is the right way to stop a
+misbehaving schedule during an incident -- it leaves the object in place, so the change is
+visible in git rather than being a deletion someone has to remember to undo.

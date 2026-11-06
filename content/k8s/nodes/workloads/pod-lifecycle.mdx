@@ -1,0 +1,69 @@
+---
+id: pod-lifecycle
+title: "Pod lifecycle"
+type: concept
+domain: workloads
+summary: "Pending, Running, Succeeded, Failed -- plus the container states underneath. Every stuck Pod is stuck in exactly one of these, and each has its own diagnosis."
+level: core
+access: free
+monogram: PL
+exam: [ckad, cka]
+relations:
+  related: [pod, graceful-shutdown]
+connects:
+  - to: scheduler
+    text: "Pending with no node means scheduling failed, and describe prints the reason per node count. Pending with a node means the kubelet is still working."
+  - to: probes
+    text: "Running and not Ready is a readiness probe failing, which keeps the Pod out of its Service without restarting it."
+  - to: graceful-shutdown
+    text: "Terminating is a grace period in progress: SIGTERM has been sent and SIGKILL is scheduled."
+  - to: eviction
+    text: "A Failed Pod with reason Evicted was killed by the kubelet to save its node, not by its own controller."
+lead: "The states, and what each one tells you to go and look at."
+parts:
+  - name: "Pending"
+    kind: gate
+    text: "Accepted but not running. Either unschedulable (describe says why) or the kubelet is pulling images and mounting volumes."
+  - name: "ContainerCreating"
+    kind: trigger
+    text: "A container state, not a phase. Stuck here is nearly always a volume mount or a missing Secret or ConfigMap."
+  - name: "Running"
+    kind: pod
+    text: "At least one container is up. Says nothing about readiness, and a Pod can be Running while serving errors."
+  - name: "CrashLoopBackOff"
+    kind: loop
+    text: "The container exits and is restarted with growing backoff, up to five minutes. The real error is in the previous container's logs."
+  - name: "Succeeded / Failed"
+    kind: panel
+    text: "Terminal, for Pods that are meant to end. Failed with exit code 137 is an OOM kill; 143 is a SIGTERM it did not handle."
+layout: row
+reviewed: 2026-11-05
+---
+
+`status.phase` has five values and they are coarse on purpose; the detail is in
+`status.containerStatuses`, where each container has a state (`waiting`, `running`,
+`terminated`), a reason, and a `lastState` for the previous attempt. Debugging a Pod is mostly
+knowing which of those fields answers your question.
+
+**Pending splits in two and the split decides who you talk to.** If `spec.nodeName` is empty,
+the scheduler could not place it, and `kubectl describe pod` ends with a line like
+`0/6 nodes are available: 3 Insufficient cpu, 3 node(s) had untolerated taint` -- a capacity or
+placement problem. If a node is assigned and it is still Pending, the kubelet is working:
+pulling an image, attaching a volume, or waiting on something that does not exist. Those are
+completely different fixes, and the field tells you which for free.
+
+**CrashLoopBackOff is a symptom with one reliable source.** The container started and exited, so
+the application has already said why -- in the logs of the attempt that died, which are gone
+from `kubectl logs` and available from `kubectl logs --previous`. The second thing to check is
+`lastState.terminated.exitCode`: 137 means it was OOM-killed (raise the memory limit or fix the
+leak), 143 means SIGTERM, 1 or 2 means the process itself failed, and 127 means the entrypoint
+is not there -- usually a wrong command or a missing shell in a distroless image.
+
+**Running is not ready, and the distinction is the entire point of probes.** A Pod is `Ready`
+only when its readiness probes pass, and only Ready Pods are in a Service's endpoints. A
+deployment that rolls out "successfully" but serves 502s is almost always a readiness probe that
+is too permissive -- a TCP check that passes before the app can answer, or no probe at all.
+
+**The restart counter is cumulative and resets with the Pod.** A Pod with 400 restarts that is
+currently healthy is still a problem report: something kills it periodically, and the pattern in
+`kubectl get pod -w` plus the previous logs is where the answer is.

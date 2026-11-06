@@ -1,0 +1,51 @@
+---
+id: headless-service
+title: "Headless Service"
+type: concept
+domain: network
+summary: "clusterIP None. DNS returns every Pod address instead of one virtual IP, which is how clients load-balance themselves and how StatefulSet members find each other."
+level: intermediate
+access: free
+monogram: HS
+exam: [ckad, cka]
+relations:
+  related: [service, statefulset]
+connects:
+  - to: statefulset
+    text: "A StatefulSet needs one of these to publish pod-0.svc.namespace names, which is what gives each member a stable address."
+  - to: coredns
+    text: "DNS returns an A record per ready Pod rather than one for the Service, so resolution is the load balancing."
+  - to: clusterip
+    text: "There is no virtual IP and no kube-proxy rule, so none of the DNAT behaviour applies and the client talks to the Pod directly."
+  - to: service-mesh
+    text: "A mesh often prefers these, because it wants the real endpoint list to apply its own routing and retry policy."
+reviewed: 2026-11-05
+---
+
+Setting `clusterIP: None` on a Service makes it headless: no virtual IP is allocated, no
+kube-proxy rules are programmed, and a DNS lookup of the Service name returns one A record for
+each ready endpoint. The client receives a list of Pod addresses and decides what to do with it.
+
+**That is the right shape for three situations.** First, clustered software whose members must
+address each other individually -- a StatefulSet with a headless Service gets
+`web-0.web.default.svc.cluster.local` per Pod, which is how etcd, Kafka and Cassandra discover
+peers. Second, clients that want to load-balance themselves: a gRPC client given the full
+endpoint list can spread individual requests across replicas, where a ClusterIP would have pinned
+its single long-lived connection to one Pod. Third, anything that needs to talk to *all*
+replicas, like a cache invalidation fan-out.
+
+**The gRPC case is worth spelling out**, because it is the most common real reason to reach for
+this. HTTP/2 multiplexes many requests over one connection, and a ClusterIP load-balances
+connections, not requests. So a client with a connection pool of one sends every request to one
+replica regardless of how many you run. A headless Service plus a client-side round-robin
+resolver, or a service mesh doing L7 balancing, are the two fixes; adding replicas is not.
+
+**`publishNotReadyAddresses`** is the field that matters for bootstrapping. Normally only ready
+Pods appear in DNS, which deadlocks a cluster whose members cannot become ready until they can
+see each other. Setting it true publishes addresses immediately, and StatefulSet-based databases
+generally need it.
+
+**It is not a security boundary and not a fallback.** DNS returning Pod IPs means the client
+bypasses every traffic policy the Service would otherwise apply, and a stale DNS answer cached by
+a client points directly at a Pod that no longer exists -- so clients need sensible TTL handling
+and retry logic. With a ClusterIP, a dead endpoint is simply removed from the rules.

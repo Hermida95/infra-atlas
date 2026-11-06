@@ -1,0 +1,49 @@
+---
+id: init-containers
+title: "Init containers"
+type: concept
+domain: workloads
+summary: "Containers that run to completion, in order, before the app starts. The right place for a migration, a wait, or anything that must not be in the app image."
+level: core
+access: free
+monogram: IC
+exam: [ckad]
+relations:
+  related: [pod, sidecar-containers]
+connects:
+  - to: pod
+    text: "They share the Pod's volumes and network, so they can prepare a file the app container will read or wait for a dependency to answer."
+  - to: job
+    text: "A schema migration as an init container runs once per Pod, which is wrong for several replicas: that belongs in a Job."
+  - to: security-context
+    text: "An init container can run privileged to set a sysctl or fix permissions while the app container stays unprivileged."
+reviewed: 2026-11-05
+---
+
+Init containers run before the app containers, one at a time, in declared order, and each must
+exit 0 before the next starts. They share the Pod's volumes and network namespace but not its
+lifecycle: once finished they are gone, and the app containers start with whatever they left
+behind on a shared volume.
+
+**The honest use cases are narrow and good.** Fixing ownership on a mounted volume so the app
+can run as non-root. Waiting for a dependency to be reachable before starting, so the app does
+not crash-loop while a database comes up. Fetching a configuration file or a secret into an
+`emptyDir`. Setting a sysctl or doing something else privileged, so the app container itself can
+stay unprivileged -- a pattern worth remembering, because it is how you keep a restricted
+security context without losing the one capability you needed.
+
+**The common misuse is database migrations.** An init container runs once per Pod, so three
+replicas run three migrations, concurrently, racing. That is a Job (or a Helm pre-upgrade hook
+wrapping a Job), run once, with the Deployment waiting for it. The init container version works
+in staging with one replica and fails the first time it matters.
+
+**Failure has its own rules.** If an init container fails, the Pod's `restartPolicy` applies: with
+`Always` or `OnFailure`, the whole init sequence restarts with backoff, so a dependency that
+takes ten minutes means ten minutes of `Init:0/2` and a growing `CrashLoopBackOff` on the init
+container. The Pod is not `Ready`, and no readiness probe is involved -- which is why a
+deployment hanging in `Init:` is a dependency problem, never a probe problem.
+
+**They are charged for.** The scheduler takes the *maximum* of the init containers' requests and
+the *sum* of the app containers' requests, and uses the larger of the two, because init and app
+containers never run at the same time. A heavy init container can therefore make a Pod
+unschedulable without the app needing anything like that much.

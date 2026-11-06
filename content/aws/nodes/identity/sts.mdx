@@ -1,0 +1,59 @@
+---
+id: sts
+title: "STS & AssumeRole"
+type: service
+domain: identity
+summary: "The token service behind every role. Cross-account access, federation and instance credentials are all one AssumeRole call."
+monogram: STS
+level: core
+access: free
+exam: [saa, sap]
+relations:
+  related: [iam-identity-center, cognito]
+connects:
+  - to: iam-role
+    text: "A role's trust policy says who may assume it; STS is what they call to do so."
+  - to: organizations
+    text: "The cross-account pattern: one identity account where people sign in, a role in every workload account."
+lead: "One API, four doors in. Which one you use says what the caller is."
+parts:
+  - name: "AssumeRole"
+    kind: gate
+    text: "An AWS identity takes a role, in this account or another. The cross-account pattern, and what Identity Center hands out."
+  - name: "AssumeRoleWithWebIdentity"
+    kind: trigger
+    text: "An OIDC token -- GitHub Actions, a mobile app, a Kubernetes service account -- exchanged for credentials."
+  - name: "AssumeRoleWithSAML"
+    kind: plugin
+    text: "The enterprise door: an assertion from ADFS, Okta or Entra becomes an AWS session."
+  - name: "The session"
+    kind: orbit
+    text: "Access key, secret and session token, with an expiry. Pass a session policy to narrow it further for this one session."
+  - name: "GetCallerIdentity"
+    kind: panel
+    text: "Needs no permission at all and answers \"who am I right now\". The first command to run when something is denied."
+layout: stack
+reviewed: 2026-11-05
+---
+
+STS is the service that hands out temporary credentials, and almost every modern AWS access
+pattern is one of its calls. A session is three values -- access key id, secret, and a session
+token -- and the token is what makes it temporary. Anything that presents only a key and a
+secret with no token is a long-lived IAM user credential, which is the thing you are trying not
+to have.
+
+Duration is bounded twice: by the role's own maximum session duration (one hour by default, up
+to twelve) and by what the caller requests. **Role chaining** -- assuming a role from a session
+that is itself a role -- caps hard at one hour regardless, which is the kind of detail that
+turns a working pipeline into one that fails on long jobs.
+
+A **session policy** is worth knowing because it is the only way to narrow permissions at the
+moment of assumption rather than in advance. You pass it to `AssumeRole`, and the session gets
+the intersection of the role's policy and yours. A tool that acts on a user's behalf can
+therefore hold a broad role and hand each operation a session scoped to exactly one bucket
+prefix.
+
+When a request is denied, the first thing to establish is which identity actually made it. `aws
+sts get-caller-identity` requires no permissions and returns the account, the user id and the
+ARN of the current session. More often than not the answer is that the credentials in the
+environment are not the ones you assumed.

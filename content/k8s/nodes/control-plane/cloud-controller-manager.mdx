@@ -1,0 +1,51 @@
+---
+id: cloud-controller-manager
+title: "cloud-controller-manager"
+type: service
+domain: control-plane
+summary: "The provider-specific half of the control plane, split out so the generic half needs no cloud credentials. It is what turns a Service into a real load balancer."
+level: intermediate
+access: free
+monogram: CCM
+exam: [cka]
+relations:
+  related: [controller-manager]
+connects:
+  - to: loadbalancer-service
+    text: "A Service of type LoadBalancer does nothing on its own: this controller calls the cloud API and writes the resulting address back into status."
+  - to: node-conditions
+    text: "It labels nodes with their zone and instance type, and deletes the Node object when the instance is really gone rather than just unreachable."
+  - to: csi
+    text: "Volume provisioning moved out of here into CSI drivers, which is why storage is now a plugin rather than part of Kubernetes."
+  - to: karpenter
+    text: "Node provisioners work alongside it: they create instances, this controller recognises and labels them."
+reviewed: 2026-11-05
+---
+
+Kubernetes used to ship with a controller for every cloud compiled into the
+controller-manager -- AWS, GCE, Azure, OpenStack -- which meant the core project carried
+provider code and the control plane needed provider credentials. The cloud-controller-manager
+is the result of pulling all of that out into a separate component that each provider ships on
+its own schedule.
+
+**It runs three loops that matter.** The *node controller* asks the cloud whether an instance
+still exists, which is the difference between a node that is unreachable (keep its Pods, it may
+come back) and a node that has been terminated (delete the Node object so its Pods can
+reschedule immediately). It also applies
+`topology.kubernetes.io/zone`, `region` and `node.kubernetes.io/instance-type` labels, which
+everything topology-aware then depends on. The *service controller* reconciles
+`type: LoadBalancer`: creating the cloud load balancer, keeping its target list in sync, and
+writing the address into `status.loadBalancer`. The *route controller* programs the VPC routes
+some CNI plugins need.
+
+**This is why a LoadBalancer Service hangs in `<pending>` forever** on a cluster with no cloud
+provider configured -- kind, a bare-metal cluster, a kubeadm install without a CCM. Nothing is
+broken; nothing is listening. The answers are MetalLB or kube-vip on bare metal, or an Ingress
+controller behind a single load balancer so one address serves many Services.
+
+**Credentials live here, so blast radius does too.** The CCM holds the cloud identity that can
+create load balancers and query instances, which makes it a high-value target and an argument
+for workload identity (IRSA, Workload Identity, managed identity) rather than node-wide
+credentials for everything else. On a managed cluster -- EKS, GKE, AKS -- this component is run
+for you, and the only trace of it you see is that your Services get addresses and your nodes get
+zone labels.

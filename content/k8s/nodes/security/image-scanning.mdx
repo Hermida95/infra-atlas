@@ -1,0 +1,50 @@
+---
+id: image-scanning
+title: "Image scanning"
+type: concept
+domain: security
+summary: "Finding known vulnerable packages in an image. Most valuable in the pipeline, least valuable as a wall of findings nobody triages."
+logo: trivy
+level: intermediate
+access: free
+exam: [cks]
+relations:
+  related: [image-signing, policy-engine]
+connects:
+  - to: policy-engine
+    text: "A policy can refuse an image without a recent scan or with a critical finding, which is what turns a report into a gate."
+  - to: image-management
+    text: "Scanning a tag is unreliable; scanning a digest is the only way the result refers to what will actually run."
+  - to: gitops
+    text: "Rebuilding on a base image update is the actual fix, which makes scanning a trigger for the pipeline rather than a report."
+reviewed: 2026-11-05
+---
+
+An image scanner reads the package manifests inside an image -- apt, apk, npm, pip, Go module
+data -- and matches them against vulnerability databases. Trivy, Grype and the registry-native
+scanners all do essentially this. It is fast, cheap, and the most mechanical security win
+available on a container platform.
+
+**The place it pays is the build.** Scanning in CI, before the push, gives a result that someone
+can act on while they are already in the code: a base image to bump, a dependency to update, or
+a conscious decision to accept. Scanning images already running in a cluster produces a list of
+problems whose fix belongs to whoever last touched a repository nobody is currently in -- which
+is why those dashboards go stale.
+
+**Base images are where most findings come from and where most of the fix is.** A distroless or
+Alpine base with no shell and no package manager cuts the reported surface dramatically, not by
+hiding anything but by genuinely not containing it. Multi-stage builds that leave the compiler,
+the test tooling and the package manager behind in the build stage do the same. A weekly rebuild
+of unchanged applications on a refreshed base is the single highest-value scanning-adjacent habit.
+
+**Severity alone is a bad gate.** A critical CVE in a library the application never calls is
+noise; a medium one in the request path is not. `Trivy`'s ability to filter by whether a fix is
+available is the pragmatic middle ground -- blocking on "critical **and** fixable" gives a
+failure someone can actually resolve, where blocking on all criticals teaches people to add
+exceptions. Reachability analysis is getting better and is what will eventually replace severity
+counting.
+
+**The admission-time version is still worth having** as a backstop: a policy requiring that
+images come from your own registry, carry a recent scan attestation, and have no fixable critical
+findings. That catches the image someone built on a laptop and pushed by hand, which no pipeline
+gate will ever see.

@@ -24,7 +24,10 @@ def test_validate_summary(content_dir: Path, write_node) -> None:
     result = runner.invoke(app, ["validate", "--content", str(content_dir)])
 
     assert result.exit_code == 0
-    assert "2 nodes, 2 domains, 1 links, 0 requirements, 0 planner rules, OK" in result.output
+    assert (
+        "2 nodes, 2 domains, 1 links (0 explained), 0 requirements, 0 planner rules, "
+        "0 cases, no certifications, OK"
+    ) in result.output
 
 
 def test_new_scaffolds_valid_node_and_refuses_overwrite(content_dir: Path) -> None:

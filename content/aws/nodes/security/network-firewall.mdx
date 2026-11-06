@@ -1,0 +1,44 @@
+---
+id: network-firewall
+title: "Network Firewall"
+type: service
+domain: security
+summary: "A managed, stateful IPS at the VPC edge with Suricata-compatible rules, usually in an inspection VPC behind a Transit Gateway."
+monogram: NF
+level: core
+access: free
+exam: [sap]
+relations:
+  related: [nacl, waf]
+  alternative_to: [gwlb]
+connects:
+  - to: transit-gateway
+    text: "Spoke VPC routes point at the Transit Gateway, which sends traffic through the inspection VPC and back out."
+  - to: gwlb
+    text: "Network Firewall is the AWS engine; a Gateway Load Balancer is how you put a vendor's engine in the same place."
+reviewed: 2026-11-05
+---
+
+AWS Network Firewall is a managed, stateful intrusion prevention system deployed inside your
+VPC. It uses **Suricata-compatible** rules, so existing signature sets and the team's existing
+knowledge transfer directly.
+
+Three kinds of rule group. **Stateless** rules are evaluated first on packet headers, cheaply,
+and either act or pass the packet on. **Stateful** rules track connections and can match on
+protocol, flow and Suricata signatures -- including **domain lists**, which is the feature most
+deployments are bought for: allowing egress only to an approved list of domains, which a
+security group cannot express because it only knows addresses.
+
+The deployment is always the same architecture. A dedicated **inspection VPC** holds firewall
+endpoints, one per Availability Zone. Spoke VPCs route `0.0.0.0/0` to a **Transit Gateway**, a
+dedicated route table sends that traffic to the inspection VPC, the firewall inspects it, and it
+leaves through a NAT Gateway and Internet Gateway there. Return traffic comes back the same way.
+On the Transit Gateway attachment for the inspection VPC, **appliance mode** must be on, or the
+return path can land on a different zone's endpoint, which has no state for the flow and drops
+it.
+
+Against the neighbours: **security groups** and **NACLs** work on addresses and ports and have
+no concept of a protocol or a domain. **WAF** is layer 7 for HTTP, in front of CloudFront or an
+ALB. **Network Firewall** is layers 3 to 7 for all traffic crossing a VPC boundary, and the
+place to enforce egress control. A **Gateway Load Balancer** is the alternative when the
+appliance should be a vendor's rather than AWS's.
